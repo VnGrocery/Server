@@ -20,7 +20,7 @@ func NewShopRepository(client *gofirestore.Client) *ShopRepository {
 func (r *ShopRepository) Save(ctx context.Context, shop domain.Shop) error {
 	_, err := r.client.Collection(ShopsCollection).Doc(shop.ShopID).Set(ctx, shop)
 	if err != nil {
-		return fmt.Errorf("khong luu duoc shop: %w", err)
+		return fmt.Errorf("failed to save shop: %w", err)
 	}
 
 	return nil
@@ -29,12 +29,12 @@ func (r *ShopRepository) Save(ctx context.Context, shop domain.Shop) error {
 func (r *ShopRepository) GetByID(ctx context.Context, shopID string) (domain.Shop, error) {
 	doc, err := r.client.Collection(ShopsCollection).Doc(shopID).Get(ctx)
 	if err != nil {
-		return domain.Shop{}, fmt.Errorf("khong lay duoc shop: %w", err)
+		return domain.Shop{}, fmt.Errorf("failed to get shop: %w", err)
 	}
 
 	var shop domain.Shop
 	if err := doc.DataTo(&shop); err != nil {
-		return domain.Shop{}, fmt.Errorf("khong map duoc shop: %w", err)
+		return domain.Shop{}, fmt.Errorf("failed to decode shop document: %w", err)
 	}
 
 	return shop, nil

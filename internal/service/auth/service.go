@@ -8,7 +8,7 @@ import (
 	firebaseauth "firebase.google.com/go/v4/auth"
 )
 
-var ErrUnauthorized = errors.New("token khong hop le hoac thieu roi")
+var ErrUnauthorized = errors.New("missing or invalid authentication token")
 
 type Principal struct {
 	UserID      string `json:"userId"`
@@ -39,7 +39,7 @@ func (s *Service) Verify(ctx context.Context, token string) (Principal, error) {
 			return Principal{}, ErrUnauthorized
 		}
 
-		return Principal{}, fmt.Errorf("verify token bang Firebase bi loi: %w", err)
+		return Principal{}, fmt.Errorf("failed to verify Firebase ID token: %w", err)
 	}
 
 	return Principal{

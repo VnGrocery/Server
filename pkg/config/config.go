@@ -22,7 +22,7 @@ func Load() (Config, error) {
 	}
 
 	if cfg.FirebaseCredentialsFile == "" {
-		return Config{}, errors.New("thieu FIREBASE_CREDENTIALS_FILE roi")
+		return Config{}, errors.New("FIREBASE_CREDENTIALS_FILE is required")
 	}
 
 	return cfg, nil
@@ -39,10 +39,10 @@ func getEnvOrDefault(key, fallback string) string {
 
 func (c Config) Validate() error {
 	if c.FirebaseCredentialsFile == "" {
-		return errors.New("thieu FIREBASE_CREDENTIALS_FILE roi")
+		return errors.New("FIREBASE_CREDENTIALS_FILE is required")
 	}
 	if c.Port == "" {
-		return fmt.Errorf("PORT khong duoc rong")
+		return fmt.Errorf("PORT must not be empty")
 	}
 
 	return nil

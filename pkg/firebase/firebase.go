@@ -35,17 +35,17 @@ func NewApp(cfg config.Config) (*App, error) {
 
 	app, err := firebaseapp.NewApp(ctx, fbConfig, options...)
 	if err != nil {
-		return nil, fmt.Errorf("tao firebase app khong xong: %w", err)
+		return nil, fmt.Errorf("failed to create Firebase app: %w", err)
 	}
 
 	authClient, err := app.Auth(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("tao auth client khong xong: %w", err)
+		return nil, fmt.Errorf("failed to create Firebase Auth client: %w", err)
 	}
 
 	firestoreClient, err := app.Firestore(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("tao firestore client khong xong: %w", err)
+		return nil, fmt.Errorf("failed to create Firestore client: %w", err)
 	}
 
 	return &App{

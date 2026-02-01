@@ -25,7 +25,7 @@ func TestAuthRequiredRejectsMissingHeader(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	middleware := NewAuthRequired(stubVerifier{
 		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-			t.Fatal("verify khong duoc goi khi thieu header")
+			t.Fatal("verify should not be called when authorization header is missing")
 			return authservice.Principal{}, nil
 		},
 	})
@@ -80,7 +80,7 @@ func TestAuthRequiredStoresPrincipal(t *testing.T) {
 	middleware := NewAuthRequired(stubVerifier{
 		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
 			if token != "good-token" {
-				return authservice.Principal{}, errors.New("token test sai roi")
+				return authservice.Principal{}, errors.New("unexpected token value")
 			}
 			return expected, nil
 		},
@@ -90,7 +90,7 @@ func TestAuthRequiredStoresPrincipal(t *testing.T) {
 	router.GET("/protected", middleware.Handle(), func(c *gin.Context) {
 		principal, ok := GetPrincipal(c)
 		if !ok {
-			t.Fatal("principal phai ton tai trong context")
+			t.Fatal("principal should exist in request context")
 		}
 
 		c.JSON(http.StatusOK, principal)

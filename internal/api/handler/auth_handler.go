@@ -19,7 +19,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	principal, ok := middleware.GetPrincipal(c)
 	if !ok {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "khong tim thay thong tin user da xac thuc",
+			"error": "authenticated principal was not found in request context",
 		})
 		return
 	}

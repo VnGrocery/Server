@@ -14,16 +14,16 @@ import (
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
-		log.Fatalf("Loi load config ne: %v", err)
+		log.Fatalf("failed to load config: %v", err)
 	}
 
 	app, err := firebasepkg.NewApp(cfg)
 	if err != nil {
-		log.Fatalf("Loi khoi tao Firebase roi: %v", err)
+		log.Fatalf("failed to initialize Firebase: %v", err)
 	}
 	defer func() {
 		if closeErr := app.Close(); closeErr != nil {
-			log.Printf("Dong ket noi Firebase bi loi nha: %v", closeErr)
+			log.Printf("failed to close Firebase resources: %v", closeErr)
 		}
 	}()
 
@@ -39,6 +39,6 @@ func main() {
 	})
 
 	if err := engine.Run(":" + cfg.Port); err != nil {
-		log.Fatalf("Server toang luc start: %v", err)
+		log.Fatalf("failed to start server: %v", err)
 	}
 }

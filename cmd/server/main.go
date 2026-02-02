@@ -7,8 +7,10 @@ import (
 	"vngrocery/internal/api/middleware"
 	"vngrocery/internal/api/router"
 	authservice "vngrocery/internal/service/auth"
+	visionservice "vngrocery/internal/service/vision"
 	"vngrocery/pkg/config"
 	firebasepkg "vngrocery/pkg/firebase"
+	visionpkg "vngrocery/pkg/vision"
 )
 
 func main() {
@@ -28,13 +30,17 @@ func main() {
 	}()
 
 	authVerifier := authservice.NewVerifier(app.AuthVerifier)
+	visionClient := visionpkg.NewOpenAIClient(cfg)
+	visionScorer := visionservice.NewService(visionClient)
 	authMiddleware := middleware.NewAuthRequired(authVerifier)
 	healthHandler := handler.NewHealthHandler()
 	authHandler := handler.NewAuthHandler()
+	sellerHandler := handler.NewSellerHandler(visionScorer)
 
 	engine := router.New(router.Dependencies{
 		HealthHandler:  healthHandler,
 		AuthHandler:    authHandler,
+		SellerHandler:  sellerHandler,
 		AuthMiddleware: authMiddleware,
 	})
 

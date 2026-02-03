@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestLoadUsesDefaultPort(t *testing.T) {
 	t.Setenv("PORT", "")
@@ -34,8 +38,82 @@ func TestLoadRequiresOpenAIAPIKey(t *testing.T) {
 	t.Setenv("FIREBASE_CREDENTIALS_FILE", "/tmp/firebase.json")
 	t.Setenv("OPENAI_API_KEY", "")
 
-	_, err := Load()
+	cfg, err := Load()
+	if err == nil {
+		if cfg.HasVisionProvider() {
+			t.Fatal("expected vision provider to be disabled without OPENAI_API_KEY")
+		}
+	}
+}
+
+func TestValidateVisionRejectsUnsupportedProvider(t *testing.T) {
+	cfg := Config{
+		Port:                    "8080",
+		FirebaseCredentialsFile: "/tmp/firebase.json",
+		AIProvider:              "gemini",
+		OpenAIAPIKey:            "test-key",
+		OpenAIBaseURL:           "https://api.openai.com/v1",
+		OpenAIModel:             "gpt-4o-mini",
+	}
+
+	err := cfg.ValidateVision()
 	if err == nil {
 		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestLoadReadsDotEnvFile(t *testing.T) {
+	tempDir := t.TempDir()
+	envFile := filepath.Join(tempDir, ".env")
+
+	content := []byte("FIREBASE_CREDENTIALS_FILE=./secrets/firebase-service-account.json\nFIREBASE_PROJECT_ID=demo-from-env-file\n")
+	if err := os.WriteFile(envFile, content, 0o644); err != nil {
+		t.Fatalf("failed to write .env file: %v", err)
+	}
+
+	workingDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	defer func() {
+		_ = os.Chdir(workingDir)
+	}()
+
+	if err := os.Chdir(tempDir); err != nil {
+		t.Fatalf("failed to change working directory: %v", err)
+	}
+
+	for _, key := range []string{
+		"FIREBASE_CREDENTIALS_FILE",
+		"FIREBASE_PROJECT_ID",
+		"OPENAI_API_KEY",
+		"PORT",
+	} {
+		originalValue, hadValue := os.LookupEnv(key)
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatalf("failed to unset %s: %v", key, err)
+		}
+		keyCopy := key
+		valueCopy := originalValue
+		hadValueCopy := hadValue
+		t.Cleanup(func() {
+			if !hadValueCopy {
+				_ = os.Unsetenv(keyCopy)
+				return
+			}
+			_ = os.Setenv(keyCopy, valueCopy)
+		})
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+
+	if cfg.FirebaseCredentialsFile != "./secrets/firebase-service-account.json" {
+		t.Fatalf("unexpected FIREBASE_CREDENTIALS_FILE: %s", cfg.FirebaseCredentialsFile)
+	}
+	if cfg.FirebaseProjectID != "demo-from-env-file" {
+		t.Fatalf("unexpected FIREBASE_PROJECT_ID: %s", cfg.FirebaseProjectID)
 	}
 }

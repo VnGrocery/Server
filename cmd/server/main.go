@@ -18,6 +18,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
+	if err := cfg.ValidateVision(); err != nil {
+		log.Fatalf("failed to validate vision config: %v", err)
+	}
 
 	app, err := firebasepkg.NewApp(cfg)
 	if err != nil {
@@ -30,8 +33,11 @@ func main() {
 	}()
 
 	authVerifier := authservice.NewVerifier(app.AuthVerifier)
-	visionClient := visionpkg.NewOpenAIClient(cfg)
-	visionScorer := visionservice.NewService(visionClient)
+	var visionScorer visionservice.ImageScorer = visionservice.NewService(nil)
+	if cfg.HasVisionProvider() {
+		visionClient := visionpkg.NewOpenAIClient(cfg)
+		visionScorer = visionservice.NewService(visionClient)
+	}
 	authMiddleware := middleware.NewAuthRequired(authVerifier)
 	healthHandler := handler.NewHealthHandler()
 	authHandler := handler.NewAuthHandler()

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"os"
+
+	"github.com/joho/godotenv"
 )
 
 const defaultPort = "8080"
@@ -20,6 +22,8 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	loadDotEnvIfPresent()
+
 	cfg := Config{
 		Port:                    getEnvOrDefault("PORT", defaultPort),
 		FirebaseProjectID:       os.Getenv("FIREBASE_PROJECT_ID"),
@@ -32,6 +36,10 @@ func Load() (Config, error) {
 	}
 
 	return cfg, cfg.Validate()
+}
+
+func loadDotEnvIfPresent() {
+	_ = godotenv.Load()
 }
 
 func getEnvOrDefault(key, fallback string) string {
@@ -50,14 +58,23 @@ func (c Config) Validate() error {
 	if c.Port == "" {
 		return fmt.Errorf("PORT must not be empty")
 	}
+
+	return nil
+}
+
+func (c Config) HasVisionProvider() bool {
+	return c.OpenAIAPIKey != ""
+}
+
+func (c Config) ValidateVision() error {
+	if !c.HasVisionProvider() {
+		return nil
+	}
 	if c.AIProvider == "" {
 		return errors.New("AI_PROVIDER must not be empty")
 	}
 	if c.AIProvider != "openai" {
 		return fmt.Errorf("unsupported AI_PROVIDER: %s", c.AIProvider)
-	}
-	if c.OpenAIAPIKey == "" {
-		return errors.New("OPENAI_API_KEY is required")
 	}
 	if c.OpenAIBaseURL == "" {
 		return errors.New("OPENAI_BASE_URL must not be empty")

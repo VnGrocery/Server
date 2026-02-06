@@ -20,3 +20,10 @@ type PledgeRepository interface {
 	Save(ctx context.Context, pledge domain.Pledge) error
 	GetByID(ctx context.Context, pledgeID string) (domain.Pledge, error)
 }
+
+type AuthUserRepository interface {
+	NewUserID() string
+	Save(ctx context.Context, user domain.AuthUser) error
+	GetByEmail(ctx context.Context, emailLower string) (domain.AuthUser, error)
+	GetByGoogleSub(ctx context.Context, googleSub string) (domain.AuthUser, error)
+}

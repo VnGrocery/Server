@@ -72,9 +72,8 @@ func TestAuthRequiredRejectsInvalidToken(t *testing.T) {
 func TestAuthRequiredStoresPrincipal(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	expected := authservice.Principal{
-		UserID:      "user-1",
-		Email:       "seller@example.com",
-		PhoneNumber: "0123",
+		UserID: "user-1",
+		Email:  "seller@example.com",
 	}
 
 	middleware := NewAuthRequired(stubVerifier{

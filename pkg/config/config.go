@@ -14,6 +14,8 @@ type Config struct {
 	Port                    string
 	FirebaseProjectID       string
 	FirebaseCredentialsFile string
+	JWTSecret               string
+	GoogleClientID          string
 	AIProvider              string
 	OpenAIAPIKey            string
 	OpenAIBaseURL           string
@@ -28,6 +30,8 @@ func Load() (Config, error) {
 		Port:                    getEnvOrDefault("PORT", defaultPort),
 		FirebaseProjectID:       os.Getenv("FIREBASE_PROJECT_ID"),
 		FirebaseCredentialsFile: os.Getenv("FIREBASE_CREDENTIALS_FILE"),
+		JWTSecret:               os.Getenv("JWT_SECRET"),
+		GoogleClientID:          os.Getenv("GOOGLE_CLIENT_ID"),
 		AIProvider:              getEnvOrDefault("AI_PROVIDER", "openai"),
 		OpenAIAPIKey:            os.Getenv("OPENAI_API_KEY"),
 		OpenAIBaseURL:           getEnvOrDefault("OPENAI_BASE_URL", "https://api.openai.com/v1"),
@@ -57,6 +61,9 @@ func (c Config) Validate() error {
 	}
 	if c.Port == "" {
 		return fmt.Errorf("PORT must not be empty")
+	}
+	if c.JWTSecret == "" {
+		return errors.New("JWT_SECRET is required")
 	}
 
 	return nil

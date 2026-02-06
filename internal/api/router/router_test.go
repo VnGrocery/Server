@@ -3,6 +3,7 @@ package router
 import (
 	"bytes"
 	"context"
+	"errors"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -31,7 +32,7 @@ func TestRouterHealth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
-		AuthHandler:   handler.NewAuthHandler(),
+		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
@@ -55,7 +56,7 @@ func TestRouterMeUnauthorized(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
-		AuthHandler:   handler.NewAuthHandler(),
+		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
@@ -79,7 +80,7 @@ func TestRouterMeAuthorized(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
-		AuthHandler:   handler.NewAuthHandler(),
+		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
@@ -104,7 +105,7 @@ func TestRouterSellerScoreProtected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
-		AuthHandler:   handler.NewAuthHandler(),
+		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
@@ -142,7 +143,7 @@ func TestRouterSellerCommitProtected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
-		AuthHandler:   handler.NewAuthHandler(),
+		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
@@ -167,7 +168,7 @@ func TestRouterBuyerCheckPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
-		AuthHandler:   handler.NewAuthHandler(),
+		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
@@ -242,4 +243,18 @@ func (buyerCheckRouteStub) Check(ctx context.Context, input buyerservice.CheckIn
 		ActualCategory:   "fresh_produce",
 		ActualConfidence: 0.9,
 	}, nil
+}
+
+type authAccountsStub struct{}
+
+func (authAccountsStub) Register(ctx context.Context, email, password, displayName string) (string, authservice.Principal, error) {
+	return "", authservice.Principal{}, errors.New("not implemented")
+}
+
+func (authAccountsStub) Login(ctx context.Context, email, password string) (string, authservice.Principal, error) {
+	return "", authservice.Principal{}, errors.New("not implemented")
+}
+
+func (authAccountsStub) GoogleLogin(ctx context.Context, googleIDToken string) (string, authservice.Principal, error) {
+	return "", authservice.Principal{}, errors.New("not implemented")
 }

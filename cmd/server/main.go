@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"time"
 
 	"vngrocery/internal/api/handler"
 	"vngrocery/internal/api/middleware"
@@ -35,18 +36,21 @@ func main() {
 		}
 	}()
 
-	authVerifier := authservice.NewVerifier(app.AuthVerifier)
+	jwtService := authservice.NewJWTService(cfg.JWTSecret, "vngrocery")
 	var visionScorer visionservice.ImageScorer = visionservice.NewService(nil)
 	if cfg.HasVisionProvider() {
 		visionClient := visionpkg.NewOpenAIClient(cfg)
 		visionScorer = visionservice.NewService(visionClient)
 	}
 	pledgeRepository := firestorerepo.NewPledgeRepository(app.Firestore)
+	userRepository := firestorerepo.NewUserRepository(app.Firestore)
+	authUserRepository := firestorerepo.NewAuthUserRepository(app.Firestore)
+	accountService := authservice.NewAccountService(authUserRepository, userRepository, jwtService, 24*time.Hour, cfg.GoogleClientID)
 	sellerCommitService := sellerservice.NewService(pledgeRepository)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, visionScorer)
-	authMiddleware := middleware.NewAuthRequired(authVerifier)
+	authMiddleware := middleware.NewAuthRequired(jwtService)
 	healthHandler := handler.NewHealthHandler()
-	authHandler := handler.NewAuthHandler()
+	authHandler := handler.NewAuthHandler(accountService)
 	sellerHandler := handler.NewSellerHandler(visionScorer, sellerCommitService)
 	buyerHandler := handler.NewBuyerHandler(buyerCheckService)
 

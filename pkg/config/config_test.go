@@ -10,6 +10,7 @@ func TestLoadUsesDefaultPort(t *testing.T) {
 	t.Setenv("PORT", "")
 	t.Setenv("FIREBASE_CREDENTIALS_FILE", "/tmp/firebase.json")
 	t.Setenv("FIREBASE_PROJECT_ID", "demo-project")
+	t.Setenv("JWT_SECRET", "test-secret")
 	t.Setenv("OPENAI_API_KEY", "test-key")
 
 	cfg, err := Load()
@@ -25,6 +26,7 @@ func TestLoadUsesDefaultPort(t *testing.T) {
 func TestLoadRequiresCredentialsFile(t *testing.T) {
 	t.Setenv("PORT", "8081")
 	t.Setenv("FIREBASE_CREDENTIALS_FILE", "")
+	t.Setenv("JWT_SECRET", "test-secret")
 	t.Setenv("OPENAI_API_KEY", "test-key")
 
 	_, err := Load()
@@ -36,6 +38,7 @@ func TestLoadRequiresCredentialsFile(t *testing.T) {
 func TestLoadRequiresOpenAIAPIKey(t *testing.T) {
 	t.Setenv("PORT", "8081")
 	t.Setenv("FIREBASE_CREDENTIALS_FILE", "/tmp/firebase.json")
+	t.Setenv("JWT_SECRET", "test-secret")
 	t.Setenv("OPENAI_API_KEY", "")
 
 	cfg, err := Load()
@@ -66,7 +69,7 @@ func TestLoadReadsDotEnvFile(t *testing.T) {
 	tempDir := t.TempDir()
 	envFile := filepath.Join(tempDir, ".env")
 
-	content := []byte("FIREBASE_CREDENTIALS_FILE=./secrets/firebase-service-account.json\nFIREBASE_PROJECT_ID=demo-from-env-file\n")
+	content := []byte("FIREBASE_CREDENTIALS_FILE=./secrets/firebase-service-account.json\nFIREBASE_PROJECT_ID=demo-from-env-file\nJWT_SECRET=from-env-file\n")
 	if err := os.WriteFile(envFile, content, 0o644); err != nil {
 		t.Fatalf("failed to write .env file: %v", err)
 	}
@@ -86,6 +89,7 @@ func TestLoadReadsDotEnvFile(t *testing.T) {
 	for _, key := range []string{
 		"FIREBASE_CREDENTIALS_FILE",
 		"FIREBASE_PROJECT_ID",
+		"JWT_SECRET",
 		"OPENAI_API_KEY",
 		"PORT",
 	} {

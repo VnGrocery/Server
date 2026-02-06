@@ -6,7 +6,10 @@ import (
 	"vngrocery/internal/api/handler"
 	"vngrocery/internal/api/middleware"
 	"vngrocery/internal/api/router"
+	firestorerepo "vngrocery/internal/repository/firestore"
 	authservice "vngrocery/internal/service/auth"
+	buyerservice "vngrocery/internal/service/buyer"
+	sellerservice "vngrocery/internal/service/seller"
 	visionservice "vngrocery/internal/service/vision"
 	"vngrocery/pkg/config"
 	firebasepkg "vngrocery/pkg/firebase"
@@ -38,15 +41,20 @@ func main() {
 		visionClient := visionpkg.NewOpenAIClient(cfg)
 		visionScorer = visionservice.NewService(visionClient)
 	}
+	pledgeRepository := firestorerepo.NewPledgeRepository(app.Firestore)
+	sellerCommitService := sellerservice.NewService(pledgeRepository)
+	buyerCheckService := buyerservice.NewService(pledgeRepository, visionScorer)
 	authMiddleware := middleware.NewAuthRequired(authVerifier)
 	healthHandler := handler.NewHealthHandler()
 	authHandler := handler.NewAuthHandler()
-	sellerHandler := handler.NewSellerHandler(visionScorer)
+	sellerHandler := handler.NewSellerHandler(visionScorer, sellerCommitService)
+	buyerHandler := handler.NewBuyerHandler(buyerCheckService)
 
 	engine := router.New(router.Dependencies{
 		HealthHandler:  healthHandler,
 		AuthHandler:    authHandler,
 		SellerHandler:  sellerHandler,
+		BuyerHandler:   buyerHandler,
 		AuthMiddleware: authMiddleware,
 	})
 

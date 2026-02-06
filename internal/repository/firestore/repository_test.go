@@ -51,6 +51,9 @@ func TestDomainStructTags(t *testing.T) {
 	assertFirestoreTag(t, user, "UserID", "userId")
 	assertFirestoreTag(t, shop, "OwnerUserID", "ownerUserId")
 	assertFirestoreTag(t, pledge, "CreatedByUserID", "createdByUserId")
+	assertFirestoreTag(t, pledge, "Score", "score")
+	assertFirestoreTag(t, pledge, "Category", "category")
+	assertFirestoreTag(t, pledge, "Confidence", "confidence")
 }
 
 func assertFirestoreTag(t *testing.T, value any, fieldName, expected string) {

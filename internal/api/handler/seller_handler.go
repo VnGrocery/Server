@@ -7,17 +7,23 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"vngrocery/internal/api/dto"
+	"vngrocery/internal/api/middleware"
+	sellerservice "vngrocery/internal/service/seller"
 	visionservice "vngrocery/internal/service/vision"
 )
 
 const maxSellerImageBytes = 10 << 20
 
 type SellerHandler struct {
-	scorer visionservice.ImageScorer
+	scorer    visionservice.ImageScorer
+	committer sellerservice.CommitService
 }
 
-func NewSellerHandler(scorer visionservice.ImageScorer) *SellerHandler {
-	return &SellerHandler{scorer: scorer}
+func NewSellerHandler(scorer visionservice.ImageScorer, committer sellerservice.CommitService) *SellerHandler {
+	return &SellerHandler{
+		scorer:    scorer,
+		committer: committer,
+	}
 }
 
 func (h *SellerHandler) Score(c *gin.Context) {
@@ -76,5 +82,54 @@ func (h *SellerHandler) Score(c *gin.Context) {
 		Score:      result.Score,
 		Category:   result.Category,
 		Confidence: result.Confidence,
+	})
+}
+
+func (h *SellerHandler) Commit(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "authenticated principal was not found in request context",
+		})
+		return
+	}
+
+	var request dto.SellerCommitRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "invalid JSON payload",
+		})
+		return
+	}
+
+	pledge, err := h.committer.Commit(c.Request.Context(), sellerservice.CommitInput{
+		ShopID:          request.ShopID,
+		CreatedByUserID: principal.UserID,
+		Score:           request.Score,
+		Category:        request.Category,
+		Confidence:      request.Confidence,
+	})
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, sellerservice.ErrInvalidCommit) {
+			status = http.StatusBadRequest
+		}
+
+		c.JSON(status, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.SellerCommitResponse{
+		PledgeID:        pledge.PledgeID,
+		ShopID:          pledge.ShopID,
+		CreatedByUserID: pledge.CreatedByUserID,
+		Status:          pledge.Status,
+		Score:           pledge.Score,
+		Category:        pledge.Category,
+		Confidence:      pledge.Confidence,
+		CreatedAt:       pledge.CreatedAt,
+		UpdatedAt:       pledge.UpdatedAt,
 	})
 }

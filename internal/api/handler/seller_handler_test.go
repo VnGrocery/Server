@@ -9,9 +9,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
+	"vngrocery/internal/domain"
+	authservice "vngrocery/internal/service/auth"
+	sellerservice "vngrocery/internal/service/seller"
 	visionservice "vngrocery/internal/service/vision"
 )
 
@@ -23,6 +27,14 @@ func (s scorerStub) Score(ctx context.Context, input visionservice.ImageInput) (
 	return s.score(ctx, input)
 }
 
+type commitServiceStub struct {
+	commit func(ctx context.Context, input sellerservice.CommitInput) (domain.Pledge, error)
+}
+
+func (s commitServiceStub) Commit(ctx context.Context, input sellerservice.CommitInput) (domain.Pledge, error) {
+	return s.commit(ctx, input)
+}
+
 func TestSellerScoreRequiresImage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := NewSellerHandler(scorerStub{
@@ -30,7 +42,7 @@ func TestSellerScoreRequiresImage(t *testing.T) {
 			t.Fatal("score should not be called when image is missing")
 			return visionservice.ScoreResult{}, nil
 		},
-	})
+	}, commitServiceStub{})
 
 	router := gin.New()
 	router.POST("/v1/seller/score", handler.Score)
@@ -62,7 +74,7 @@ func TestSellerScoreReturnsStructuredResponse(t *testing.T) {
 				Confidence: 0.94,
 			}, nil
 		},
-	})
+	}, commitServiceStub{})
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -105,7 +117,7 @@ func TestSellerScoreRejectsInvalidImage(t *testing.T) {
 		score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
 			return visionservice.ScoreResult{}, visionservice.ErrInvalidImage
 		},
-	})
+	}, commitServiceStub{})
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -140,7 +152,7 @@ func TestSellerScoreHandlesProviderFailure(t *testing.T) {
 		score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
 			return visionservice.ScoreResult{}, errors.New("provider failed")
 		},
-	})
+	}, commitServiceStub{})
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -166,5 +178,74 @@ func TestSellerScoreHandlesProviderFailure(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestSellerCommitCreatesPledge(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	now := time.Date(2026, 3, 27, 12, 0, 0, 0, time.UTC)
+
+	handler := NewSellerHandler(scorerStub{}, commitServiceStub{
+		commit: func(ctx context.Context, input sellerservice.CommitInput) (domain.Pledge, error) {
+			if input.ShopID != "shop-1" {
+				t.Fatalf("unexpected shop id: %s", input.ShopID)
+			}
+			if input.CreatedByUserID != "user-1" {
+				t.Fatalf("unexpected user id: %s", input.CreatedByUserID)
+			}
+			return domain.Pledge{
+				PledgeID:        "pledge-1",
+				ShopID:          input.ShopID,
+				CreatedByUserID: input.CreatedByUserID,
+				Status:          sellerservice.PledgeStatusCommitted,
+				Score:           input.Score,
+				Category:        input.Category,
+				Confidence:      input.Confidence,
+				CreatedAt:       now,
+				UpdatedAt:       now,
+			}, nil
+		},
+	})
+
+	router := gin.New()
+	router.POST("/v1/seller/commit", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "user-1"})
+		handler.Commit(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/seller/commit", bytes.NewBufferString(`{"shopId":"shop-1","score":8.5,"category":"fresh_produce","confidence":0.91}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", rec.Code)
+	}
+}
+
+func TestSellerCommitRejectsInvalidPayload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewSellerHandler(scorerStub{}, commitServiceStub{
+		commit: func(ctx context.Context, input sellerservice.CommitInput) (domain.Pledge, error) {
+			t.Fatal("commit should not be called for invalid payload")
+			return domain.Pledge{}, nil
+		},
+	})
+
+	router := gin.New()
+	router.POST("/v1/seller/commit", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "user-1"})
+		handler.Commit(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/seller/commit", bytes.NewBufferString(`{"shopId":`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }

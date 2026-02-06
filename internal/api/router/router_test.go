@@ -12,7 +12,10 @@ import (
 
 	"vngrocery/internal/api/handler"
 	"vngrocery/internal/api/middleware"
+	"vngrocery/internal/domain"
 	authservice "vngrocery/internal/service/auth"
+	buyerservice "vngrocery/internal/service/buyer"
+	sellerservice "vngrocery/internal/service/seller"
 	visionservice "vngrocery/internal/service/vision"
 )
 
@@ -29,7 +32,8 @@ func TestRouterHealth(t *testing.T) {
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
 		AuthHandler:   handler.NewAuthHandler(),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}),
+		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
 			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
 				return authservice.Principal{}, nil
@@ -52,7 +56,8 @@ func TestRouterMeUnauthorized(t *testing.T) {
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
 		AuthHandler:   handler.NewAuthHandler(),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}),
+		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
 			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
 				return authservice.Principal{}, authservice.ErrUnauthorized
@@ -75,7 +80,8 @@ func TestRouterMeAuthorized(t *testing.T) {
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
 		AuthHandler:   handler.NewAuthHandler(),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}),
+		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
 			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
 				return authservice.Principal{UserID: "user-123", Email: "u@example.com"}, nil
@@ -99,7 +105,8 @@ func TestRouterSellerScoreProtected(t *testing.T) {
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
 		AuthHandler:   handler.NewAuthHandler(),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}),
+		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
 			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
 				return authservice.Principal{}, authservice.ErrUnauthorized
@@ -131,6 +138,72 @@ func TestRouterSellerScoreProtected(t *testing.T) {
 	}
 }
 
+func TestRouterSellerCommitProtected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(Dependencies{
+		HealthHandler: handler.NewHealthHandler(),
+		AuthHandler:   handler.NewAuthHandler(),
+		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
+			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+				return authservice.Principal{}, authservice.ErrUnauthorized
+			},
+		}),
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/seller/commit", bytes.NewBufferString(`{"shopId":"shop-1","score":8.5,"category":"fresh_produce","confidence":0.91}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestRouterBuyerCheckPublic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(Dependencies{
+		HealthHandler: handler.NewHealthHandler(),
+		AuthHandler:   handler.NewAuthHandler(),
+		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
+			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+				return authservice.Principal{}, authservice.ErrUnauthorized
+			},
+		}),
+	})
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	if err := writer.WriteField("pledgeId", "pledge-1"); err != nil {
+		t.Fatalf("failed to write pledgeId: %v", err)
+	}
+	part, err := writer.CreateFormFile("image", "shop.jpg")
+	if err != nil {
+		t.Fatalf("failed to create file: %v", err)
+	}
+	if _, err := part.Write([]byte("fake-image-content")); err != nil {
+		t.Fatalf("failed to write body: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close writer: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/buyer/check", body)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
 type sellerScorerStub struct{}
 
 func (sellerScorerStub) Score(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
@@ -138,5 +211,35 @@ func (sellerScorerStub) Score(ctx context.Context, input visionservice.ImageInpu
 		Score:      8.3,
 		Category:   "fresh_produce",
 		Confidence: 0.91,
+	}, nil
+}
+
+type sellerCommitStub struct{}
+
+func (sellerCommitStub) Commit(ctx context.Context, input sellerservice.CommitInput) (domain.Pledge, error) {
+	return domain.Pledge{
+		PledgeID:        "pledge-1",
+		ShopID:          input.ShopID,
+		CreatedByUserID: input.CreatedByUserID,
+		Status:          sellerservice.PledgeStatusCommitted,
+		Score:           input.Score,
+		Category:        input.Category,
+		Confidence:      input.Confidence,
+	}, nil
+}
+
+type buyerCheckRouteStub struct{}
+
+func (buyerCheckRouteStub) Check(ctx context.Context, input buyerservice.CheckInput) (buyerservice.CheckResult, error) {
+	return buyerservice.CheckResult{
+		PledgeID:         input.PledgeID,
+		Trusted:          true,
+		Verdict:          "trusted",
+		PledgedScore:     8.4,
+		ActualScore:      8.0,
+		ScoreDelta:       -0.4,
+		PledgedCategory:  "fresh_produce",
+		ActualCategory:   "fresh_produce",
+		ActualConfidence: 0.9,
 	}, nil
 }

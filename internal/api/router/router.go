@@ -11,6 +11,7 @@ type Dependencies struct {
 	HealthHandler  *handler.HealthHandler
 	AuthHandler    *handler.AuthHandler
 	SellerHandler  *handler.SellerHandler
+	BuyerHandler   *handler.BuyerHandler
 	AuthMiddleware *middleware.AuthRequired
 }
 
@@ -25,6 +26,8 @@ func New(deps Dependencies) *gin.Engine {
 		v1.GET("/health", deps.HealthHandler.Health)
 		v1.GET("/me", deps.AuthMiddleware.Handle(), deps.AuthHandler.Me)
 		v1.POST("/seller/score", deps.AuthMiddleware.Handle(), deps.SellerHandler.Score)
+		v1.POST("/seller/commit", deps.AuthMiddleware.Handle(), deps.SellerHandler.Commit)
+		v1.POST("/buyer/check", deps.BuyerHandler.Check)
 	}
 
 	return engine

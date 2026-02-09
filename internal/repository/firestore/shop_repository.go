@@ -39,3 +39,21 @@ func (r *ShopRepository) GetByID(ctx context.Context, shopID string) (domain.Sho
 
 	return shop, nil
 }
+
+func (r *ShopRepository) ListActive(ctx context.Context) ([]domain.Shop, error) {
+	docs, err := r.client.Collection(ShopsCollection).Where("status", "==", "active").Documents(ctx).GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list shops: %w", err)
+	}
+
+	shops := make([]domain.Shop, 0, len(docs))
+	for _, doc := range docs {
+		var shop domain.Shop
+		if err := doc.DataTo(&shop); err != nil {
+			return nil, fmt.Errorf("failed to decode shop document: %w", err)
+		}
+		shops = append(shops, shop)
+	}
+
+	return shops, nil
+}

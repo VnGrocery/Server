@@ -14,6 +14,7 @@ import (
 )
 
 var ErrInvalidCommit = errors.New("invalid seller commit request")
+var ErrShopNotFound = errors.New("shop not found")
 
 const PledgeStatusCommitted = "committed"
 
@@ -31,12 +32,14 @@ type CommitService interface {
 
 type Service struct {
 	pledges repository.PledgeRepository
+	shops   repository.ShopRepository
 	now     func() time.Time
 }
 
-func NewService(pledges repository.PledgeRepository) *Service {
+func NewService(pledges repository.PledgeRepository, shops repository.ShopRepository) *Service {
 	return &Service{
 		pledges: pledges,
+		shops:   shops,
 		now:     time.Now,
 	}
 }
@@ -47,6 +50,12 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 	}
 	if s.pledges == nil {
 		return domain.Pledge{}, fmt.Errorf("pledge repository is not configured")
+	}
+	if s.shops == nil {
+		return domain.Pledge{}, fmt.Errorf("shop repository is not configured")
+	}
+	if _, err := s.shops.GetByID(ctx, strings.TrimSpace(input.ShopID)); err != nil {
+		return domain.Pledge{}, fmt.Errorf("%w: %v", ErrShopNotFound, err)
 	}
 
 	now := s.now().UTC()

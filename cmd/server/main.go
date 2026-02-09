@@ -11,6 +11,7 @@ import (
 	authservice "vngrocery/internal/service/auth"
 	buyerservice "vngrocery/internal/service/buyer"
 	sellerservice "vngrocery/internal/service/seller"
+	shopservice "vngrocery/internal/service/shop"
 	visionservice "vngrocery/internal/service/vision"
 	"vngrocery/pkg/config"
 	firebasepkg "vngrocery/pkg/firebase"
@@ -43,22 +44,26 @@ func main() {
 		visionScorer = visionservice.NewService(visionClient)
 	}
 	pledgeRepository := firestorerepo.NewPledgeRepository(app.Firestore)
+	shopRepository := firestorerepo.NewShopRepository(app.Firestore)
 	userRepository := firestorerepo.NewUserRepository(app.Firestore)
 	authUserRepository := firestorerepo.NewAuthUserRepository(app.Firestore)
 	accountService := authservice.NewAccountService(authUserRepository, userRepository, jwtService, 24*time.Hour, cfg.GoogleClientID)
-	sellerCommitService := sellerservice.NewService(pledgeRepository)
+	shopManager := shopservice.NewService(shopRepository)
+	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, visionScorer)
 	authMiddleware := middleware.NewAuthRequired(jwtService)
 	healthHandler := handler.NewHealthHandler()
 	authHandler := handler.NewAuthHandler(accountService)
 	sellerHandler := handler.NewSellerHandler(visionScorer, sellerCommitService)
 	buyerHandler := handler.NewBuyerHandler(buyerCheckService)
+	shopHandler := handler.NewShopHandler(shopManager)
 
 	engine := router.New(router.Dependencies{
 		HealthHandler:  healthHandler,
 		AuthHandler:    authHandler,
 		SellerHandler:  sellerHandler,
 		BuyerHandler:   buyerHandler,
+		ShopHandler:    shopHandler,
 		AuthMiddleware: authMiddleware,
 	})
 

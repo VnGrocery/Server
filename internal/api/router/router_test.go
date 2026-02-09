@@ -17,6 +17,7 @@ import (
 	authservice "vngrocery/internal/service/auth"
 	buyerservice "vngrocery/internal/service/buyer"
 	sellerservice "vngrocery/internal/service/seller"
+	shopservice "vngrocery/internal/service/shop"
 	visionservice "vngrocery/internal/service/vision"
 )
 
@@ -35,6 +36,7 @@ func TestRouterHealth(t *testing.T) {
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
 			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
 				return authservice.Principal{}, nil
@@ -59,6 +61,7 @@ func TestRouterMeUnauthorized(t *testing.T) {
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
 			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
 				return authservice.Principal{}, authservice.ErrUnauthorized
@@ -83,6 +86,7 @@ func TestRouterMeAuthorized(t *testing.T) {
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
 			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
 				return authservice.Principal{UserID: "user-123", Email: "u@example.com"}, nil
@@ -108,6 +112,7 @@ func TestRouterSellerScoreProtected(t *testing.T) {
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
 			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
 				return authservice.Principal{}, authservice.ErrUnauthorized
@@ -146,6 +151,7 @@ func TestRouterSellerCommitProtected(t *testing.T) {
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
 			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
 				return authservice.Principal{}, authservice.ErrUnauthorized
@@ -171,6 +177,7 @@ func TestRouterBuyerCheckPublic(t *testing.T) {
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
 		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
 			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
 				return authservice.Principal{}, authservice.ErrUnauthorized
@@ -196,6 +203,57 @@ func TestRouterBuyerCheckPublic(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/buyer/check", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestRouterShopCreateProtected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(Dependencies{
+		HealthHandler: handler.NewHealthHandler(),
+		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
+		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
+		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
+			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+				return authservice.Principal{}, authservice.ErrUnauthorized
+			},
+		}),
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/shops", bytes.NewBufferString(`{"name":"Green Shop","description":"Fresh daily","address":"123 Main St","latitude":10.7,"longitude":106.6}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestRouterShopListPublic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(Dependencies{
+		HealthHandler: handler.NewHealthHandler(),
+		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
+		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
+		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
+			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+				return authservice.Principal{}, authservice.ErrUnauthorized
+			},
+		}),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/shops", nil)
 	rec := httptest.NewRecorder()
 
 	engine.ServeHTTP(rec, req)
@@ -257,4 +315,60 @@ func (authAccountsStub) Login(ctx context.Context, email, password string) (stri
 
 func (authAccountsStub) GoogleLogin(ctx context.Context, googleIDToken string) (string, authservice.Principal, error) {
 	return "", authservice.Principal{}, errors.New("not implemented")
+}
+
+type shopHandlerStub struct{}
+
+func (shopHandlerStub) Create(ctx context.Context, input shopservice.CreateInput) (domain.Shop, error) {
+	return domain.Shop{
+		ShopID:      "shop-1",
+		OwnerUserID: input.OwnerUserID,
+		Name:        input.Name,
+		Description: input.Description,
+		Address:     input.Address,
+		Latitude:    input.Latitude,
+		Longitude:   input.Longitude,
+		Status:      shopservice.ShopStatusActive,
+	}, nil
+}
+
+func (shopHandlerStub) Update(ctx context.Context, input shopservice.UpdateInput) (domain.Shop, error) {
+	return domain.Shop{
+		ShopID:      input.ShopID,
+		OwnerUserID: input.OwnerUserID,
+		Name:        input.Name,
+		Description: input.Description,
+		Address:     input.Address,
+		Latitude:    input.Latitude,
+		Longitude:   input.Longitude,
+		Status:      shopservice.ShopStatusActive,
+	}, nil
+}
+
+func (shopHandlerStub) GetByID(ctx context.Context, shopID string) (domain.Shop, error) {
+	return domain.Shop{
+		ShopID:      shopID,
+		OwnerUserID: "user-1",
+		Name:        "Green Shop",
+		Description: "Fresh daily",
+		Address:     "123 Main St",
+		Latitude:    10.7,
+		Longitude:   106.6,
+		Status:      shopservice.ShopStatusActive,
+	}, nil
+}
+
+func (shopHandlerStub) ListActive(ctx context.Context) ([]domain.Shop, error) {
+	return []domain.Shop{
+		{
+			ShopID:      "shop-1",
+			OwnerUserID: "user-1",
+			Name:        "Green Shop",
+			Description: "Fresh daily",
+			Address:     "123 Main St",
+			Latitude:    10.7,
+			Longitude:   106.6,
+			Status:      shopservice.ShopStatusActive,
+		},
+	}, nil
 }

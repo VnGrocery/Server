@@ -35,6 +35,10 @@ func TestDomainStructTags(t *testing.T) {
 		ShopID:      "shop-1",
 		OwnerUserID: "user-1",
 		Name:        "Fresh Market",
+		Description: "A nice store",
+		Address:     "123 Main St",
+		Latitude:    10.123,
+		Longitude:   106.456,
 		Status:      "active",
 		CreatedAt:   now,
 		UpdatedAt:   now,
@@ -50,6 +54,8 @@ func TestDomainStructTags(t *testing.T) {
 
 	assertFirestoreTag(t, user, "UserID", "userId")
 	assertFirestoreTag(t, shop, "OwnerUserID", "ownerUserId")
+	assertFirestoreTag(t, shop, "Latitude", "latitude")
+	assertFirestoreTag(t, shop, "Longitude", "longitude")
 	assertFirestoreTag(t, pledge, "CreatedByUserID", "createdByUserId")
 	assertFirestoreTag(t, pledge, "Score", "score")
 	assertFirestoreTag(t, pledge, "Category", "category")

@@ -113,6 +113,8 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 		status := http.StatusInternalServerError
 		if errors.Is(err, sellerservice.ErrInvalidCommit) {
 			status = http.StatusBadRequest
+		} else if errors.Is(err, sellerservice.ErrShopNotFound) {
+			status = http.StatusNotFound
 		}
 
 		c.JSON(status, gin.H{

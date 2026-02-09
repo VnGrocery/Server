@@ -14,6 +14,7 @@ type UserRepository interface {
 type ShopRepository interface {
 	Save(ctx context.Context, shop domain.Shop) error
 	GetByID(ctx context.Context, shopID string) (domain.Shop, error)
+	ListActive(ctx context.Context) ([]domain.Shop, error)
 }
 
 type PledgeRepository interface {

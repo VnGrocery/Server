@@ -56,6 +56,10 @@ func TestCommitCreatesPledge(t *testing.T) {
 			}
 			return nil
 		},
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1"}, nil
+		},
 	})
 	service.now = func() time.Time { return fixedTime }
 
@@ -80,6 +84,10 @@ func TestCommitRejectsInvalidInput(t *testing.T) {
 			t.Fatal("save should not be called for invalid input")
 			return nil
 		},
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{}, nil
+		},
 	})
 
 	_, err := service.Commit(context.Background(), CommitInput{
@@ -92,4 +100,44 @@ func TestCommitRejectsInvalidInput(t *testing.T) {
 	if !errors.Is(err, ErrInvalidCommit) {
 		t.Fatalf("expected ErrInvalidCommit, got %v", err)
 	}
+}
+
+func TestCommitRejectsMissingShop(t *testing.T) {
+	service := NewService(pledgeRepositoryStub{
+		save: func(ctx context.Context, pledge domain.Pledge) error {
+			t.Fatal("save should not be called when shop is missing")
+			return nil
+		},
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{}, errors.New("not found")
+		},
+	})
+
+	_, err := service.Commit(context.Background(), CommitInput{
+		ShopID:          "shop-1",
+		CreatedByUserID: "user-1",
+		Score:           8.8,
+		Category:        "fresh_produce",
+		Confidence:      0.93,
+	})
+	if !errors.Is(err, ErrShopNotFound) {
+		t.Fatalf("expected ErrShopNotFound, got %v", err)
+	}
+}
+
+type shopRepositoryStub struct {
+	getByID func(ctx context.Context, shopID string) (domain.Shop, error)
+}
+
+func (s shopRepositoryStub) Save(ctx context.Context, shop domain.Shop) error {
+	return nil
+}
+
+func (s shopRepositoryStub) GetByID(ctx context.Context, shopID string) (domain.Shop, error) {
+	return s.getByID(ctx, shopID)
+}
+
+func (s shopRepositoryStub) ListActive(ctx context.Context) ([]domain.Shop, error) {
+	return nil, errors.New("not implemented")
 }

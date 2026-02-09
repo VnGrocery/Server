@@ -7,10 +7,15 @@ EMAIL="${EMAIL:-}"
 PASSWORD="${PASSWORD:-Passw0rd!}"
 DISPLAY_NAME="${DISPLAY_NAME:-Test User}"
 
-SHOP_ID="${SHOP_ID:-shop-1}"
-SCORE="${SCORE:-8.5}"
-CATEGORY="${CATEGORY:-fresh_produce}"
-CONFIDENCE="${CONFIDENCE:-0.91}"
+SHOP_NAME="${SHOP_NAME:-Green Shop}"
+SHOP_DESCRIPTION="${SHOP_DESCRIPTION:-Fresh daily}"
+SHOP_ADDRESS="${SHOP_ADDRESS:-123 Main St}"
+SHOP_LATITUDE="${SHOP_LATITUDE:-10.762622}"
+SHOP_LONGITUDE="${SHOP_LONGITUDE:-106.660172}"
+
+PLEDGE_SCORE="${PLEDGE_SCORE:-8.5}"
+PLEDGE_CATEGORY="${PLEDGE_CATEGORY:-fresh_produce}"
+PLEDGE_CONFIDENCE="${PLEDGE_CONFIDENCE:-0.91}"
 
 IMAGE_PATH="${IMAGE_PATH:-}"
 
@@ -22,7 +27,6 @@ json_get() {
     jq -r ".$key // empty"
     return 0
   fi
-  # Minimal fallback for flat JSON fields: "key":"value" or "key":123
   sed -nE "s/.*\"$key\"[[:space:]]*:[[:space:]]*\"?([^\",}]*)\"?.*/\\1/p" | head -n 1
 }
 
@@ -44,7 +48,7 @@ if [[ -z "$EMAIL" ]]; then
 fi
 
 echo
-echo "== register =="
+echo "== register / login =="
 register_body=$(request POST /v1/auth/register \
   -H "Content-Type: application/json" \
   -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\",\"displayName\":\"$DISPLAY_NAME\"}")
@@ -52,8 +56,6 @@ echo "$register_body"
 
 token=$(printf '%s' "$register_body" | json_get accessToken || true)
 if [[ -z "$token" ]]; then
-  echo
-  echo "== login =="
   login_body=$(request POST /v1/auth/login \
     -H "Content-Type: application/json" \
     -d "{\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}")
@@ -72,11 +74,35 @@ me_body=$(request GET /v1/me -H "Authorization: Bearer $token")
 echo "$me_body"
 
 echo
+echo "== create shop =="
+shop_body=$(request POST /v1/shops \
+  -H "Authorization: Bearer $token" \
+  -H "Content-Type: application/json" \
+  -d "{\"name\":\"$SHOP_NAME\",\"description\":\"$SHOP_DESCRIPTION\",\"address\":\"$SHOP_ADDRESS\",\"latitude\":$SHOP_LATITUDE,\"longitude\":$SHOP_LONGITUDE}")
+echo "$shop_body"
+
+shop_id=$(printf '%s' "$shop_body" | json_get shopId || true)
+if [[ -z "$shop_id" ]]; then
+  echo "ERROR: could not extract shopId from shop response" >&2
+  exit 1
+fi
+
+echo
+echo "== list shops =="
+shops_body=$(request GET /v1/shops)
+echo "$shops_body"
+
+echo
+echo "== get shop =="
+shop_detail_body=$(request GET "/v1/shops/$shop_id")
+echo "$shop_detail_body"
+
+echo
 echo "== seller commit =="
 commit_body=$(request POST /v1/seller/commit \
   -H "Authorization: Bearer $token" \
   -H "Content-Type: application/json" \
-  -d "{\"shopId\":\"$SHOP_ID\",\"score\":$SCORE,\"category\":\"$CATEGORY\",\"confidence\":$CONFIDENCE}")
+  -d "{\"shopId\":\"$shop_id\",\"score\":$PLEDGE_SCORE,\"category\":\"$PLEDGE_CATEGORY\",\"confidence\":$PLEDGE_CONFIDENCE}")
 echo "$commit_body"
 
 pledge_id=$(printf '%s' "$commit_body" | json_get pledgeId || true)
@@ -95,7 +121,7 @@ if [[ -n "$IMAGE_PATH" ]]; then
   fi
 
   echo
-  echo "== buyer check (multipart) =="
+  echo "== buyer check =="
   buyer_body=$(request POST /v1/buyer/check \
     -F "pledgeId=$pledge_id" \
     -F "image=@$IMAGE_PATH")
@@ -105,4 +131,3 @@ else
   echo "== buyer check skipped =="
   echo "Set IMAGE_PATH=/abs/path/to/shop.jpg to run /v1/buyer/check"
 fi
-

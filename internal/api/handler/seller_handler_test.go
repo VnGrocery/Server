@@ -249,3 +249,28 @@ func TestSellerCommitRejectsInvalidPayload(t *testing.T) {
 		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }
+
+func TestSellerCommitRejectsForbiddenShop(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewSellerHandler(scorerStub{}, commitServiceStub{
+		commit: func(ctx context.Context, input sellerservice.CommitInput) (domain.Pledge, error) {
+			return domain.Pledge{}, sellerservice.ErrShopOwnership
+		},
+	})
+
+	router := gin.New()
+	router.POST("/v1/seller/commit", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "user-1"})
+		handler.Commit(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/seller/commit", bytes.NewBufferString(`{"shopId":"shop-1","score":8.5,"category":"fresh_produce","confidence":0.91}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rec.Code)
+	}
+}

@@ -115,6 +115,8 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 			status = http.StatusBadRequest
 		} else if errors.Is(err, sellerservice.ErrShopNotFound) {
 			status = http.StatusNotFound
+		} else if errors.Is(err, sellerservice.ErrShopOwnership) {
+			status = http.StatusForbidden
 		}
 
 		c.JSON(status, gin.H{

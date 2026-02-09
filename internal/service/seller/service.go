@@ -15,6 +15,7 @@ import (
 
 var ErrInvalidCommit = errors.New("invalid seller commit request")
 var ErrShopNotFound = errors.New("shop not found")
+var ErrShopOwnership = errors.New("shop does not belong to the authenticated seller")
 
 const PledgeStatusCommitted = "committed"
 
@@ -54,8 +55,12 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 	if s.shops == nil {
 		return domain.Pledge{}, fmt.Errorf("shop repository is not configured")
 	}
-	if _, err := s.shops.GetByID(ctx, strings.TrimSpace(input.ShopID)); err != nil {
+	shop, err := s.shops.GetByID(ctx, strings.TrimSpace(input.ShopID))
+	if err != nil {
 		return domain.Pledge{}, fmt.Errorf("%w: %v", ErrShopNotFound, err)
+	}
+	if shop.OwnerUserID != strings.TrimSpace(input.CreatedByUserID) {
+		return domain.Pledge{}, ErrShopOwnership
 	}
 
 	now := s.now().UTC()

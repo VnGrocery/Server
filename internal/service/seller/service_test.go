@@ -126,6 +126,30 @@ func TestCommitRejectsMissingShop(t *testing.T) {
 	}
 }
 
+func TestCommitRejectsNonOwnerShop(t *testing.T) {
+	service := NewService(pledgeRepositoryStub{
+		save: func(ctx context.Context, pledge domain.Pledge) error {
+			t.Fatal("save should not be called when seller does not own the shop")
+			return nil
+		},
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "owner-2"}, nil
+		},
+	})
+
+	_, err := service.Commit(context.Background(), CommitInput{
+		ShopID:          "shop-1",
+		CreatedByUserID: "user-1",
+		Score:           8.8,
+		Category:        "fresh_produce",
+		Confidence:      0.93,
+	})
+	if !errors.Is(err, ErrShopOwnership) {
+		t.Fatalf("expected ErrShopOwnership, got %v", err)
+	}
+}
+
 type shopRepositoryStub struct {
 	getByID func(ctx context.Context, shopID string) (domain.Shop, error)
 }

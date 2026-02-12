@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -16,33 +17,10 @@ import (
 	shopsvc "vngrocery/internal/service/shop"
 )
 
-type shopServiceStub struct {
-	create     func(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error)
-	update     func(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error)
-	getByID    func(ctx context.Context, shopID string) (domain.Shop, error)
-	listActive func(ctx context.Context) ([]domain.Shop, error)
-}
-
-func (s shopServiceStub) Create(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error) {
-	return s.create(ctx, input)
-}
-
-func (s shopServiceStub) Update(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error) {
-	return s.update(ctx, input)
-}
-
-func (s shopServiceStub) GetByID(ctx context.Context, shopID string) (domain.Shop, error) {
-	return s.getByID(ctx, shopID)
-}
-
-func (s shopServiceStub) ListActive(ctx context.Context) ([]domain.Shop, error) {
-	return s.listActive(ctx)
-}
-
 func TestCreateShop(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	now := time.Date(2026, 4, 3, 9, 0, 0, 0, time.UTC)
-	handler := NewShopHandler(shopServiceStub{
+	handler := NewShopHandler(shopServiceAdapter{
 		create: func(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error) {
 			if input.OwnerUserID != "user-1" {
 				t.Fatalf("unexpected ownerUserID: %s", input.OwnerUserID)
@@ -59,15 +37,6 @@ func TestCreateShop(t *testing.T) {
 				CreatedAt:   now,
 				UpdatedAt:   now,
 			}, nil
-		},
-		update: func(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error) {
-			return domain.Shop{}, errors.New("not implemented")
-		},
-		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
-			return domain.Shop{}, errors.New("not implemented")
-		},
-		listActive: func(ctx context.Context) ([]domain.Shop, error) {
-			return nil, errors.New("not implemented")
 		},
 	})
 
@@ -88,33 +57,72 @@ func TestCreateShop(t *testing.T) {
 	}
 }
 
-func TestUpdateShopRejectsForbidden(t *testing.T) {
+func TestListShopsWithPagination(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	handler := NewShopHandler(shopServiceStub{
-		create: func(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error) {
-			return domain.Shop{}, errors.New("not implemented")
-		},
-		update: func(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error) {
-			return domain.Shop{}, shopsvc.ErrForbidden
-		},
-		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
-			return domain.Shop{}, errors.New("not implemented")
-		},
-		listActive: func(ctx context.Context) ([]domain.Shop, error) {
-			return nil, errors.New("not implemented")
+	handler := NewShopHandler(shopServiceAdapter{
+		list: func(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error) {
+			if input.Page != 2 || input.PageSize != 1 || input.Query != "green" {
+				t.Fatalf("unexpected list input: %+v", input)
+			}
+			return shopsvc.ListResult{
+				Items: []shopsvc.ShopView{{
+					Shop: domain.Shop{
+						ShopID:    "shop-1",
+						Name:      "Green Shop",
+						Address:   "123 Main St",
+						Latitude:  10.7,
+						Longitude: 106.6,
+						Status:    shopsvc.ShopStatusActive,
+					},
+					TrustSummary: shopsvc.TrustSummary{
+						HasPledges:  true,
+						PledgeCount: 1,
+					},
+				}},
+				Page:     2,
+				PageSize: 1,
+				Total:    3,
+				HasNext:  true,
+			}, nil
 		},
 	})
 
 	router := gin.New()
-	router.PUT("/v1/shops/:shopId", func(c *gin.Context) {
-		c.Set("auth.principal", authservice.Principal{UserID: "user-2"})
-		handler.Update(c)
+	router.GET("/v1/shops", handler.List)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/shops?page=2&pageSize=1&q=green", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if payload["page"] != float64(2) {
+		t.Fatalf("unexpected page: %v", payload["page"])
+	}
+}
+
+func TestModerateShopRejectsNonAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewShopHandler(shopServiceAdapter{
+		moderate: func(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error) {
+			return domain.Shop{}, shopsvc.ErrAdminRequired
+		},
 	})
 
-	req := httptest.NewRequest(http.MethodPut, "/v1/shops/shop-1", bytes.NewBufferString(`{"name":"Green Shop","description":"Fresh daily","address":"123 Main St","latitude":10.7,"longitude":106.6}`))
+	router := gin.New()
+	router.PATCH("/v1/admin/shops/:shopId/moderation", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "user-2"})
+		handler.Moderate(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/admin/shops/shop-1/moderation", bytes.NewBufferString(`{"status":"suspended","moderationNote":"fraud review"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-
 	router.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusForbidden {
@@ -122,32 +130,32 @@ func TestUpdateShopRejectsForbidden(t *testing.T) {
 	}
 }
 
-func TestListShops(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	handler := NewShopHandler(shopServiceStub{
-		create: func(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error) {
-			return domain.Shop{}, errors.New("not implemented")
-		},
-		update: func(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error) {
-			return domain.Shop{}, errors.New("not implemented")
-		},
-		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
-			return domain.Shop{}, errors.New("not implemented")
-		},
-		listActive: func(ctx context.Context) ([]domain.Shop, error) {
-			return []domain.Shop{{ShopID: "shop-1", Name: "Green Shop", Address: "123 Main St", Latitude: 10.7, Longitude: 106.6, Status: shopsvc.ShopStatusActive}}, nil
-		},
-	})
+type shopServiceAdapter struct {
+	create   func(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error)
+	update   func(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error)
+	getByID  func(ctx context.Context, shopID string) (shopsvc.ShopView, error)
+	list     func(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
+	moderate func(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error)
+}
 
-	router := gin.New()
-	router.GET("/v1/shops", handler.List)
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/shops", nil)
-	rec := httptest.NewRecorder()
-
-	router.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
+func (s shopServiceAdapter) Create(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error) {
+	return s.create(ctx, input)
+}
+func (s shopServiceAdapter) Update(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error) {
+	if s.update == nil {
+		return domain.Shop{}, errors.New("not implemented")
 	}
+	return s.update(ctx, input)
+}
+func (s shopServiceAdapter) Moderate(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error) {
+	return s.moderate(ctx, input)
+}
+func (s shopServiceAdapter) GetByID(ctx context.Context, shopID string) (shopsvc.ShopView, error) {
+	if s.getByID == nil {
+		return shopsvc.ShopView{}, errors.New("not implemented")
+	}
+	return s.getByID(ctx, shopID)
+}
+func (s shopServiceAdapter) List(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error) {
+	return s.list(ctx, input)
 }

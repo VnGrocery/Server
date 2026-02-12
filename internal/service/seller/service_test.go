@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 )
 
 type pledgeRepositoryStub struct {
@@ -23,6 +24,10 @@ func (s pledgeRepositoryStub) GetByID(ctx context.Context, pledgeID string) (dom
 		return domain.Pledge{}, errors.New("not implemented")
 	}
 	return s.get(ctx, pledgeID)
+}
+
+func (s pledgeRepositoryStub) ListByShopID(ctx context.Context, shopID string) ([]domain.Pledge, error) {
+	return nil, nil
 }
 
 func TestCommitCreatesPledge(t *testing.T) {
@@ -162,6 +167,6 @@ func (s shopRepositoryStub) GetByID(ctx context.Context, shopID string) (domain.
 	return s.getByID(ctx, shopID)
 }
 
-func (s shopRepositoryStub) ListActive(ctx context.Context) ([]domain.Shop, error) {
+func (s shopRepositoryStub) List(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
 	return nil, errors.New("not implemented")
 }

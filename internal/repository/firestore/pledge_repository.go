@@ -3,6 +3,7 @@ package firestore
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	gofirestore "cloud.google.com/go/firestore"
 
@@ -38,4 +39,26 @@ func (r *PledgeRepository) GetByID(ctx context.Context, pledgeID string) (domain
 	}
 
 	return pledge, nil
+}
+
+func (r *PledgeRepository) ListByShopID(ctx context.Context, shopID string) ([]domain.Pledge, error) {
+	docs, err := r.client.Collection(PledgesCollection).Where("shopId", "==", shopID).Documents(ctx).GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pledges by shop: %w", err)
+	}
+
+	pledges := make([]domain.Pledge, 0, len(docs))
+	for _, doc := range docs {
+		var pledge domain.Pledge
+		if err := doc.DataTo(&pledge); err != nil {
+			return nil, fmt.Errorf("failed to decode pledge document: %w", err)
+		}
+		pledges = append(pledges, pledge)
+	}
+
+	sort.Slice(pledges, func(i, j int) bool {
+		return pledges[i].CreatedAt.After(pledges[j].CreatedAt)
+	})
+
+	return pledges, nil
 }

@@ -22,6 +22,10 @@ func (s pledgeRepositoryStub) GetByID(ctx context.Context, pledgeID string) (dom
 	return s.getByID(ctx, pledgeID)
 }
 
+func (s pledgeRepositoryStub) ListByShopID(ctx context.Context, shopID string) ([]domain.Pledge, error) {
+	return nil, nil
+}
+
 type scorerStub struct {
 	score func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error)
 }

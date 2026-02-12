@@ -7,6 +7,7 @@ import (
 	gofirestore "cloud.google.com/go/firestore"
 
 	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 )
 
 type ShopRepository struct {
@@ -40,8 +41,16 @@ func (r *ShopRepository) GetByID(ctx context.Context, shopID string) (domain.Sho
 	return shop, nil
 }
 
-func (r *ShopRepository) ListActive(ctx context.Context) ([]domain.Shop, error) {
-	docs, err := r.client.Collection(ShopsCollection).Where("status", "==", "active").Documents(ctx).GetAll()
+func (r *ShopRepository) List(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
+	query := r.client.Collection(ShopsCollection).Query
+	if filter.Status != "" {
+		query = query.Where("status", "==", filter.Status)
+	}
+	if filter.OwnerUserID != "" {
+		query = query.Where("ownerUserId", "==", filter.OwnerUserID)
+	}
+
+	docs, err := query.Documents(ctx).GetAll()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list shops: %w", err)
 	}

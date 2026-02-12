@@ -6,6 +6,11 @@ import (
 	"vngrocery/internal/domain"
 )
 
+type ShopListFilter struct {
+	Status      string
+	OwnerUserID string
+}
+
 type UserRepository interface {
 	Save(ctx context.Context, user domain.User) error
 	GetByID(ctx context.Context, userID string) (domain.User, error)
@@ -14,12 +19,13 @@ type UserRepository interface {
 type ShopRepository interface {
 	Save(ctx context.Context, shop domain.Shop) error
 	GetByID(ctx context.Context, shopID string) (domain.Shop, error)
-	ListActive(ctx context.Context) ([]domain.Shop, error)
+	List(ctx context.Context, filter ShopListFilter) ([]domain.Shop, error)
 }
 
 type PledgeRepository interface {
 	Save(ctx context.Context, pledge domain.Pledge) error
 	GetByID(ctx context.Context, pledgeID string) (domain.Pledge, error)
+	ListByShopID(ctx context.Context, shopID string) ([]domain.Pledge, error)
 }
 
 type AuthUserRepository interface {

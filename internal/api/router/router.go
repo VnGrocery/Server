@@ -33,6 +33,8 @@ func New(deps Dependencies) *gin.Engine {
 		v1.GET("/me", deps.AuthMiddleware.Handle(), deps.AuthHandler.Me)
 		v1.POST("/shops", deps.AuthMiddleware.Handle(), deps.ShopHandler.Create)
 		v1.PUT("/shops/:shopId", deps.AuthMiddleware.Handle(), deps.ShopHandler.Update)
+		v1.GET("/admin/shops", deps.AuthMiddleware.Handle(), deps.ShopHandler.AdminList)
+		v1.PATCH("/admin/shops/:shopId/moderation", deps.AuthMiddleware.Handle(), deps.ShopHandler.Moderate)
 		v1.POST("/seller/score", deps.AuthMiddleware.Handle(), deps.SellerHandler.Score)
 		v1.POST("/seller/commit", deps.AuthMiddleware.Handle(), deps.SellerHandler.Commit)
 		v1.POST("/buyer/check", deps.BuyerHandler.Check)

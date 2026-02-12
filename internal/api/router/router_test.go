@@ -291,15 +291,19 @@ type buyerCheckRouteStub struct{}
 
 func (buyerCheckRouteStub) Check(ctx context.Context, input buyerservice.CheckInput) (buyerservice.CheckResult, error) {
 	return buyerservice.CheckResult{
+		PolicyVersion:    "trust_policy_v1",
 		PledgeID:         input.PledgeID,
 		Trusted:          true,
 		Verdict:          "trusted",
 		PledgedScore:     8.4,
 		ActualScore:      8.0,
 		ScoreDelta:       -0.4,
+		ScoreDeltaAbs:    0.4,
 		PledgedCategory:  "fresh_produce",
 		ActualCategory:   "fresh_produce",
 		ActualConfidence: 0.9,
+		CategoryMatch:    true,
+		Reasons:          []string{},
 	}, nil
 }
 
@@ -332,6 +336,15 @@ func (shopHandlerStub) Create(ctx context.Context, input shopservice.CreateInput
 	}, nil
 }
 
+func (shopHandlerStub) Moderate(ctx context.Context, input shopservice.ModerateInput) (domain.Shop, error) {
+	return domain.Shop{
+		ShopID:            input.ShopID,
+		Status:            input.Status,
+		ModeratedByUserID: input.ModeratorUserID,
+		ModerationNote:    input.ModerationNote,
+	}, nil
+}
+
 func (shopHandlerStub) Update(ctx context.Context, input shopservice.UpdateInput) (domain.Shop, error) {
 	return domain.Shop{
 		ShopID:      input.ShopID,
@@ -345,23 +358,10 @@ func (shopHandlerStub) Update(ctx context.Context, input shopservice.UpdateInput
 	}, nil
 }
 
-func (shopHandlerStub) GetByID(ctx context.Context, shopID string) (domain.Shop, error) {
-	return domain.Shop{
-		ShopID:      shopID,
-		OwnerUserID: "user-1",
-		Name:        "Green Shop",
-		Description: "Fresh daily",
-		Address:     "123 Main St",
-		Latitude:    10.7,
-		Longitude:   106.6,
-		Status:      shopservice.ShopStatusActive,
-	}, nil
-}
-
-func (shopHandlerStub) ListActive(ctx context.Context) ([]domain.Shop, error) {
-	return []domain.Shop{
-		{
-			ShopID:      "shop-1",
+func (shopHandlerStub) GetByID(ctx context.Context, shopID string) (shopservice.ShopView, error) {
+	return shopservice.ShopView{
+		Shop: domain.Shop{
+			ShopID:      shopID,
 			OwnerUserID: "user-1",
 			Name:        "Green Shop",
 			Description: "Fresh daily",
@@ -370,5 +370,27 @@ func (shopHandlerStub) ListActive(ctx context.Context) ([]domain.Shop, error) {
 			Longitude:   106.6,
 			Status:      shopservice.ShopStatusActive,
 		},
+	}, nil
+}
+
+func (shopHandlerStub) List(ctx context.Context, input shopservice.ListInput) (shopservice.ListResult, error) {
+	return shopservice.ListResult{
+		Items: []shopservice.ShopView{
+			{
+				Shop: domain.Shop{
+					ShopID:      "shop-1",
+					OwnerUserID: "user-1",
+					Name:        "Green Shop",
+					Description: "Fresh daily",
+					Address:     "123 Main St",
+					Latitude:    10.7,
+					Longitude:   106.6,
+					Status:      shopservice.ShopStatusActive,
+				},
+			},
+		},
+		Page:     1,
+		PageSize: 20,
+		Total:    1,
 	}, nil
 }

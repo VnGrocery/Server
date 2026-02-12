@@ -85,14 +85,18 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.BuyerCheckResponse{
+		PolicyVersion:    result.PolicyVersion,
 		PledgeID:         result.PledgeID,
 		Trusted:          result.Trusted,
 		Verdict:          result.Verdict,
 		PledgedScore:     result.PledgedScore,
 		ActualScore:      result.ActualScore,
 		ScoreDelta:       result.ScoreDelta,
+		ScoreDeltaAbs:    result.ScoreDeltaAbs,
 		PledgedCategory:  result.PledgedCategory,
 		ActualCategory:   result.ActualCategory,
 		ActualConfidence: result.ActualConfidence,
+		CategoryMatch:    result.CategoryMatch,
+		Reasons:          result.Reasons,
 	})
 }

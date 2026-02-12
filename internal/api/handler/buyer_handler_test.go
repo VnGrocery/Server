@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"mime/multipart"
 	"net/http"
@@ -66,15 +67,19 @@ func TestBuyerCheckReturnsComparison(t *testing.T) {
 				t.Fatalf("unexpected pledge id: %s", input.PledgeID)
 			}
 			return buyerservice.CheckResult{
+				PolicyVersion:    "trust_policy_v1",
 				PledgeID:         "pledge-1",
 				Trusted:          true,
 				Verdict:          "trusted",
 				PledgedScore:     8.5,
 				ActualScore:      8.1,
 				ScoreDelta:       -0.4,
+				ScoreDeltaAbs:    0.4,
 				PledgedCategory:  "fresh_produce",
 				ActualCategory:   "fresh_produce",
 				ActualConfidence: 0.89,
+				CategoryMatch:    true,
+				Reasons:          []string{},
 			}, nil
 		},
 	})
@@ -106,6 +111,17 @@ func TestBuyerCheckReturnsComparison(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var response map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if response["policyVersion"] != "trust_policy_v1" {
+		t.Fatalf("unexpected policyVersion: %v", response["policyVersion"])
+	}
+	if response["categoryMatch"] != true {
+		t.Fatalf("expected categoryMatch=true, got %v", response["categoryMatch"])
 	}
 }
 

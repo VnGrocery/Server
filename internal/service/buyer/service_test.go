@@ -69,6 +69,18 @@ func TestCheckReturnsTrustedVerdict(t *testing.T) {
 	if result.Verdict != "trusted" {
 		t.Fatalf("unexpected verdict: %s", result.Verdict)
 	}
+	if result.PolicyVersion != policyVersionV1 {
+		t.Fatalf("unexpected policy version: %s", result.PolicyVersion)
+	}
+	if !result.CategoryMatch {
+		t.Fatal("expected category match")
+	}
+	if result.ScoreDeltaAbs <= 0 {
+		t.Fatal("expected positive score delta abs")
+	}
+	if len(result.Reasons) != 0 {
+		t.Fatalf("expected no warning reasons for trusted result, got %v", result.Reasons)
+	}
 }
 
 func TestCheckReturnsHighRiskOnMismatch(t *testing.T) {
@@ -105,6 +117,65 @@ func TestCheckReturnsHighRiskOnMismatch(t *testing.T) {
 	}
 	if result.Verdict != "high_risk" {
 		t.Fatalf("unexpected verdict: %s", result.Verdict)
+	}
+	if result.CategoryMatch {
+		t.Fatal("expected category mismatch")
+	}
+	if len(result.Reasons) == 0 {
+		t.Fatal("expected risk reasons")
+	}
+}
+
+func TestCheckReturnsWarningForLowConfidence(t *testing.T) {
+	service := NewService(
+		pledgeRepositoryStub{
+			getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+				return domain.Pledge{
+					PledgeID: pledgeID,
+					Score:    7.5,
+					Category: "fresh_produce",
+				}, nil
+			},
+		},
+		scorerStub{
+			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
+				return visionservice.ScoreResult{
+					Score:      7.1,
+					Category:   "fresh_produce",
+					Confidence: 0.42,
+				}, nil
+			},
+		},
+	)
+
+	result, err := service.Check(context.Background(), CheckInput{
+		PledgeID: "pledge-1",
+		Image: visionservice.ImageInput{
+			Filename: "shop.jpg",
+			Content:  bytes.NewBuffer([]byte("fake")),
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.Verdict != "warning" {
+		t.Fatalf("unexpected verdict: %s", result.Verdict)
+	}
+	if result.Trusted {
+		t.Fatal("expected untrusted warning result")
+	}
+	if len(result.Reasons) == 0 {
+		t.Fatal("expected warning reasons")
+	}
+	found := false
+	for _, reason := range result.Reasons {
+		if reason == "low_ai_confidence" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected low_ai_confidence in reasons, got %v", result.Reasons)
 	}
 }
 

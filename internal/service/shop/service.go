@@ -79,9 +79,15 @@ type TrustSummary struct {
 	LastCommittedAt    *time.Time
 }
 
+type RatingSummary struct {
+	RatingCount   int
+	AverageRating float64
+}
+
 type ShopView struct {
-	Shop         domain.Shop
-	TrustSummary TrustSummary
+	Shop          domain.Shop
+	TrustSummary  TrustSummary
+	RatingSummary RatingSummary
 }
 
 type ListResult struct {
@@ -95,17 +101,26 @@ type ListResult struct {
 type Service struct {
 	shops   repository.ShopRepository
 	pledges repository.PledgeRepository
+	reviews repository.ShopReviewRepository
 	users   repository.UserRepository
 	now     func() time.Time
 }
 
-func NewService(shops repository.ShopRepository, pledges repository.PledgeRepository, users repository.UserRepository) *Service {
+func NewService(shops repository.ShopRepository, pledges repository.PledgeRepository, reviews repository.ShopReviewRepository, users repository.UserRepository) *Service {
 	return &Service{
 		shops:   shops,
 		pledges: pledges,
+		reviews: reviews,
 		users:   users,
 		now:     time.Now,
 	}
+}
+
+type ReviewInput struct {
+	ShopID         string
+	ReviewerUserID string
+	Rating         int
+	Comment        string
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Shop, error) {
@@ -225,6 +240,68 @@ func (s *Service) GetByID(ctx context.Context, shopID string) (ShopView, error) 
 	return s.buildShopView(ctx, shop)
 }
 
+func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopReview, error) {
+	if strings.TrimSpace(input.ShopID) == "" {
+		return domain.ShopReview{}, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
+	}
+	if strings.TrimSpace(input.ReviewerUserID) == "" {
+		return domain.ShopReview{}, fmt.Errorf("%w: reviewerUserId is required", ErrInvalidShop)
+	}
+	if input.Rating < 1 || input.Rating > 5 {
+		return domain.ShopReview{}, fmt.Errorf("%w: rating must be between 1 and 5", ErrInvalidShop)
+	}
+	if s.shops == nil || s.reviews == nil {
+		return domain.ShopReview{}, fmt.Errorf("shop review dependencies are not configured")
+	}
+
+	shop, err := s.shops.GetByID(ctx, strings.TrimSpace(input.ShopID))
+	if err != nil {
+		return domain.ShopReview{}, fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
+	if shop.Status != ShopStatusActive {
+		return domain.ShopReview{}, fmt.Errorf("%w: shop is not open for reviews", ErrInvalidShop)
+	}
+
+	now := s.now().UTC()
+	existing, err := s.reviews.GetByShopAndUser(ctx, strings.TrimSpace(input.ShopID), strings.TrimSpace(input.ReviewerUserID))
+	if err != nil {
+		return domain.ShopReview{}, err
+	}
+	if existing.ReviewID != "" {
+		existing.Rating = input.Rating
+		existing.Comment = strings.TrimSpace(input.Comment)
+		existing.UpdatedAt = now
+		if err := s.reviews.Save(ctx, existing); err != nil {
+			return domain.ShopReview{}, err
+		}
+		return existing, nil
+	}
+
+	review := domain.ShopReview{
+		ReviewID:       uuid.NewString(),
+		ShopID:         strings.TrimSpace(input.ShopID),
+		ReviewerUserID: strings.TrimSpace(input.ReviewerUserID),
+		Rating:         input.Rating,
+		Comment:        strings.TrimSpace(input.Comment),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	if err := s.reviews.Save(ctx, review); err != nil {
+		return domain.ShopReview{}, err
+	}
+	return review, nil
+}
+
+func (s *Service) ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
+	if strings.TrimSpace(shopID) == "" {
+		return nil, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
+	}
+	if s.reviews == nil {
+		return nil, fmt.Errorf("shop review repository is not configured")
+	}
+	return s.reviews.ListByShopID(ctx, strings.TrimSpace(shopID))
+}
+
 func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error) {
 	if s.shops == nil {
 		return ListResult{}, fmt.Errorf("shop repository is not configured")
@@ -312,28 +389,40 @@ func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error)
 
 func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView, error) {
 	shopView := ShopView{Shop: shop}
-	if s.pledges == nil {
-		return shopView, nil
+	if s.pledges != nil {
+		pledges, err := s.pledges.ListByShopID(ctx, shop.ShopID)
+		if err != nil {
+			return ShopView{}, err
+		}
+		if len(pledges) > 0 {
+			latest := pledges[0]
+			shopView.TrustSummary = TrustSummary{
+				HasPledges:         true,
+				PledgeCount:        len(pledges),
+				LatestPledgeID:     latest.PledgeID,
+				LatestPledgeStatus: latest.Status,
+				LatestScore:        latest.Score,
+				LatestCategory:     latest.Category,
+				LatestConfidence:   latest.Confidence,
+				LastCommittedAt:    &latest.CreatedAt,
+			}
+		}
 	}
-
-	pledges, err := s.pledges.ListByShopID(ctx, shop.ShopID)
-	if err != nil {
-		return ShopView{}, err
-	}
-	if len(pledges) == 0 {
-		return shopView, nil
-	}
-
-	latest := pledges[0]
-	shopView.TrustSummary = TrustSummary{
-		HasPledges:         true,
-		PledgeCount:        len(pledges),
-		LatestPledgeID:     latest.PledgeID,
-		LatestPledgeStatus: latest.Status,
-		LatestScore:        latest.Score,
-		LatestCategory:     latest.Category,
-		LatestConfidence:   latest.Confidence,
-		LastCommittedAt:    &latest.CreatedAt,
+	if s.reviews != nil {
+		reviews, err := s.reviews.ListByShopID(ctx, shop.ShopID)
+		if err != nil {
+			return ShopView{}, err
+		}
+		if len(reviews) > 0 {
+			totalRating := 0
+			for _, review := range reviews {
+				totalRating += review.Rating
+			}
+			shopView.RatingSummary = RatingSummary{
+				RatingCount:   len(reviews),
+				AverageRating: float64(totalRating) / float64(len(reviews)),
+			}
+		}
 	}
 	return shopView, nil
 }

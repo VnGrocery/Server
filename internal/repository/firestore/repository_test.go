@@ -18,6 +18,9 @@ func TestCollectionNames(t *testing.T) {
 	if PledgesCollection != "pledges" {
 		t.Fatalf("expected pledges collection, got %s", PledgesCollection)
 	}
+	if ShopReviewsCollection != "shop_reviews" {
+		t.Fatalf("expected shop_reviews collection, got %s", ShopReviewsCollection)
+	}
 }
 
 func TestDomainStructTags(t *testing.T) {
@@ -51,6 +54,15 @@ func TestDomainStructTags(t *testing.T) {
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
+	review := domain.ShopReview{
+		ReviewID:       "review-1",
+		ShopID:         "shop-1",
+		ReviewerUserID: "user-2",
+		Rating:         5,
+		Comment:        "Great",
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
 
 	assertFirestoreTag(t, user, "UserID", "userId")
 	assertFirestoreTag(t, shop, "OwnerUserID", "ownerUserId")
@@ -60,6 +72,8 @@ func TestDomainStructTags(t *testing.T) {
 	assertFirestoreTag(t, pledge, "Score", "score")
 	assertFirestoreTag(t, pledge, "Category", "category")
 	assertFirestoreTag(t, pledge, "Confidence", "confidence")
+	assertFirestoreTag(t, review, "ReviewerUserID", "reviewerUserId")
+	assertFirestoreTag(t, review, "Rating", "rating")
 }
 
 func assertFirestoreTag(t *testing.T, value any, fieldName, expected string) {

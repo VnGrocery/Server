@@ -20,6 +20,8 @@ type ShopService interface {
 	Moderate(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error)
 	GetByID(ctx context.Context, shopID string) (shopsvc.ShopView, error)
 	List(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
+	Review(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
+	ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error)
 }
 
 type ShopHandler struct {
@@ -199,6 +201,64 @@ func (h *ShopHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, toShopResponse(shop))
 }
 
+func (h *ShopHandler) CreateReview(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	var request dto.CreateShopReviewRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	review, err := h.shops.Review(c.Request.Context(), shopsvc.ReviewInput{
+		ShopID:         c.Param("shopId"),
+		ReviewerUserID: principal.UserID,
+		Rating:         request.Rating,
+		Comment:        request.Comment,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, dto.ShopReviewResponse{
+		ReviewID:       review.ReviewID,
+		ShopID:         review.ShopID,
+		ReviewerUserID: review.ReviewerUserID,
+		Rating:         review.Rating,
+		Comment:        review.Comment,
+		CreatedAt:      review.CreatedAt,
+		UpdatedAt:      review.UpdatedAt,
+	})
+}
+
+func (h *ShopHandler) ListReviews(c *gin.Context) {
+	reviews, err := h.shops.ListReviews(c.Request.Context(), c.Param("shopId"))
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+
+	response := make([]dto.ShopReviewResponse, 0, len(reviews))
+	for _, review := range reviews {
+		response = append(response, dto.ShopReviewResponse{
+			ReviewID:       review.ReviewID,
+			ShopID:         review.ShopID,
+			ReviewerUserID: review.ReviewerUserID,
+			Rating:         review.Rating,
+			Comment:        review.Comment,
+			CreatedAt:      review.CreatedAt,
+			UpdatedAt:      review.UpdatedAt,
+		})
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 func (h *ShopHandler) writeError(c *gin.Context, err error) {
 	status := http.StatusInternalServerError
 	switch {
@@ -236,6 +296,10 @@ func toShopResponse(view shopsvc.ShopView) dto.ShopResponse {
 			LatestCategory:     view.TrustSummary.LatestCategory,
 			LatestConfidence:   view.TrustSummary.LatestConfidence,
 			LastCommittedAt:    view.TrustSummary.LastCommittedAt,
+		},
+		RatingSummary: dto.ShopRatingSummaryResponse{
+			RatingCount:   view.RatingSummary.RatingCount,
+			AverageRating: view.RatingSummary.AverageRating,
 		},
 		CreatedAt: shop.CreatedAt,
 		UpdatedAt: shop.UpdatedAt,

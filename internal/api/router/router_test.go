@@ -263,6 +263,55 @@ func TestRouterShopListPublic(t *testing.T) {
 	}
 }
 
+func TestRouterShopReviewCreateProtected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(Dependencies{
+		HealthHandler: handler.NewHealthHandler(),
+		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
+		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
+		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
+			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+				return authservice.Principal{}, authservice.ErrUnauthorized
+			},
+		}),
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/shops/shop-1/reviews", bytes.NewBufferString(`{"rating":5,"comment":"Great shop"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestRouterShopReviewListPublic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(Dependencies{
+		HealthHandler: handler.NewHealthHandler(),
+		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
+		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
+		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
+			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+				return authservice.Principal{}, authservice.ErrUnauthorized
+			},
+		}),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/shops/shop-1/reviews", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
 type sellerScorerStub struct{}
 
 func (sellerScorerStub) Score(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
@@ -392,5 +441,27 @@ func (shopHandlerStub) List(ctx context.Context, input shopservice.ListInput) (s
 		Page:     1,
 		PageSize: 20,
 		Total:    1,
+	}, nil
+}
+
+func (shopHandlerStub) Review(ctx context.Context, input shopservice.ReviewInput) (domain.ShopReview, error) {
+	return domain.ShopReview{
+		ReviewID:       "review-1",
+		ShopID:         input.ShopID,
+		ReviewerUserID: input.ReviewerUserID,
+		Rating:         input.Rating,
+		Comment:        input.Comment,
+	}, nil
+}
+
+func (shopHandlerStub) ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
+	return []domain.ShopReview{
+		{
+			ReviewID:       "review-1",
+			ShopID:         shopID,
+			ReviewerUserID: "user-1",
+			Rating:         4,
+			Comment:        "Good",
+		},
 	}, nil
 }

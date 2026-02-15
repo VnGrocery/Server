@@ -28,6 +28,12 @@ type PledgeRepository interface {
 	ListByShopID(ctx context.Context, shopID string) ([]domain.Pledge, error)
 }
 
+type ShopReviewRepository interface {
+	Save(ctx context.Context, review domain.ShopReview) error
+	GetByShopAndUser(ctx context.Context, shopID, reviewerUserID string) (domain.ShopReview, error)
+	ListByShopID(ctx context.Context, shopID string) ([]domain.ShopReview, error)
+}
+
 type AuthUserRepository interface {
 	NewUserID() string
 	Save(ctx context.Context, user domain.AuthUser) error

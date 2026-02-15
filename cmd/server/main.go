@@ -45,10 +45,11 @@ func main() {
 	}
 	pledgeRepository := firestorerepo.NewPledgeRepository(app.Firestore)
 	shopRepository := firestorerepo.NewShopRepository(app.Firestore)
+	shopReviewRepository := firestorerepo.NewShopReviewRepository(app.Firestore)
 	userRepository := firestorerepo.NewUserRepository(app.Firestore)
 	authUserRepository := firestorerepo.NewAuthUserRepository(app.Firestore)
 	accountService := authservice.NewAccountService(authUserRepository, userRepository, jwtService, 24*time.Hour, cfg.GoogleClientID)
-	shopManager := shopservice.NewService(shopRepository, pledgeRepository, userRepository)
+	shopManager := shopservice.NewService(shopRepository, pledgeRepository, shopReviewRepository, userRepository)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, visionScorer)
 	authMiddleware := middleware.NewAuthRequired(jwtService)

@@ -58,6 +58,33 @@ func (u userRepositoryStub) GetByID(ctx context.Context, userID string) (domain.
 	return u.getByID(ctx, userID)
 }
 
+type reviewRepositoryStub struct {
+	save             func(ctx context.Context, review domain.ShopReview) error
+	getByShopAndUser func(ctx context.Context, shopID, reviewerUserID string) (domain.ShopReview, error)
+	listByShopID     func(ctx context.Context, shopID string) ([]domain.ShopReview, error)
+}
+
+func (r reviewRepositoryStub) Save(ctx context.Context, review domain.ShopReview) error {
+	if r.save == nil {
+		return nil
+	}
+	return r.save(ctx, review)
+}
+
+func (r reviewRepositoryStub) GetByShopAndUser(ctx context.Context, shopID, reviewerUserID string) (domain.ShopReview, error) {
+	if r.getByShopAndUser == nil {
+		return domain.ShopReview{}, nil
+	}
+	return r.getByShopAndUser(ctx, shopID, reviewerUserID)
+}
+
+func (r reviewRepositoryStub) ListByShopID(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
+	if r.listByShopID == nil {
+		return nil, nil
+	}
+	return r.listByShopID(ctx, shopID)
+}
+
 func TestCreateShop(t *testing.T) {
 	fixedTime := time.Date(2026, 4, 3, 8, 0, 0, 0, time.UTC)
 	service := NewService(shopRepositoryStub{
@@ -79,7 +106,7 @@ func TestCreateShop(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
 		},
-	}, pledgeRepositoryStub{}, userRepositoryStub{})
+	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{})
 	service.now = func() time.Time { return fixedTime }
 
 	shop, err := service.Create(context.Background(), CreateInput{
@@ -107,7 +134,7 @@ func TestUpdateRejectsNonOwner(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "owner-1"}, nil
 		},
-	}, pledgeRepositoryStub{}, userRepositoryStub{})
+	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{})
 
 	_, err := service.Update(context.Background(), UpdateInput{
 		ShopID:      "shop-1",
@@ -131,7 +158,7 @@ func TestCreateRejectsInvalidCoordinates(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
 		},
-	}, pledgeRepositoryStub{}, userRepositoryStub{})
+	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{})
 
 	_, err := service.Create(context.Background(), CreateInput{
 		OwnerUserID: "user-1",
@@ -168,6 +195,13 @@ func TestListReturnsTrustSummary(t *testing.T) {
 				CreatedAt:  committedAt,
 			}}, nil
 		},
+	}, reviewRepositoryStub{
+		listByShopID: func(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
+			return []domain.ShopReview{
+				{ShopID: shopID, Rating: 5},
+				{ShopID: shopID, Rating: 3},
+			}, nil
+		},
 	}, userRepositoryStub{})
 
 	result, err := service.List(context.Background(), ListInput{})
@@ -183,6 +217,12 @@ func TestListReturnsTrustSummary(t *testing.T) {
 	if result.Items[0].TrustSummary.LatestPledgeID != "pledge-1" {
 		t.Fatalf("unexpected latest pledge id: %s", result.Items[0].TrustSummary.LatestPledgeID)
 	}
+	if result.Items[0].RatingSummary.RatingCount != 2 {
+		t.Fatalf("expected rating count 2, got %d", result.Items[0].RatingSummary.RatingCount)
+	}
+	if result.Items[0].RatingSummary.AverageRating != 4 {
+		t.Fatalf("expected average rating 4, got %v", result.Items[0].RatingSummary.AverageRating)
+	}
 }
 
 func TestModerateRequiresAdmin(t *testing.T) {
@@ -191,7 +231,7 @@ func TestModerateRequiresAdmin(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, Status: ShopStatusActive}, nil
 		},
-	}, pledgeRepositoryStub{}, userRepositoryStub{
+	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{
 		getByID: func(ctx context.Context, userID string) (domain.User, error) {
 			return domain.User{UserID: userID, Role: "user"}, nil
 		},
@@ -204,5 +244,39 @@ func TestModerateRequiresAdmin(t *testing.T) {
 	})
 	if !errors.Is(err, ErrAdminRequired) {
 		t.Fatalf("expected ErrAdminRequired, got %v", err)
+	}
+}
+
+func TestReviewCreatesOrUpdatesRating(t *testing.T) {
+	fixedTime := time.Date(2026, 4, 4, 10, 0, 0, 0, time.UTC)
+	service := NewService(shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, Status: ShopStatusActive}, nil
+		},
+		save: func(ctx context.Context, shop domain.Shop) error { return nil },
+	}, pledgeRepositoryStub{}, reviewRepositoryStub{
+		save: func(ctx context.Context, review domain.ShopReview) error {
+			if review.Rating != 5 {
+				t.Fatalf("unexpected rating: %d", review.Rating)
+			}
+			return nil
+		},
+		getByShopAndUser: func(ctx context.Context, shopID, reviewerUserID string) (domain.ShopReview, error) {
+			return domain.ShopReview{}, nil
+		},
+	}, userRepositoryStub{})
+	service.now = func() time.Time { return fixedTime }
+
+	review, err := service.Review(context.Background(), ReviewInput{
+		ShopID:         "shop-1",
+		ReviewerUserID: "user-1",
+		Rating:         5,
+		Comment:        "Very good",
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if review.ReviewID == "" {
+		t.Fatal("expected generated review id")
 	}
 }

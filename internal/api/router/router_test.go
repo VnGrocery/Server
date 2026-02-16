@@ -33,6 +33,7 @@ func TestRouterHealth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
+		DocsHandler:   handler.NewDocsHandler(),
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
@@ -58,6 +59,7 @@ func TestRouterMeUnauthorized(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
+		DocsHandler:   handler.NewDocsHandler(),
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
@@ -83,6 +85,7 @@ func TestRouterMeAuthorized(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
+		DocsHandler:   handler.NewDocsHandler(),
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
@@ -109,6 +112,7 @@ func TestRouterSellerScoreProtected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
+		DocsHandler:   handler.NewDocsHandler(),
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
@@ -148,6 +152,7 @@ func TestRouterSellerCommitProtected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
+		DocsHandler:   handler.NewDocsHandler(),
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
@@ -174,6 +179,7 @@ func TestRouterBuyerCheckPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
+		DocsHandler:   handler.NewDocsHandler(),
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
@@ -216,6 +222,7 @@ func TestRouterShopCreateProtected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
+		DocsHandler:   handler.NewDocsHandler(),
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
@@ -242,6 +249,7 @@ func TestRouterShopListPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
+		DocsHandler:   handler.NewDocsHandler(),
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
@@ -267,6 +275,7 @@ func TestRouterShopReviewCreateProtected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
+		DocsHandler:   handler.NewDocsHandler(),
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
@@ -292,6 +301,7 @@ func TestRouterShopReviewListPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(Dependencies{
 		HealthHandler: handler.NewHealthHandler(),
+		DocsHandler:   handler.NewDocsHandler(),
 		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
 		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
@@ -304,6 +314,56 @@ func TestRouterShopReviewListPublic(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/shops/shop-1/reviews", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestRouterDocsPublic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(Dependencies{
+		HealthHandler: handler.NewHealthHandler(),
+		DocsHandler:   handler.NewDocsHandler(),
+		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
+		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
+		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
+			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+				return authservice.Principal{}, authservice.ErrUnauthorized
+			},
+		}),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/docs", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestRouterOpenAPIPublic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(Dependencies{
+		HealthHandler: handler.NewHealthHandler(),
+		DocsHandler:   handler.NewDocsHandler(),
+		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
+		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
+		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
+			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+				return authservice.Principal{}, authservice.ErrUnauthorized
+			},
+		}),
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
 	rec := httptest.NewRecorder()
 	engine.ServeHTTP(rec, req)
 

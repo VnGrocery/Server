@@ -54,6 +54,7 @@ func main() {
 	buyerCheckService := buyerservice.NewService(pledgeRepository, visionScorer)
 	authMiddleware := middleware.NewAuthRequired(jwtService)
 	healthHandler := handler.NewHealthHandler()
+	docsHandler := handler.NewDocsHandler()
 	authHandler := handler.NewAuthHandler(accountService)
 	sellerHandler := handler.NewSellerHandler(visionScorer, sellerCommitService)
 	buyerHandler := handler.NewBuyerHandler(buyerCheckService)
@@ -61,6 +62,7 @@ func main() {
 
 	engine := router.New(router.Dependencies{
 		HealthHandler:  healthHandler,
+		DocsHandler:    docsHandler,
 		AuthHandler:    authHandler,
 		SellerHandler:  sellerHandler,
 		BuyerHandler:   buyerHandler,

@@ -9,6 +9,7 @@ import (
 
 type Dependencies struct {
 	HealthHandler  *handler.HealthHandler
+	DocsHandler    *handler.DocsHandler
 	AuthHandler    *handler.AuthHandler
 	SellerHandler  *handler.SellerHandler
 	BuyerHandler   *handler.BuyerHandler
@@ -21,6 +22,8 @@ func New(deps Dependencies) *gin.Engine {
 	engine.Use(gin.Logger(), gin.Recovery())
 
 	engine.GET("/health", deps.HealthHandler.Health)
+	engine.GET("/docs", deps.DocsHandler.SwaggerUI)
+	engine.GET("/openapi.json", deps.DocsHandler.OpenAPI)
 
 	v1 := engine.Group("/v1")
 	{

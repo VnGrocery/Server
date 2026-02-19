@@ -506,12 +506,14 @@ const swaggerUIHTML = `<!DOCTYPE html>
   <div id="swagger-ui"></div>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
   <script>
+    const specUrl = new URL('/openapi.json', window.location.href).toString();
     window.ui = SwaggerUIBundle({
-      url: '/openapi.json',
+      url: specUrl,
       dom_id: '#swagger-ui',
       deepLinking: true,
       persistAuthorization: true,
-      displayRequestDuration: true
+      displayRequestDuration: true,
+      validatorUrl: null
     });
   </script>
 </body>

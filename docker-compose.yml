@@ -1,0 +1,15 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vngrocery-api
+    env_file:
+      - .env
+    environment:
+      PORT: 5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./secrets:/app/secrets:ro
+    restart: unless-stopped

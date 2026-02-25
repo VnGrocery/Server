@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea
+.vscode
+bin
+build
+dist
+coverage.out
+Plans.md
+SESSION_NOTES.md
+secrets
+vendor

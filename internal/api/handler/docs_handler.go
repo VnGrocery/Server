@@ -77,6 +77,7 @@ func buildSchemas() gin.H {
 				"accessToken": gin.H{"type": "string"},
 				"userId":      gin.H{"type": "string"},
 				"email":       gin.H{"type": "string"},
+				"publicKey":   gin.H{"type": "string"},
 			},
 		},
 		"MeResponse": gin.H{

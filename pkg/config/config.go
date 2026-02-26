@@ -16,6 +16,11 @@ type Config struct {
 	FirebaseCredentialsFile string
 	JWTSecret               string
 	GoogleClientID          string
+	VaultEnabled            bool
+	VaultAddr               string
+	VaultToken              string
+	VaultKVMount            string
+	VaultKeysPathPrefix     string
 	AIProvider              string
 	OpenAIAPIKey            string
 	OpenAIBaseURL           string
@@ -32,6 +37,11 @@ func Load() (Config, error) {
 		FirebaseCredentialsFile: os.Getenv("FIREBASE_CREDENTIALS_FILE"),
 		JWTSecret:               os.Getenv("JWT_SECRET"),
 		GoogleClientID:          os.Getenv("GOOGLE_CLIENT_ID"),
+		VaultEnabled:            os.Getenv("VAULT_ENABLED") == "true",
+		VaultAddr:               os.Getenv("VAULT_ADDR"),
+		VaultToken:              os.Getenv("VAULT_TOKEN"),
+		VaultKVMount:            getEnvOrDefault("VAULT_KV_MOUNT", "secret"),
+		VaultKeysPathPrefix:     getEnvOrDefault("VAULT_KEYS_PATH_PREFIX", "account-keys"),
 		AIProvider:              getEnvOrDefault("AI_PROVIDER", "openai"),
 		OpenAIAPIKey:            os.Getenv("OPENAI_API_KEY"),
 		OpenAIBaseURL:           getEnvOrDefault("OPENAI_BASE_URL", "https://api.openai.com/v1"),
@@ -64,6 +74,20 @@ func (c Config) Validate() error {
 	}
 	if c.JWTSecret == "" {
 		return errors.New("JWT_SECRET is required")
+	}
+	if c.VaultEnabled {
+		if c.VaultAddr == "" {
+			return errors.New("VAULT_ADDR is required when VAULT_ENABLED=true")
+		}
+		if c.VaultToken == "" {
+			return errors.New("VAULT_TOKEN is required when VAULT_ENABLED=true")
+		}
+		if c.VaultKVMount == "" {
+			return errors.New("VAULT_KV_MOUNT is required when VAULT_ENABLED=true")
+		}
+		if c.VaultKeysPathPrefix == "" {
+			return errors.New("VAULT_KEYS_PATH_PREFIX is required when VAULT_ENABLED=true")
+		}
 	}
 
 	return nil

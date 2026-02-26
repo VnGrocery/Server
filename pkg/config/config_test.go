@@ -11,6 +11,7 @@ func TestLoadUsesDefaultPort(t *testing.T) {
 	t.Setenv("FIREBASE_CREDENTIALS_FILE", "/tmp/firebase.json")
 	t.Setenv("FIREBASE_PROJECT_ID", "demo-project")
 	t.Setenv("JWT_SECRET", "test-secret")
+	t.Setenv("VAULT_ENABLED", "false")
 	t.Setenv("OPENAI_API_KEY", "test-key")
 
 	cfg, err := Load()
@@ -27,6 +28,7 @@ func TestLoadRequiresCredentialsFile(t *testing.T) {
 	t.Setenv("PORT", "8081")
 	t.Setenv("FIREBASE_CREDENTIALS_FILE", "")
 	t.Setenv("JWT_SECRET", "test-secret")
+	t.Setenv("VAULT_ENABLED", "false")
 	t.Setenv("OPENAI_API_KEY", "test-key")
 
 	_, err := Load()
@@ -39,6 +41,7 @@ func TestLoadRequiresOpenAIAPIKey(t *testing.T) {
 	t.Setenv("PORT", "8081")
 	t.Setenv("FIREBASE_CREDENTIALS_FILE", "/tmp/firebase.json")
 	t.Setenv("JWT_SECRET", "test-secret")
+	t.Setenv("VAULT_ENABLED", "false")
 	t.Setenv("OPENAI_API_KEY", "")
 
 	cfg, err := Load()
@@ -90,6 +93,7 @@ func TestLoadReadsDotEnvFile(t *testing.T) {
 		"FIREBASE_CREDENTIALS_FILE",
 		"FIREBASE_PROJECT_ID",
 		"JWT_SECRET",
+		"VAULT_ENABLED",
 		"OPENAI_API_KEY",
 		"PORT",
 	} {
@@ -119,5 +123,23 @@ func TestLoadReadsDotEnvFile(t *testing.T) {
 	}
 	if cfg.FirebaseProjectID != "demo-from-env-file" {
 		t.Fatalf("unexpected FIREBASE_PROJECT_ID: %s", cfg.FirebaseProjectID)
+	}
+}
+
+func TestValidateRequiresVaultSettingsWhenEnabled(t *testing.T) {
+	cfg := Config{
+		Port:                    "8080",
+		FirebaseCredentialsFile: "/tmp/firebase.json",
+		JWTSecret:               "test-secret",
+		VaultEnabled:            true,
+		VaultAddr:               "",
+		VaultToken:              "",
+		VaultKVMount:            "secret",
+		VaultKeysPathPrefix:     "account-keys",
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error, got nil")
 	}
 }

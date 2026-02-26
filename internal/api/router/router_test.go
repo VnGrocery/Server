@@ -418,16 +418,16 @@ func (buyerCheckRouteStub) Check(ctx context.Context, input buyerservice.CheckIn
 
 type authAccountsStub struct{}
 
-func (authAccountsStub) Register(ctx context.Context, email, password, displayName string) (string, authservice.Principal, error) {
-	return "", authservice.Principal{}, errors.New("not implemented")
+func (authAccountsStub) Register(ctx context.Context, email, password, displayName string) (string, authservice.Principal, string, error) {
+	return "", authservice.Principal{}, "", errors.New("not implemented")
 }
 
-func (authAccountsStub) Login(ctx context.Context, email, password string) (string, authservice.Principal, error) {
-	return "", authservice.Principal{}, errors.New("not implemented")
+func (authAccountsStub) Login(ctx context.Context, email, password string) (string, authservice.Principal, string, error) {
+	return "", authservice.Principal{}, "", errors.New("not implemented")
 }
 
-func (authAccountsStub) GoogleLogin(ctx context.Context, googleIDToken string) (string, authservice.Principal, error) {
-	return "", authservice.Principal{}, errors.New("not implemented")
+func (authAccountsStub) GoogleLogin(ctx context.Context, googleIDToken string) (string, authservice.Principal, string, error) {
+	return "", authservice.Principal{}, "", errors.New("not implemented")
 }
 
 type shopHandlerStub struct{}

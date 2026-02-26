@@ -17,9 +17,9 @@ type AuthHandler struct {
 }
 
 type AccountUsecase interface {
-	Register(ctx context.Context, email, password, displayName string) (string, authservice.Principal, error)
-	Login(ctx context.Context, email, password string) (string, authservice.Principal, error)
-	GoogleLogin(ctx context.Context, googleIDToken string) (string, authservice.Principal, error)
+	Register(ctx context.Context, email, password, displayName string) (string, authservice.Principal, string, error)
+	Login(ctx context.Context, email, password string) (string, authservice.Principal, string, error)
+	GoogleLogin(ctx context.Context, googleIDToken string) (string, authservice.Principal, string, error)
 }
 
 func NewAuthHandler(accounts AccountUsecase) *AuthHandler {
@@ -48,7 +48,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	token, principal, err := h.accounts.Register(c.Request.Context(), request.Email, request.Password, request.DisplayName)
+	token, principal, publicKey, err := h.accounts.Register(c.Request.Context(), request.Email, request.Password, request.DisplayName)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, authservice.ErrInvalidCredentials) || errors.Is(err, authservice.ErrEmailTaken) {
@@ -62,6 +62,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		AccessToken: token,
 		UserID:      principal.UserID,
 		Email:       principal.Email,
+		PublicKey:   publicKey,
 	})
 }
 
@@ -72,7 +73,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, principal, err := h.accounts.Login(c.Request.Context(), request.Email, request.Password)
+	token, principal, publicKey, err := h.accounts.Login(c.Request.Context(), request.Email, request.Password)
 	if err != nil {
 		status := http.StatusUnauthorized
 		if errors.Is(err, authservice.ErrInvalidCredentials) {
@@ -88,6 +89,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		AccessToken: token,
 		UserID:      principal.UserID,
 		Email:       principal.Email,
+		PublicKey:   publicKey,
 	})
 }
 
@@ -98,7 +100,7 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 		return
 	}
 
-	token, principal, err := h.accounts.GoogleLogin(c.Request.Context(), request.IDToken)
+	token, principal, publicKey, err := h.accounts.GoogleLogin(c.Request.Context(), request.IDToken)
 	if err != nil {
 		status := http.StatusUnauthorized
 		if errors.Is(err, authservice.ErrInvalidCredentials) {
@@ -114,5 +116,6 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 		AccessToken: token,
 		UserID:      principal.UserID,
 		Email:       principal.Email,
+		PublicKey:   publicKey,
 	})
 }

@@ -22,58 +22,109 @@ var (
 type AccountService struct {
 	authUsers      repository.AuthUserRepository
 	users          repository.UserRepository
+	keys           AccountKeyStore
+	googleTokens   GoogleTokenValidator
 	jwt            Issuer
 	jwtTTL         time.Duration
 	googleClientID string
 }
 
-func NewAccountService(authUsers repository.AuthUserRepository, users repository.UserRepository, jwt Issuer, jwtTTL time.Duration, googleClientID string) *AccountService {
+type AccountKey struct {
+	PublicKey  string
+	Algorithm  string
+	VaultPath  string
+	PrivateKey string
+}
+
+type AccountKeyStore interface {
+	CreateAccountKey(ctx context.Context, userID string) (AccountKey, error)
+	DeleteAccountKey(ctx context.Context, vaultPath string) error
+}
+
+type GoogleIdentity struct {
+	Subject string
+	Email   string
+}
+
+type GoogleTokenValidator interface {
+	Validate(ctx context.Context, idToken, audience string) (GoogleIdentity, error)
+}
+
+type googleTokenValidator struct{}
+
+func (googleTokenValidator) Validate(ctx context.Context, idToken, audience string) (GoogleIdentity, error) {
+	payload, err := idtoken.Validate(ctx, idToken, audience)
+	if err != nil {
+		return GoogleIdentity{}, err
+	}
+
+	email, _ := payload.Claims["email"].(string)
+	return GoogleIdentity{
+		Subject: payload.Subject,
+		Email:   email,
+	}, nil
+}
+
+func NewAccountService(authUsers repository.AuthUserRepository, users repository.UserRepository, keys AccountKeyStore, googleTokens GoogleTokenValidator, jwt Issuer, jwtTTL time.Duration, googleClientID string) *AccountService {
+	if googleTokens == nil {
+		googleTokens = googleTokenValidator{}
+	}
 	return &AccountService{
 		authUsers:      authUsers,
 		users:          users,
+		keys:           keys,
+		googleTokens:   googleTokens,
 		jwt:            jwt,
 		jwtTTL:         jwtTTL,
 		googleClientID: googleClientID,
 	}
 }
 
-func (s *AccountService) Register(ctx context.Context, email, password, displayName string) (string, Principal, error) {
+func (s *AccountService) Register(ctx context.Context, email, password, displayName string) (string, Principal, string, error) {
 	emailLower := strings.ToLower(strings.TrimSpace(email))
 	if emailLower == "" || password == "" {
-		return "", Principal{}, fmt.Errorf("%w: email and password are required", ErrInvalidCredentials)
+		return "", Principal{}, "", fmt.Errorf("%w: email and password are required", ErrInvalidCredentials)
 	}
 	if len(password) < 8 {
-		return "", Principal{}, fmt.Errorf("%w: password must be at least 8 characters", ErrInvalidCredentials)
+		return "", Principal{}, "", fmt.Errorf("%w: password must be at least 8 characters", ErrInvalidCredentials)
 	}
 
-	if s.authUsers == nil || s.users == nil || s.jwt == nil {
-		return "", Principal{}, fmt.Errorf("auth service is not configured")
+	if s.authUsers == nil || s.users == nil || s.keys == nil || s.jwt == nil {
+		return "", Principal{}, "", fmt.Errorf("auth service is not configured")
 	}
 
 	existing, err := s.authUsers.GetByEmail(ctx, emailLower)
 	if err == nil && existing.UserID != "" {
-		return "", Principal{}, ErrEmailTaken
+		return "", Principal{}, "", ErrEmailTaken
 	}
 
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return "", Principal{}, fmt.Errorf("failed to hash password: %w", err)
+		return "", Principal{}, "", fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	userID := s.authUsers.NewUserID()
 	now := time.Now().UTC()
+	key, err := s.keys.CreateAccountKey(ctx, userID)
+	if err != nil {
+		return "", Principal{}, "", fmt.Errorf("failed to create account key: %w", err)
+	}
 
 	authUser := domain.AuthUser{
 		UserID:       userID,
 		EmailLower:   emailLower,
 		PasswordHash: string(passwordHash),
 		Providers:    []string{"password"},
+		PublicKey:    key.PublicKey,
+		KeyAlgorithm: key.Algorithm,
+		VaultKeyPath: key.VaultPath,
 		CreatedAt:    now,
 		UpdatedAt:    now,
 	}
 
 	if err := s.authUsers.Save(ctx, authUser); err != nil {
-		return "", Principal{}, err
+		s.cleanupAccountKey(ctx, key.VaultPath)
+		return "", Principal{}, "", err
 	}
 
 	if err := s.users.Save(ctx, domain.User{
@@ -84,86 +135,94 @@ func (s *AccountService) Register(ctx context.Context, email, password, displayN
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}); err != nil {
-		return "", Principal{}, err
+		s.cleanupAccountKey(ctx, key.VaultPath)
+		return "", Principal{}, "", err
 	}
 
 	principal := Principal{UserID: userID, Email: emailLower}
 	token, err := s.jwt.IssueToken(principal, s.jwtTTL)
 	if err != nil {
-		return "", Principal{}, err
+		return "", Principal{}, "", err
 	}
 
-	return token, principal, nil
+	return token, principal, key.PublicKey, nil
 }
 
-func (s *AccountService) Login(ctx context.Context, email, password string) (string, Principal, error) {
+func (s *AccountService) Login(ctx context.Context, email, password string) (string, Principal, string, error) {
 	emailLower := strings.ToLower(strings.TrimSpace(email))
 	if emailLower == "" || password == "" {
-		return "", Principal{}, ErrInvalidCredentials
+		return "", Principal{}, "", ErrInvalidCredentials
 	}
 	if s.authUsers == nil || s.jwt == nil {
-		return "", Principal{}, fmt.Errorf("auth service is not configured")
+		return "", Principal{}, "", fmt.Errorf("auth service is not configured")
 	}
 
 	authUser, err := s.authUsers.GetByEmail(ctx, emailLower)
 	if err != nil || authUser.UserID == "" {
-		return "", Principal{}, ErrInvalidCredentials
+		return "", Principal{}, "", ErrInvalidCredentials
 	}
 	if authUser.PasswordHash == "" {
-		return "", Principal{}, ErrInvalidCredentials
+		return "", Principal{}, "", ErrInvalidCredentials
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(authUser.PasswordHash), []byte(password)); err != nil {
-		return "", Principal{}, ErrInvalidCredentials
+		return "", Principal{}, "", ErrInvalidCredentials
 	}
 
 	principal := Principal{UserID: authUser.UserID, Email: emailLower}
 	token, err := s.jwt.IssueToken(principal, s.jwtTTL)
 	if err != nil {
-		return "", Principal{}, err
+		return "", Principal{}, "", err
 	}
 
-	return token, principal, nil
+	return token, principal, authUser.PublicKey, nil
 }
 
-func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) (string, Principal, error) {
+func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) (string, Principal, string, error) {
 	if strings.TrimSpace(googleIDToken) == "" {
-		return "", Principal{}, ErrInvalidCredentials
+		return "", Principal{}, "", ErrInvalidCredentials
 	}
 	if s.googleClientID == "" {
-		return "", Principal{}, fmt.Errorf("GOOGLE_CLIENT_ID is required for google login")
+		return "", Principal{}, "", fmt.Errorf("GOOGLE_CLIENT_ID is required for google login")
 	}
-	if s.authUsers == nil || s.users == nil || s.jwt == nil {
-		return "", Principal{}, fmt.Errorf("auth service is not configured")
+	if s.authUsers == nil || s.users == nil || s.keys == nil || s.jwt == nil {
+		return "", Principal{}, "", fmt.Errorf("auth service is not configured")
 	}
 
-	payload, err := idtoken.Validate(ctx, googleIDToken, s.googleClientID)
+	payload, err := s.googleTokens.Validate(ctx, googleIDToken, s.googleClientID)
 	if err != nil {
-		return "", Principal{}, ErrInvalidCredentials
+		return "", Principal{}, "", ErrInvalidCredentials
 	}
 
-	email, _ := payload.Claims["email"].(string)
-	emailLower := strings.ToLower(strings.TrimSpace(email))
+	emailLower := strings.ToLower(strings.TrimSpace(payload.Email))
 	googleSub := strings.TrimSpace(payload.Subject)
 	if googleSub == "" {
-		return "", Principal{}, ErrInvalidCredentials
+		return "", Principal{}, "", ErrInvalidCredentials
 	}
 
 	authUser, err := s.authUsers.GetByGoogleSub(ctx, googleSub)
 	if err != nil || authUser.UserID == "" {
 		userID := s.authUsers.NewUserID()
 		now := time.Now().UTC()
+		key, err := s.keys.CreateAccountKey(ctx, userID)
+		if err != nil {
+			return "", Principal{}, "", fmt.Errorf("failed to create account key: %w", err)
+		}
 
 		authUser = domain.AuthUser{
-			UserID:     userID,
-			EmailLower: emailLower,
-			GoogleSub:  googleSub,
-			Providers:  []string{"google"},
-			CreatedAt:  now,
-			UpdatedAt:  now,
+			UserID:       userID,
+			EmailLower:   emailLower,
+			GoogleSub:    googleSub,
+			Providers:    []string{"google"},
+			PublicKey:    key.PublicKey,
+			KeyAlgorithm: key.Algorithm,
+			VaultKeyPath: key.VaultPath,
+			CreatedAt:    now,
+			UpdatedAt:    now,
 		}
 		if err := s.authUsers.Save(ctx, authUser); err != nil {
-			return "", Principal{}, err
+			s.cleanupAccountKey(ctx, key.VaultPath)
+			return "", Principal{}, "", err
 		}
 		if err := s.users.Save(ctx, domain.User{
 			UserID:      userID,
@@ -173,15 +232,23 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 			CreatedAt:   now,
 			UpdatedAt:   now,
 		}); err != nil {
-			return "", Principal{}, err
+			s.cleanupAccountKey(ctx, key.VaultPath)
+			return "", Principal{}, "", err
 		}
 	}
 
 	principal := Principal{UserID: authUser.UserID, Email: emailLower}
 	token, err := s.jwt.IssueToken(principal, s.jwtTTL)
 	if err != nil {
-		return "", Principal{}, err
+		return "", Principal{}, "", err
 	}
 
-	return token, principal, nil
+	return token, principal, authUser.PublicKey, nil
+}
+
+func (s *AccountService) cleanupAccountKey(ctx context.Context, vaultPath string) {
+	if s.keys == nil || strings.TrimSpace(vaultPath) == "" {
+		return
+	}
+	_ = s.keys.DeleteAccountKey(ctx, vaultPath)
 }

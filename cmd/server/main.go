@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -15,8 +16,31 @@ import (
 	visionservice "vngrocery/internal/service/vision"
 	"vngrocery/pkg/config"
 	firebasepkg "vngrocery/pkg/firebase"
+	vaultpkg "vngrocery/pkg/vault"
 	visionpkg "vngrocery/pkg/vision"
 )
+
+type vaultAccountKeyStore struct {
+	client *vaultpkg.Client
+}
+
+func (s vaultAccountKeyStore) CreateAccountKey(ctx context.Context, userID string) (authservice.AccountKey, error) {
+	key, err := s.client.CreateAccountKey(ctx, userID)
+	if err != nil {
+		return authservice.AccountKey{}, err
+	}
+
+	return authservice.AccountKey{
+		PublicKey:  key.PublicKey,
+		Algorithm:  key.Algorithm,
+		VaultPath:  key.VaultPath,
+		PrivateKey: key.PrivateKey,
+	}, nil
+}
+
+func (s vaultAccountKeyStore) DeleteAccountKey(ctx context.Context, vaultPath string) error {
+	return s.client.DeleteAccountKey(ctx, vaultPath)
+}
 
 func main() {
 	cfg, err := config.Load()
@@ -48,7 +72,16 @@ func main() {
 	shopReviewRepository := firestorerepo.NewShopReviewRepository(app.Firestore)
 	userRepository := firestorerepo.NewUserRepository(app.Firestore)
 	authUserRepository := firestorerepo.NewAuthUserRepository(app.Firestore)
-	accountService := authservice.NewAccountService(authUserRepository, userRepository, jwtService, 24*time.Hour, cfg.GoogleClientID)
+	var accountKeys authservice.AccountKeyStore
+	if cfg.VaultEnabled {
+		accountKeys = vaultAccountKeyStore{client: vaultpkg.NewClient(vaultpkg.Config{
+			Address:        cfg.VaultAddr,
+			Token:          cfg.VaultToken,
+			KVMount:        cfg.VaultKVMount,
+			KeysPathPrefix: cfg.VaultKeysPathPrefix,
+		})}
+	}
+	accountService := authservice.NewAccountService(authUserRepository, userRepository, accountKeys, nil, jwtService, 24*time.Hour, cfg.GoogleClientID)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, shopReviewRepository, userRepository)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, visionScorer)

@@ -29,7 +29,7 @@ func buildOpenAPISpec() gin.H {
 			"description": "Backend API for authentication, shop management, trust checks, moderation, and reviews.",
 		},
 		"servers": []gin.H{
-			{"url": "http://localhost:8080"},
+			{"url": "/"},
 		},
 		"components": gin.H{
 			"securitySchemes": gin.H{

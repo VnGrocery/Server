@@ -179,6 +179,7 @@ func buildSchemas() gin.H {
 				"reviewerUserId": gin.H{"type": "string"},
 				"rating":         gin.H{"type": "integer"},
 				"comment":        gin.H{"type": "string"},
+				"status":         gin.H{"type": "string"},
 				"createdAt":      gin.H{"type": "string", "format": "date-time"},
 				"updatedAt":      gin.H{"type": "string", "format": "date-time"},
 			},

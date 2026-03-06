@@ -8,6 +8,7 @@ type EventLog struct {
 	ResourceType  string    `firestore:"resourceType"`
 	ResourceID    string    `firestore:"resourceId"`
 	Action        string    `firestore:"action"`
+	Status        string    `firestore:"status"`
 	PayloadJSON   string    `firestore:"payloadJson"`
 	PublicKey     string    `firestore:"publicKey"`
 	KeyAlgorithm  string    `firestore:"keyAlgorithm"`

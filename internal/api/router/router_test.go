@@ -430,6 +430,10 @@ func (authAccountsStub) GoogleLogin(ctx context.Context, googleIDToken string) (
 	return "", authservice.Principal{}, "", errors.New("not implemented")
 }
 
+func (authAccountsStub) Delete(ctx context.Context, userID string) (authservice.DeleteResult, error) {
+	return authservice.DeleteResult{}, errors.New("not implemented")
+}
+
 type shopHandlerStub struct{}
 
 func (shopHandlerStub) Create(ctx context.Context, input shopservice.CreateInput) (domain.Shop, error) {
@@ -464,6 +468,14 @@ func (shopHandlerStub) Update(ctx context.Context, input shopservice.UpdateInput
 		Latitude:    input.Latitude,
 		Longitude:   input.Longitude,
 		Status:      shopservice.ShopStatusActive,
+	}, nil
+}
+
+func (shopHandlerStub) Delete(ctx context.Context, input shopservice.DeleteInput) (domain.Shop, error) {
+	return domain.Shop{
+		ShopID:      input.ShopID,
+		OwnerUserID: input.OwnerUserID,
+		Status:      shopservice.ShopStatusDeleted,
 	}, nil
 }
 

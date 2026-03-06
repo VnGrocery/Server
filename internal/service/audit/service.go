@@ -24,6 +24,7 @@ type Input struct {
 	ResourceType   string
 	ResourceID     string
 	Action         string
+	Status         string
 	Payload        any
 	PublicKey      string
 	KeyAlgorithm   string
@@ -67,6 +68,9 @@ func (s *Service) Log(ctx context.Context, input Input) error {
 	}
 	if strings.TrimSpace(input.Action) == "" {
 		return fmt.Errorf("action is required")
+	}
+	if strings.TrimSpace(input.Status) == "" {
+		return fmt.Errorf("status is required")
 	}
 	if s.events == nil || s.signer == nil {
 		return fmt.Errorf("audit dependencies are not configured")
@@ -127,6 +131,7 @@ func (s *Service) Log(ctx context.Context, input Input) error {
 		ResourceType:  strings.TrimSpace(input.ResourceType),
 		ResourceID:    strings.TrimSpace(input.ResourceID),
 		Action:        strings.TrimSpace(input.Action),
+		Status:        strings.TrimSpace(input.Status),
 		PayloadJSON:   string(payloadBytes),
 		PublicKey:     publicKey,
 		KeyAlgorithm:  keyAlgorithm,

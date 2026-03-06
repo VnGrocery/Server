@@ -88,6 +88,7 @@ func TestLogSignsAndSavesEvent(t *testing.T) {
 		ResourceType: "shop",
 		ResourceID:   "shop-1",
 		Action:       "shop.updated",
+		Status:       "updated",
 		Payload: map[string]any{
 			"after": map[string]any{"name": "Green Shop"},
 		},
@@ -97,6 +98,9 @@ func TestLogSignsAndSavesEvent(t *testing.T) {
 	}
 	if saved.ActorUserID != "user-1" || saved.ResourceID != "shop-1" || saved.Signature != "signature" {
 		t.Fatalf("unexpected saved event: %#v", saved)
+	}
+	if saved.Status != "updated" {
+		t.Fatalf("unexpected status: %s", saved.Status)
 	}
 	if saved.PublicKey != "pub-key" || saved.KeyAlgorithm != "Ed25519" {
 		t.Fatalf("unexpected signer metadata: %#v", saved)

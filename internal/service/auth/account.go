@@ -18,6 +18,12 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailTaken         = errors.New("email is already registered")
+	ErrAccountDeleted     = errors.New("account is deleted")
+)
+
+const (
+	AccountStatusActive  = "active"
+	AccountStatusDeleted = "deleted"
 )
 
 type AccountService struct {
@@ -54,6 +60,11 @@ type GoogleTokenValidator interface {
 
 type AuditLogger interface {
 	Log(ctx context.Context, input audit.Input) error
+}
+
+type DeleteResult struct {
+	UserID string
+	Status string
 }
 
 type googleTokenValidator struct{}
@@ -122,6 +133,7 @@ func (s *AccountService) Register(ctx context.Context, email, password, displayN
 		EmailLower:   emailLower,
 		PasswordHash: string(passwordHash),
 		Providers:    []string{"password"},
+		Status:       AccountStatusActive,
 		PublicKey:    key.PublicKey,
 		KeyAlgorithm: key.Algorithm,
 		VaultKeyPath: key.VaultPath,
@@ -139,6 +151,7 @@ func (s *AccountService) Register(ctx context.Context, email, password, displayN
 		Email:       emailLower,
 		DisplayName: strings.TrimSpace(displayName),
 		Role:        "user",
+		Status:      AccountStatusActive,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}); err != nil {
@@ -170,6 +183,9 @@ func (s *AccountService) Login(ctx context.Context, email, password string) (str
 	authUser, err := s.authUsers.GetByEmail(ctx, emailLower)
 	if err != nil || authUser.UserID == "" {
 		return "", Principal{}, "", ErrInvalidCredentials
+	}
+	if authUser.Status == AccountStatusDeleted {
+		return "", Principal{}, "", ErrAccountDeleted
 	}
 	if authUser.PasswordHash == "" {
 		return "", Principal{}, "", ErrInvalidCredentials
@@ -224,6 +240,7 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 			EmailLower:   emailLower,
 			GoogleSub:    googleSub,
 			Providers:    []string{"google"},
+			Status:       AccountStatusActive,
 			PublicKey:    key.PublicKey,
 			KeyAlgorithm: key.Algorithm,
 			VaultKeyPath: key.VaultPath,
@@ -239,6 +256,7 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 			Email:       emailLower,
 			DisplayName: "",
 			Role:        "user",
+			Status:      AccountStatusActive,
 			CreatedAt:   now,
 			UpdatedAt:   now,
 		}); err != nil {
@@ -249,6 +267,9 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 			return "", Principal{}, "", err
 		}
 	}
+	if authUser.Status == AccountStatusDeleted {
+		return "", Principal{}, "", ErrAccountDeleted
+	}
 
 	principal := Principal{UserID: authUser.UserID, Email: emailLower}
 	token, err := s.jwt.IssueToken(principal, s.jwtTTL)
@@ -257,6 +278,64 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 	}
 
 	return token, principal, authUser.PublicKey, nil
+}
+
+func (s *AccountService) Delete(ctx context.Context, userID string) (DeleteResult, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return DeleteResult{}, fmt.Errorf("%w: userId is required", ErrInvalidCredentials)
+	}
+	if s.authUsers == nil || s.users == nil {
+		return DeleteResult{}, fmt.Errorf("auth service is not configured")
+	}
+
+	authUser, err := s.authUsers.GetByID(ctx, userID)
+	if err != nil {
+		return DeleteResult{}, err
+	}
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return DeleteResult{}, err
+	}
+	if authUser.Status == AccountStatusDeleted && user.Status == AccountStatusDeleted {
+		return DeleteResult{UserID: userID, Status: AccountStatusDeleted}, nil
+	}
+
+	now := time.Now().UTC()
+	authUser.Status = AccountStatusDeleted
+	authUser.UpdatedAt = now
+	if err := s.authUsers.Save(ctx, authUser); err != nil {
+		return DeleteResult{}, err
+	}
+
+	user.Status = AccountStatusDeleted
+	user.UpdatedAt = now
+	if err := s.users.Save(ctx, user); err != nil {
+		return DeleteResult{}, err
+	}
+
+	if s.audit != nil {
+		if err := s.audit.Log(ctx, audit.Input{
+			ActorUserID:    userID,
+			ResourceType:   "account",
+			ResourceID:     userID,
+			Action:         "account.deleted",
+			Status:         "deleted",
+			PublicKey:      authUser.PublicKey,
+			KeyAlgorithm:   authUser.KeyAlgorithm,
+			SignerVaultKey: authUser.VaultKeyPath,
+			Payload: map[string]any{
+				"after": map[string]any{
+					"userId": userID,
+					"status": AccountStatusDeleted,
+				},
+			},
+		}); err != nil {
+			return DeleteResult{}, err
+		}
+	}
+
+	return DeleteResult{UserID: userID, Status: AccountStatusDeleted}, nil
 }
 
 func (s *AccountService) cleanupAccountKey(ctx context.Context, vaultPath string) {
@@ -275,6 +354,7 @@ func (s *AccountService) logAccountCreated(ctx context.Context, authUser domain.
 		ResourceType:   "account",
 		ResourceID:     authUser.UserID,
 		Action:         "account.created",
+		Status:         "created",
 		PublicKey:      authUser.PublicKey,
 		KeyAlgorithm:   authUser.KeyAlgorithm,
 		SignerVaultKey: authUser.VaultKeyPath,

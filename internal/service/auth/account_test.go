@@ -47,7 +47,8 @@ func (s authUserRepoStub) GetByGoogleSub(ctx context.Context, googleSub string) 
 }
 
 type userRepoStub struct {
-	save func(ctx context.Context, user domain.User) error
+	save    func(ctx context.Context, user domain.User) error
+	getByID func(ctx context.Context, userID string) (domain.User, error)
 }
 
 func (s userRepoStub) Save(ctx context.Context, user domain.User) error {
@@ -58,6 +59,9 @@ func (s userRepoStub) Save(ctx context.Context, user domain.User) error {
 }
 
 func (s userRepoStub) GetByID(ctx context.Context, userID string) (domain.User, error) {
+	if s.getByID != nil {
+		return s.getByID(ctx, userID)
+	}
 	return domain.User{}, errors.New("not implemented")
 }
 
@@ -181,8 +185,14 @@ func TestAccountServiceRegisterCreatesVaultKeyAndReturnsPublicKey(t *testing.T) 
 	if savedAuthUser.PublicKey != "pub-key" || savedAuthUser.KeyAlgorithm != "Ed25519" || savedAuthUser.VaultKeyPath != "account-keys/user-1" {
 		t.Fatalf("auth user key metadata not persisted: %#v", savedAuthUser)
 	}
+	if savedAuthUser.Status != AccountStatusActive {
+		t.Fatalf("unexpected auth user status: %s", savedAuthUser.Status)
+	}
 	if savedUser.Email != "user@example.com" {
 		t.Fatalf("unexpected saved user email: %s", savedUser.Email)
+	}
+	if savedUser.Status != AccountStatusActive {
+		t.Fatalf("unexpected saved user status: %s", savedUser.Status)
 	}
 	if keys.createHits != 1 || keys.deleteHits != 0 {
 		t.Fatalf("unexpected key store calls: create=%d delete=%d", keys.createHits, keys.deleteHits)
@@ -400,5 +410,89 @@ func TestAccountServiceGoogleLoginDoesNotRecreateKeyForExistingUser(t *testing.T
 	}
 	if keys.createHits != 0 {
 		t.Fatalf("expected no key recreation, got %d", keys.createHits)
+	}
+}
+
+func TestAccountServiceLoginRejectsDeletedAccount(t *testing.T) {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to hash password: %v", err)
+	}
+
+	service := NewAccountService(
+		authUserRepoStub{
+			getByEmail: func(ctx context.Context, emailLower string) (domain.AuthUser, error) {
+				return domain.AuthUser{
+					UserID:       "user-1",
+					EmailLower:   emailLower,
+					PasswordHash: string(passwordHash),
+					Status:       AccountStatusDeleted,
+				}, nil
+			},
+		},
+		userRepoStub{},
+		nil,
+		nil,
+		nil,
+		issuerStub{},
+		time.Hour,
+		"google-client-id",
+	)
+
+	_, _, _, err = service.Login(context.Background(), "user@example.com", "password123")
+	if !errors.Is(err, ErrAccountDeleted) {
+		t.Fatalf("expected ErrAccountDeleted, got %v", err)
+	}
+}
+
+func TestAccountServiceDeleteMarksAccountDeleted(t *testing.T) {
+	auditLogger := &auditLoggerStub{}
+	var savedAuthUser domain.AuthUser
+	var savedUser domain.User
+	service := NewAccountService(
+		authUserRepoStub{
+			getByID: func(ctx context.Context, userID string) (domain.AuthUser, error) {
+				return domain.AuthUser{
+					UserID:       userID,
+					Status:       AccountStatusActive,
+					PublicKey:    "pub-key",
+					KeyAlgorithm: "Ed25519",
+					VaultKeyPath: "account-keys/user-1",
+				}, nil
+			},
+			save: func(ctx context.Context, user domain.AuthUser) error {
+				savedAuthUser = user
+				return nil
+			},
+		},
+		userRepoStub{
+			getByID: func(ctx context.Context, userID string) (domain.User, error) {
+				return domain.User{UserID: userID, Status: AccountStatusActive}, nil
+			},
+			save: func(ctx context.Context, user domain.User) error {
+				savedUser = user
+				return nil
+			},
+		},
+		nil,
+		auditLogger,
+		nil,
+		issuerStub{},
+		time.Hour,
+		"google-client-id",
+	)
+
+	result, err := service.Delete(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.Status != AccountStatusDeleted {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	if savedAuthUser.Status != AccountStatusDeleted || savedUser.Status != AccountStatusDeleted {
+		t.Fatalf("expected deleted statuses, got auth=%s user=%s", savedAuthUser.Status, savedUser.Status)
+	}
+	if auditLogger.logHits != 1 {
+		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
 	}
 }

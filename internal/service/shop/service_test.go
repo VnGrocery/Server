@@ -163,6 +163,31 @@ func TestUpdateRejectsNonOwner(t *testing.T) {
 	}
 }
 
+func TestDeleteMarksShopDeleted(t *testing.T) {
+	auditLogger := &auditLoggerStub{}
+	var savedShop domain.Shop
+	service := NewService(shopRepositoryStub{
+		save: func(ctx context.Context, shop domain.Shop) error {
+			savedShop = shop
+			return nil
+		},
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1", Status: ShopStatusActive}, nil
+		},
+	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, auditLogger)
+
+	shop, err := service.Delete(context.Background(), DeleteInput{ShopID: "shop-1", OwnerUserID: "user-1"})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if shop.Status != ShopStatusDeleted || savedShop.Status != ShopStatusDeleted {
+		t.Fatalf("expected deleted status, got %#v %#v", shop, savedShop)
+	}
+	if auditLogger.logHits != 1 {
+		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
+	}
+}
+
 func TestCreateRejectsInvalidCoordinates(t *testing.T) {
 	service := NewService(shopRepositoryStub{
 		save: func(ctx context.Context, shop domain.Shop) error {
@@ -293,12 +318,15 @@ func TestReviewCreatesOrUpdatesRating(t *testing.T) {
 	if review.ReviewID == "" {
 		t.Fatal("expected generated review id")
 	}
+	if review.Status != ReviewStatusActive {
+		t.Fatalf("unexpected review status: %s", review.Status)
+	}
 }
 
 func TestCreateShopWritesAuditLog(t *testing.T) {
 	auditLogger := &auditLoggerStub{
 		log: func(ctx context.Context, input audit.Input) error {
-			if input.Action != "shop.created" || input.ActorUserID != "user-1" || input.ResourceType != "shop" {
+			if input.Action != "shop.created" || input.Status != "created" || input.ActorUserID != "user-1" || input.ResourceType != "shop" {
 				t.Fatalf("unexpected audit input: %#v", input)
 			}
 			return nil

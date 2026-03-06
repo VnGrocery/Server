@@ -92,6 +92,7 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 			ResourceType: "pledge",
 			ResourceID:   pledge.PledgeID,
 			Action:       "pledge.committed",
+			Status:       "committed",
 			Payload: map[string]any{
 				"after": pledge,
 			},

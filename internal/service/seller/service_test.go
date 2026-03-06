@@ -188,7 +188,7 @@ func (s *auditLoggerStub) Log(ctx context.Context, input audit.Input) error {
 func TestCommitWritesAuditLog(t *testing.T) {
 	auditLogger := &auditLoggerStub{
 		log: func(ctx context.Context, input audit.Input) error {
-			if input.Action != "pledge.committed" || input.ActorUserID != "user-1" || input.ResourceType != "pledge" {
+			if input.Action != "pledge.committed" || input.Status != "committed" || input.ActorUserID != "user-1" || input.ResourceType != "pledge" {
 				t.Fatalf("unexpected audit input: %#v", input)
 			}
 			return nil

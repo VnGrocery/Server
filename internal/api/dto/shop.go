@@ -42,6 +42,7 @@ type ShopReviewResponse struct {
 	ReviewerUserID string    `json:"reviewerUserId"`
 	Rating         int       `json:"rating"`
 	Comment        string    `json:"comment"`
+	Status         string    `json:"status"`
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
 }

@@ -20,6 +20,7 @@ type AccountUsecase interface {
 	Register(ctx context.Context, email, password, displayName string) (string, authservice.Principal, string, error)
 	Login(ctx context.Context, email, password string) (string, authservice.Principal, string, error)
 	GoogleLogin(ctx context.Context, googleIDToken string) (string, authservice.Principal, string, error)
+	Delete(ctx context.Context, userID string) (authservice.DeleteResult, error)
 }
 
 func NewAuthHandler(accounts AccountUsecase) *AuthHandler {
@@ -78,6 +79,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		status := http.StatusUnauthorized
 		if errors.Is(err, authservice.ErrInvalidCredentials) {
 			status = http.StatusUnauthorized
+		} else if errors.Is(err, authservice.ErrAccountDeleted) {
+			status = http.StatusForbidden
 		} else {
 			status = http.StatusInternalServerError
 		}
@@ -105,6 +108,8 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 		status := http.StatusUnauthorized
 		if errors.Is(err, authservice.ErrInvalidCredentials) {
 			status = http.StatusUnauthorized
+		} else if errors.Is(err, authservice.ErrAccountDeleted) {
+			status = http.StatusForbidden
 		} else {
 			status = http.StatusBadRequest
 		}
@@ -117,5 +122,28 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 		UserID:      principal.UserID,
 		Email:       principal.Email,
 		PublicKey:   publicKey,
+	})
+}
+
+func (h *AuthHandler) DeleteMe(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	result, err := h.accounts.Delete(c.Request.Context(), principal.UserID)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, authservice.ErrInvalidCredentials) {
+			status = http.StatusBadRequest
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"userId": result.UserID,
+		"status": result.Status,
 	})
 }

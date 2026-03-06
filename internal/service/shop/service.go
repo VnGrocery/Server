@@ -28,6 +28,8 @@ const (
 	ShopStatusPendingReview = "pending_review"
 	ShopStatusSuspended     = "suspended"
 	ShopStatusRejected      = "rejected"
+	ShopStatusDeleted       = "deleted"
+	ReviewStatusActive      = "active"
 	defaultPage             = 1
 	defaultPageSize         = 20
 	maxPageSize             = 100
@@ -57,6 +59,11 @@ type ModerateInput struct {
 	ModeratorUserID string
 	Status          string
 	ModerationNote  string
+}
+
+type DeleteInput struct {
+	ShopID      string
+	OwnerUserID string
 }
 
 type ListInput struct {
@@ -157,7 +164,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Shop, e
 	}
 	if err := s.logMutation(ctx, input.OwnerUserID, "shop", shop.ShopID, "shop.created", map[string]any{
 		"after": shop,
-	}); err != nil {
+	}, "created"); err != nil {
 		return domain.Shop{}, err
 	}
 
@@ -186,6 +193,9 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Shop, e
 	if existing.OwnerUserID != strings.TrimSpace(input.OwnerUserID) {
 		return domain.Shop{}, ErrForbidden
 	}
+	if existing.Status == ShopStatusDeleted {
+		return domain.Shop{}, ErrNotFound
+	}
 
 	existing.Name = strings.TrimSpace(input.Name)
 	existing.Description = strings.TrimSpace(input.Description)
@@ -200,10 +210,47 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Shop, e
 	if err := s.logMutation(ctx, input.OwnerUserID, "shop", existing.ShopID, "shop.updated", map[string]any{
 		"before": before,
 		"after":  existing,
-	}); err != nil {
+	}, "updated"); err != nil {
 		return domain.Shop{}, err
 	}
 
+	return existing, nil
+}
+
+func (s *Service) Delete(ctx context.Context, input DeleteInput) (domain.Shop, error) {
+	if strings.TrimSpace(input.ShopID) == "" {
+		return domain.Shop{}, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
+	}
+	if strings.TrimSpace(input.OwnerUserID) == "" {
+		return domain.Shop{}, fmt.Errorf("%w: ownerUserId is required", ErrInvalidShop)
+	}
+	if s.shops == nil {
+		return domain.Shop{}, fmt.Errorf("shop repository is not configured")
+	}
+
+	existing, err := s.shops.GetByID(ctx, input.ShopID)
+	if err != nil {
+		return domain.Shop{}, fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
+	before := existing
+	if existing.ShopID == "" || existing.Status == ShopStatusDeleted {
+		return domain.Shop{}, ErrNotFound
+	}
+	if existing.OwnerUserID != strings.TrimSpace(input.OwnerUserID) {
+		return domain.Shop{}, ErrForbidden
+	}
+
+	existing.Status = ShopStatusDeleted
+	existing.UpdatedAt = s.now().UTC()
+	if err := s.shops.Save(ctx, existing); err != nil {
+		return domain.Shop{}, err
+	}
+	if err := s.logMutation(ctx, input.OwnerUserID, "shop", existing.ShopID, "shop.deleted", map[string]any{
+		"before": before,
+		"after":  existing,
+	}, "deleted"); err != nil {
+		return domain.Shop{}, err
+	}
 	return existing, nil
 }
 
@@ -244,7 +291,7 @@ func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.Sho
 	if err := s.logMutation(ctx, input.ModeratorUserID, "shop", existing.ShopID, "shop.moderated", map[string]any{
 		"before": before,
 		"after":  existing,
-	}); err != nil {
+	}, "moderated"); err != nil {
 		return domain.Shop{}, err
 	}
 
@@ -261,6 +308,9 @@ func (s *Service) GetByID(ctx context.Context, shopID string) (ShopView, error) 
 	shop, err := s.shops.GetByID(ctx, strings.TrimSpace(shopID))
 	if err != nil {
 		return ShopView{}, fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
+	if shop.Status != ShopStatusActive {
+		return ShopView{}, ErrNotFound
 	}
 
 	return s.buildShopView(ctx, shop)
@@ -297,6 +347,7 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 		before := existing
 		existing.Rating = input.Rating
 		existing.Comment = strings.TrimSpace(input.Comment)
+		existing.Status = ReviewStatusActive
 		existing.UpdatedAt = now
 		if err := s.reviews.Save(ctx, existing); err != nil {
 			return domain.ShopReview{}, err
@@ -304,7 +355,7 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 		if err := s.logMutation(ctx, input.ReviewerUserID, "shop_review", existing.ReviewID, "shop_review.updated", map[string]any{
 			"before": before,
 			"after":  existing,
-		}); err != nil {
+		}, "updated"); err != nil {
 			return domain.ShopReview{}, err
 		}
 		return existing, nil
@@ -316,6 +367,7 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 		ReviewerUserID: strings.TrimSpace(input.ReviewerUserID),
 		Rating:         input.Rating,
 		Comment:        strings.TrimSpace(input.Comment),
+		Status:         ReviewStatusActive,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
@@ -324,13 +376,13 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 	}
 	if err := s.logMutation(ctx, input.ReviewerUserID, "shop_review", review.ReviewID, "shop_review.created", map[string]any{
 		"after": review,
-	}); err != nil {
+	}, "created"); err != nil {
 		return domain.ShopReview{}, err
 	}
 	return review, nil
 }
 
-func (s *Service) logMutation(ctx context.Context, actorUserID, resourceType, resourceID, action string, payload any) error {
+func (s *Service) logMutation(ctx context.Context, actorUserID, resourceType, resourceID, action string, payload any, status string) error {
 	if s.audit == nil {
 		return nil
 	}
@@ -339,6 +391,7 @@ func (s *Service) logMutation(ctx context.Context, actorUserID, resourceType, re
 		ResourceType: resourceType,
 		ResourceID:   resourceID,
 		Action:       action,
+		Status:       status,
 		Payload:      payload,
 	})
 }

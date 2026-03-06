@@ -17,6 +17,7 @@ import (
 type ShopService interface {
 	Create(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error)
 	Update(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error)
+	Delete(ctx context.Context, input shopsvc.DeleteInput) (domain.Shop, error)
 	Moderate(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error)
 	GetByID(ctx context.Context, shopID string) (shopsvc.ShopView, error)
 	List(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
@@ -82,6 +83,25 @@ func (h *ShopHandler) Update(c *gin.Context) {
 		Address:     request.Address,
 		Latitude:    request.Latitude,
 		Longitude:   request.Longitude,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, toShopResponse(shopsvc.ShopView{Shop: shop}))
+}
+
+func (h *ShopHandler) Delete(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	shop, err := h.shops.Delete(c.Request.Context(), shopsvc.DeleteInput{
+		ShopID:      c.Param("shopId"),
+		OwnerUserID: principal.UserID,
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -231,6 +251,7 @@ func (h *ShopHandler) CreateReview(c *gin.Context) {
 		ReviewerUserID: review.ReviewerUserID,
 		Rating:         review.Rating,
 		Comment:        review.Comment,
+		Status:         review.Status,
 		CreatedAt:      review.CreatedAt,
 		UpdatedAt:      review.UpdatedAt,
 	})
@@ -251,6 +272,7 @@ func (h *ShopHandler) ListReviews(c *gin.Context) {
 			ReviewerUserID: review.ReviewerUserID,
 			Rating:         review.Rating,
 			Comment:        review.Comment,
+			Status:         review.Status,
 			CreatedAt:      review.CreatedAt,
 			UpdatedAt:      review.UpdatedAt,
 		})

@@ -13,6 +13,7 @@ import (
 
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
+	"vngrocery/internal/service/audit"
 )
 
 var (
@@ -103,15 +104,21 @@ type Service struct {
 	pledges repository.PledgeRepository
 	reviews repository.ShopReviewRepository
 	users   repository.UserRepository
+	audit   AuditLogger
 	now     func() time.Time
 }
 
-func NewService(shops repository.ShopRepository, pledges repository.PledgeRepository, reviews repository.ShopReviewRepository, users repository.UserRepository) *Service {
+type AuditLogger interface {
+	Log(ctx context.Context, input audit.Input) error
+}
+
+func NewService(shops repository.ShopRepository, pledges repository.PledgeRepository, reviews repository.ShopReviewRepository, users repository.UserRepository, auditLogger AuditLogger) *Service {
 	return &Service{
 		shops:   shops,
 		pledges: pledges,
 		reviews: reviews,
 		users:   users,
+		audit:   auditLogger,
 		now:     time.Now,
 	}
 }
@@ -148,6 +155,11 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Shop, e
 	if err := s.shops.Save(ctx, shop); err != nil {
 		return domain.Shop{}, err
 	}
+	if err := s.logMutation(ctx, input.OwnerUserID, "shop", shop.ShopID, "shop.created", map[string]any{
+		"after": shop,
+	}); err != nil {
+		return domain.Shop{}, err
+	}
 
 	return shop, nil
 }
@@ -167,6 +179,7 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Shop, e
 	if err != nil {
 		return domain.Shop{}, fmt.Errorf("%w: %v", ErrNotFound, err)
 	}
+	before := existing
 	if existing.ShopID == "" {
 		return domain.Shop{}, ErrNotFound
 	}
@@ -182,6 +195,12 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Shop, e
 	existing.UpdatedAt = s.now().UTC()
 
 	if err := s.shops.Save(ctx, existing); err != nil {
+		return domain.Shop{}, err
+	}
+	if err := s.logMutation(ctx, input.OwnerUserID, "shop", existing.ShopID, "shop.updated", map[string]any{
+		"before": before,
+		"after":  existing,
+	}); err != nil {
 		return domain.Shop{}, err
 	}
 
@@ -210,6 +229,7 @@ func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.Sho
 	if err != nil {
 		return domain.Shop{}, fmt.Errorf("%w: %v", ErrNotFound, err)
 	}
+	before := existing
 
 	now := s.now().UTC()
 	existing.Status = status
@@ -219,6 +239,12 @@ func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.Sho
 	existing.UpdatedAt = now
 
 	if err := s.shops.Save(ctx, existing); err != nil {
+		return domain.Shop{}, err
+	}
+	if err := s.logMutation(ctx, input.ModeratorUserID, "shop", existing.ShopID, "shop.moderated", map[string]any{
+		"before": before,
+		"after":  existing,
+	}); err != nil {
 		return domain.Shop{}, err
 	}
 
@@ -268,10 +294,17 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 		return domain.ShopReview{}, err
 	}
 	if existing.ReviewID != "" {
+		before := existing
 		existing.Rating = input.Rating
 		existing.Comment = strings.TrimSpace(input.Comment)
 		existing.UpdatedAt = now
 		if err := s.reviews.Save(ctx, existing); err != nil {
+			return domain.ShopReview{}, err
+		}
+		if err := s.logMutation(ctx, input.ReviewerUserID, "shop_review", existing.ReviewID, "shop_review.updated", map[string]any{
+			"before": before,
+			"after":  existing,
+		}); err != nil {
 			return domain.ShopReview{}, err
 		}
 		return existing, nil
@@ -289,7 +322,25 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 	if err := s.reviews.Save(ctx, review); err != nil {
 		return domain.ShopReview{}, err
 	}
+	if err := s.logMutation(ctx, input.ReviewerUserID, "shop_review", review.ReviewID, "shop_review.created", map[string]any{
+		"after": review,
+	}); err != nil {
+		return domain.ShopReview{}, err
+	}
 	return review, nil
+}
+
+func (s *Service) logMutation(ctx context.Context, actorUserID, resourceType, resourceID, action string, payload any) error {
+	if s.audit == nil {
+		return nil
+	}
+	return s.audit.Log(ctx, audit.Input{
+		ActorUserID:  strings.TrimSpace(actorUserID),
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+		Action:       action,
+		Payload:      payload,
+	})
 }
 
 func (s *Service) ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error) {

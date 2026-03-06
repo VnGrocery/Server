@@ -8,6 +8,7 @@ import (
 
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
+	"vngrocery/internal/service/audit"
 )
 
 type shopRepositoryStub struct {
@@ -85,6 +86,19 @@ func (r reviewRepositoryStub) ListByShopID(ctx context.Context, shopID string) (
 	return r.listByShopID(ctx, shopID)
 }
 
+type auditLoggerStub struct {
+	log     func(ctx context.Context, input audit.Input) error
+	logHits int
+}
+
+func (s *auditLoggerStub) Log(ctx context.Context, input audit.Input) error {
+	s.logHits++
+	if s.log != nil {
+		return s.log(ctx, input)
+	}
+	return nil
+}
+
 func TestCreateShop(t *testing.T) {
 	fixedTime := time.Date(2026, 4, 3, 8, 0, 0, 0, time.UTC)
 	service := NewService(shopRepositoryStub{
@@ -106,7 +120,7 @@ func TestCreateShop(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
 		},
-	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{})
+	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
 	service.now = func() time.Time { return fixedTime }
 
 	shop, err := service.Create(context.Background(), CreateInput{
@@ -134,7 +148,7 @@ func TestUpdateRejectsNonOwner(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "owner-1"}, nil
 		},
-	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{})
+	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
 
 	_, err := service.Update(context.Background(), UpdateInput{
 		ShopID:      "shop-1",
@@ -158,7 +172,7 @@ func TestCreateRejectsInvalidCoordinates(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
 		},
-	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{})
+	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
 
 	_, err := service.Create(context.Background(), CreateInput{
 		OwnerUserID: "user-1",
@@ -202,7 +216,7 @@ func TestListReturnsTrustSummary(t *testing.T) {
 				{ShopID: shopID, Rating: 3},
 			}, nil
 		},
-	}, userRepositoryStub{})
+	}, userRepositoryStub{}, nil)
 
 	result, err := service.List(context.Background(), ListInput{})
 	if err != nil {
@@ -235,7 +249,7 @@ func TestModerateRequiresAdmin(t *testing.T) {
 		getByID: func(ctx context.Context, userID string) (domain.User, error) {
 			return domain.User{UserID: userID, Role: "user"}, nil
 		},
-	})
+	}, nil)
 
 	_, err := service.Moderate(context.Background(), ModerateInput{
 		ShopID:          "shop-1",
@@ -264,7 +278,7 @@ func TestReviewCreatesOrUpdatesRating(t *testing.T) {
 		getByShopAndUser: func(ctx context.Context, shopID, reviewerUserID string) (domain.ShopReview, error) {
 			return domain.ShopReview{}, nil
 		},
-	}, userRepositoryStub{})
+	}, userRepositoryStub{}, nil)
 	service.now = func() time.Time { return fixedTime }
 
 	review, err := service.Review(context.Background(), ReviewInput{
@@ -278,5 +292,36 @@ func TestReviewCreatesOrUpdatesRating(t *testing.T) {
 	}
 	if review.ReviewID == "" {
 		t.Fatal("expected generated review id")
+	}
+}
+
+func TestCreateShopWritesAuditLog(t *testing.T) {
+	auditLogger := &auditLoggerStub{
+		log: func(ctx context.Context, input audit.Input) error {
+			if input.Action != "shop.created" || input.ActorUserID != "user-1" || input.ResourceType != "shop" {
+				t.Fatalf("unexpected audit input: %#v", input)
+			}
+			return nil
+		},
+	}
+
+	service := NewService(shopRepositoryStub{
+		save: func(ctx context.Context, shop domain.Shop) error { return nil },
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{}, nil
+		},
+	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, auditLogger)
+
+	if _, err := service.Create(context.Background(), CreateInput{
+		OwnerUserID: "user-1",
+		Name:        "Green Shop",
+		Address:     "123 Main St",
+		Latitude:    10,
+		Longitude:   106,
+	}); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if auditLogger.logHits != 1 {
+		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"vngrocery/internal/api/middleware"
 	"vngrocery/internal/api/router"
 	firestorerepo "vngrocery/internal/repository/firestore"
+	auditservice "vngrocery/internal/service/audit"
 	authservice "vngrocery/internal/service/auth"
 	buyerservice "vngrocery/internal/service/buyer"
 	sellerservice "vngrocery/internal/service/seller"
@@ -72,18 +73,26 @@ func main() {
 	shopReviewRepository := firestorerepo.NewShopReviewRepository(app.Firestore)
 	userRepository := firestorerepo.NewUserRepository(app.Firestore)
 	authUserRepository := firestorerepo.NewAuthUserRepository(app.Firestore)
+	eventLogRepository := firestorerepo.NewEventLogRepository(app.Firestore)
 	var accountKeys authservice.AccountKeyStore
+	var auditSigner auditservice.Signer
 	if cfg.VaultEnabled {
-		accountKeys = vaultAccountKeyStore{client: vaultpkg.NewClient(vaultpkg.Config{
+		vaultClient := vaultpkg.NewClient(vaultpkg.Config{
 			Address:        cfg.VaultAddr,
 			Token:          cfg.VaultToken,
 			KVMount:        cfg.VaultKVMount,
 			KeysPathPrefix: cfg.VaultKeysPathPrefix,
-		})}
+		})
+		accountKeys = vaultAccountKeyStore{client: vaultClient}
+		auditSigner = vaultClient
 	}
-	accountService := authservice.NewAccountService(authUserRepository, userRepository, accountKeys, nil, jwtService, 24*time.Hour, cfg.GoogleClientID)
-	shopManager := shopservice.NewService(shopRepository, pledgeRepository, shopReviewRepository, userRepository)
-	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository)
+	var auditLogger *auditservice.Service
+	if auditSigner != nil {
+		auditLogger = auditservice.NewService(eventLogRepository, authUserRepository, auditSigner)
+	}
+	accountService := authservice.NewAccountService(authUserRepository, userRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, cfg.GoogleClientID)
+	shopManager := shopservice.NewService(shopRepository, pledgeRepository, shopReviewRepository, userRepository, auditLogger)
+	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, auditLogger)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, visionScorer)
 	authMiddleware := middleware.NewAuthRequired(jwtService)
 	healthHandler := handler.NewHealthHandler()

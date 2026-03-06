@@ -8,6 +8,7 @@ import (
 
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
+	"vngrocery/internal/service/audit"
 )
 
 type pledgeRepositoryStub struct {
@@ -65,7 +66,7 @@ func TestCommitCreatesPledge(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1"}, nil
 		},
-	})
+	}, nil)
 	service.now = func() time.Time { return fixedTime }
 
 	pledge, err := service.Commit(context.Background(), CommitInput{
@@ -93,7 +94,7 @@ func TestCommitRejectsInvalidInput(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
 		},
-	})
+	}, nil)
 
 	_, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "",
@@ -117,7 +118,7 @@ func TestCommitRejectsMissingShop(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, errors.New("not found")
 		},
-	})
+	}, nil)
 
 	_, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",
@@ -141,7 +142,7 @@ func TestCommitRejectsNonOwnerShop(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "owner-2"}, nil
 		},
-	})
+	}, nil)
 
 	_, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",
@@ -169,4 +170,49 @@ func (s shopRepositoryStub) GetByID(ctx context.Context, shopID string) (domain.
 
 func (s shopRepositoryStub) List(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
 	return nil, errors.New("not implemented")
+}
+
+type auditLoggerStub struct {
+	log     func(ctx context.Context, input audit.Input) error
+	logHits int
+}
+
+func (s *auditLoggerStub) Log(ctx context.Context, input audit.Input) error {
+	s.logHits++
+	if s.log != nil {
+		return s.log(ctx, input)
+	}
+	return nil
+}
+
+func TestCommitWritesAuditLog(t *testing.T) {
+	auditLogger := &auditLoggerStub{
+		log: func(ctx context.Context, input audit.Input) error {
+			if input.Action != "pledge.committed" || input.ActorUserID != "user-1" || input.ResourceType != "pledge" {
+				t.Fatalf("unexpected audit input: %#v", input)
+			}
+			return nil
+		},
+	}
+
+	service := NewService(pledgeRepositoryStub{
+		save: func(ctx context.Context, pledge domain.Pledge) error { return nil },
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1"}, nil
+		},
+	}, auditLogger)
+
+	if _, err := service.Commit(context.Background(), CommitInput{
+		ShopID:          "shop-1",
+		CreatedByUserID: "user-1",
+		Score:           8.8,
+		Category:        "fresh_produce",
+		Confidence:      0.93,
+	}); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if auditLogger.logHits != 1 {
+		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
+	}
 }

@@ -41,6 +41,14 @@ type Client struct {
 	httpClient     *http.Client
 }
 
+type storedAccountKey struct {
+	UserID     string `json:"userId"`
+	Algorithm  string `json:"algorithm"`
+	PublicKey  string `json:"publicKey"`
+	PrivateKey string `json:"privateKey"`
+	CreatedAt  string `json:"createdAt"`
+}
+
 func NewClient(cfg Config) *Client {
 	httpClient := cfg.HTTPClient
 	if httpClient == nil {
@@ -122,6 +130,23 @@ func (c *Client) DeleteAccountKey(ctx context.Context, vaultPath string) error {
 	return nil
 }
 
+func (c *Client) SignAccountEvent(ctx context.Context, vaultPath string, message []byte) (string, error) {
+	key, err := c.readAccountKey(ctx, vaultPath)
+	if err != nil {
+		return "", err
+	}
+	if key.Algorithm != algorithmEd25519 {
+		return "", fmt.Errorf("unsupported key algorithm: %s", key.Algorithm)
+	}
+
+	privateKeyBytes, err := base64.StdEncoding.DecodeString(key.PrivateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode private key: %w", err)
+	}
+	signature := ed25519.Sign(ed25519.PrivateKey(privateKeyBytes), message)
+	return base64.StdEncoding.EncodeToString(signature), nil
+}
+
 func (c *Client) secretPath(userID string) string {
 	if c.keysPathPrefix == "" {
 		return userID
@@ -159,4 +184,43 @@ func (c *Client) writeKVV2(ctx context.Context, vaultPath string, payload map[st
 	}
 
 	return nil
+}
+
+func (c *Client) readAccountKey(ctx context.Context, vaultPath string) (storedAccountKey, error) {
+	vaultPath = strings.Trim(vaultPath, "/")
+	if vaultPath == "" {
+		return storedAccountKey{}, fmt.Errorf("vaultPath is required")
+	}
+
+	endpoint, err := url.JoinPath(c.address, "v1", c.kvMount, "data", vaultPath)
+	if err != nil {
+		return storedAccountKey{}, fmt.Errorf("failed to build Vault read endpoint: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return storedAccountKey{}, fmt.Errorf("failed to build Vault read request: %w", err)
+	}
+	req.Header.Set("X-Vault-Token", c.token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return storedAccountKey{}, fmt.Errorf("failed to read Vault key: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return storedAccountKey{}, fmt.Errorf("vault read failed: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var response struct {
+		Data struct {
+			Data storedAccountKey `json:"data"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return storedAccountKey{}, fmt.Errorf("failed to decode Vault read response: %w", err)
+	}
+	return response.Data.Data, nil
 }

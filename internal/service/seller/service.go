@@ -11,6 +11,7 @@ import (
 
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
+	"vngrocery/internal/service/audit"
 )
 
 var ErrInvalidCommit = errors.New("invalid seller commit request")
@@ -34,13 +35,19 @@ type CommitService interface {
 type Service struct {
 	pledges repository.PledgeRepository
 	shops   repository.ShopRepository
+	audit   AuditLogger
 	now     func() time.Time
 }
 
-func NewService(pledges repository.PledgeRepository, shops repository.ShopRepository) *Service {
+type AuditLogger interface {
+	Log(ctx context.Context, input audit.Input) error
+}
+
+func NewService(pledges repository.PledgeRepository, shops repository.ShopRepository, auditLogger AuditLogger) *Service {
 	return &Service{
 		pledges: pledges,
 		shops:   shops,
+		audit:   auditLogger,
 		now:     time.Now,
 	}
 }
@@ -78,6 +85,19 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 
 	if err := s.pledges.Save(ctx, pledge); err != nil {
 		return domain.Pledge{}, err
+	}
+	if s.audit != nil {
+		if err := s.audit.Log(ctx, audit.Input{
+			ActorUserID:  pledge.CreatedByUserID,
+			ResourceType: "pledge",
+			ResourceID:   pledge.PledgeID,
+			Action:       "pledge.committed",
+			Payload: map[string]any{
+				"after": pledge,
+			},
+		}); err != nil {
+			return domain.Pledge{}, err
+		}
 	}
 
 	return pledge, nil

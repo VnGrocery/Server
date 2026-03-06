@@ -12,6 +12,7 @@ import (
 
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
+	"vngrocery/internal/service/audit"
 )
 
 var (
@@ -23,6 +24,7 @@ type AccountService struct {
 	authUsers      repository.AuthUserRepository
 	users          repository.UserRepository
 	keys           AccountKeyStore
+	audit          AuditLogger
 	googleTokens   GoogleTokenValidator
 	jwt            Issuer
 	jwtTTL         time.Duration
@@ -50,6 +52,10 @@ type GoogleTokenValidator interface {
 	Validate(ctx context.Context, idToken, audience string) (GoogleIdentity, error)
 }
 
+type AuditLogger interface {
+	Log(ctx context.Context, input audit.Input) error
+}
+
 type googleTokenValidator struct{}
 
 func (googleTokenValidator) Validate(ctx context.Context, idToken, audience string) (GoogleIdentity, error) {
@@ -65,7 +71,7 @@ func (googleTokenValidator) Validate(ctx context.Context, idToken, audience stri
 	}, nil
 }
 
-func NewAccountService(authUsers repository.AuthUserRepository, users repository.UserRepository, keys AccountKeyStore, googleTokens GoogleTokenValidator, jwt Issuer, jwtTTL time.Duration, googleClientID string) *AccountService {
+func NewAccountService(authUsers repository.AuthUserRepository, users repository.UserRepository, keys AccountKeyStore, auditLogger AuditLogger, googleTokens GoogleTokenValidator, jwt Issuer, jwtTTL time.Duration, googleClientID string) *AccountService {
 	if googleTokens == nil {
 		googleTokens = googleTokenValidator{}
 	}
@@ -73,6 +79,7 @@ func NewAccountService(authUsers repository.AuthUserRepository, users repository
 		authUsers:      authUsers,
 		users:          users,
 		keys:           keys,
+		audit:          auditLogger,
 		googleTokens:   googleTokens,
 		jwt:            jwt,
 		jwtTTL:         jwtTTL,
@@ -136,6 +143,9 @@ func (s *AccountService) Register(ctx context.Context, email, password, displayN
 		UpdatedAt:   now,
 	}); err != nil {
 		s.cleanupAccountKey(ctx, key.VaultPath)
+		return "", Principal{}, "", err
+	}
+	if err := s.logAccountCreated(ctx, authUser); err != nil {
 		return "", Principal{}, "", err
 	}
 
@@ -235,6 +245,9 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 			s.cleanupAccountKey(ctx, key.VaultPath)
 			return "", Principal{}, "", err
 		}
+		if err := s.logAccountCreated(ctx, authUser); err != nil {
+			return "", Principal{}, "", err
+		}
 	}
 
 	principal := Principal{UserID: authUser.UserID, Email: emailLower}
@@ -251,4 +264,28 @@ func (s *AccountService) cleanupAccountKey(ctx context.Context, vaultPath string
 		return
 	}
 	_ = s.keys.DeleteAccountKey(ctx, vaultPath)
+}
+
+func (s *AccountService) logAccountCreated(ctx context.Context, authUser domain.AuthUser) error {
+	if s.audit == nil {
+		return nil
+	}
+	return s.audit.Log(ctx, audit.Input{
+		ActorUserID:    authUser.UserID,
+		ResourceType:   "account",
+		ResourceID:     authUser.UserID,
+		Action:         "account.created",
+		PublicKey:      authUser.PublicKey,
+		KeyAlgorithm:   authUser.KeyAlgorithm,
+		SignerVaultKey: authUser.VaultKeyPath,
+		Payload: map[string]any{
+			"after": map[string]any{
+				"userId":       authUser.UserID,
+				"emailLower":   authUser.EmailLower,
+				"providers":    authUser.Providers,
+				"publicKey":    authUser.PublicKey,
+				"keyAlgorithm": authUser.KeyAlgorithm,
+			},
+		},
+	})
 }

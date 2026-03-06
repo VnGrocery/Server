@@ -2,6 +2,9 @@ package vault
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -82,5 +85,42 @@ func TestDeleteAccountKeyUsesMetadataEndpoint(t *testing.T) {
 	}
 	if capturedPath != "/v1/secret/metadata/account-keys/user-123" {
 		t.Fatalf("unexpected path: %s", capturedPath)
+	}
+}
+
+func TestSignAccountEventReadsAndSignsWithStoredKey(t *testing.T) {
+	t.Helper()
+
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate key pair: %v", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("unexpected method: %s", r.Method)
+		}
+		if r.URL.Path != "/v1/secret/data/account-keys/user-123" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if _, err := w.Write([]byte(`{"data":{"data":{"userId":"user-123","algorithm":"Ed25519","publicKey":"` + base64.StdEncoding.EncodeToString(publicKey) + `","privateKey":"` + base64.StdEncoding.EncodeToString(privateKey) + `"}}}`)); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{
+		Address:        server.URL,
+		Token:          "test-token",
+		KVMount:        "secret",
+		KeysPathPrefix: "account-keys",
+	})
+
+	signature, err := client.SignAccountEvent(context.Background(), "account-keys/user-123", []byte("hello"))
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if strings.TrimSpace(signature) == "" {
+		t.Fatal("expected signature, got empty string")
 	}
 }

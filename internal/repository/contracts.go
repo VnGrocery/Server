@@ -37,6 +37,11 @@ type ShopReviewRepository interface {
 type AuthUserRepository interface {
 	NewUserID() string
 	Save(ctx context.Context, user domain.AuthUser) error
+	GetByID(ctx context.Context, userID string) (domain.AuthUser, error)
 	GetByEmail(ctx context.Context, emailLower string) (domain.AuthUser, error)
 	GetByGoogleSub(ctx context.Context, googleSub string) (domain.AuthUser, error)
+}
+
+type EventLogRepository interface {
+	Save(ctx context.Context, event domain.EventLog) error
 }

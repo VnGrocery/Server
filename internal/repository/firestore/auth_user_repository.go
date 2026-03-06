@@ -11,8 +11,6 @@ import (
 	"vngrocery/internal/domain"
 )
 
-const AuthUsersCollection = "auth_users"
-
 type AuthUserRepository struct {
 	client *gofirestore.Client
 }
@@ -31,6 +29,24 @@ func (r *AuthUserRepository) Save(ctx context.Context, user domain.AuthUser) err
 		return fmt.Errorf("failed to save auth user: %w", err)
 	}
 	return nil
+}
+
+func (r *AuthUserRepository) GetByID(ctx context.Context, userID string) (domain.AuthUser, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return domain.AuthUser{}, fmt.Errorf("userID is required")
+	}
+
+	doc, err := r.client.Collection(AuthUsersCollection).Doc(userID).Get(ctx)
+	if err != nil {
+		return domain.AuthUser{}, fmt.Errorf("failed to get auth user: %w", err)
+	}
+
+	var user domain.AuthUser
+	if err := doc.DataTo(&user); err != nil {
+		return domain.AuthUser{}, fmt.Errorf("failed to decode auth user: %w", err)
+	}
+	return user, nil
 }
 
 func (r *AuthUserRepository) GetByEmail(ctx context.Context, emailLower string) (domain.AuthUser, error) {

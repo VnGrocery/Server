@@ -9,10 +9,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"vngrocery/internal/domain"
+	"vngrocery/internal/service/audit"
 )
 
 type authUserRepoStub struct {
 	newUserID      string
+	getByID        func(ctx context.Context, userID string) (domain.AuthUser, error)
 	getByEmail     func(ctx context.Context, emailLower string) (domain.AuthUser, error)
 	getByGoogleSub func(ctx context.Context, googleSub string) (domain.AuthUser, error)
 	save           func(ctx context.Context, user domain.AuthUser) error
@@ -24,6 +26,12 @@ func (s authUserRepoStub) Save(ctx context.Context, user domain.AuthUser) error 
 		return s.save(ctx, user)
 	}
 	return nil
+}
+func (s authUserRepoStub) GetByID(ctx context.Context, userID string) (domain.AuthUser, error) {
+	if s.getByID != nil {
+		return s.getByID(ctx, userID)
+	}
+	return domain.AuthUser{}, errors.New("not found")
 }
 func (s authUserRepoStub) GetByEmail(ctx context.Context, emailLower string) (domain.AuthUser, error) {
 	if s.getByEmail != nil {
@@ -94,6 +102,31 @@ func (s googleTokensStub) Validate(ctx context.Context, idToken, audience string
 	return s.validate(ctx, idToken, audience)
 }
 
+type auditLoggerStub struct {
+	log     func(ctx context.Context, input auditInput) error
+	logHits int
+}
+
+type auditInput struct {
+	Action       string
+	ActorUserID  string
+	ResourceType string
+	ResourceID   string
+}
+
+func (s *auditLoggerStub) Log(ctx context.Context, input audit.Input) error {
+	s.logHits++
+	if s.log != nil {
+		return s.log(ctx, auditInput{
+			Action:       input.Action,
+			ActorUserID:  input.ActorUserID,
+			ResourceType: input.ResourceType,
+			ResourceID:   input.ResourceID,
+		})
+	}
+	return nil
+}
+
 func TestAccountServiceRegisterCreatesVaultKeyAndReturnsPublicKey(t *testing.T) {
 	keys := &accountKeyStoreStub{
 		create: func(ctx context.Context, userID string) (AccountKey, error) {
@@ -125,6 +158,7 @@ func TestAccountServiceRegisterCreatesVaultKeyAndReturnsPublicKey(t *testing.T) 
 			},
 		},
 		keys,
+		nil,
 		nil,
 		issuerStub{},
 		time.Hour,
@@ -167,6 +201,7 @@ func TestAccountServiceRegisterDoesNotCreateKeyWhenEmailExists(t *testing.T) {
 		userRepoStub{},
 		keys,
 		nil,
+		nil,
 		issuerStub{},
 		time.Hour,
 		"google-client-id",
@@ -200,6 +235,7 @@ func TestAccountServiceRegisterCleansVaultKeyWhenUserSaveFails(t *testing.T) {
 		},
 		keys,
 		nil,
+		nil,
 		issuerStub{},
 		time.Hour,
 		"google-client-id",
@@ -211,6 +247,44 @@ func TestAccountServiceRegisterCleansVaultKeyWhenUserSaveFails(t *testing.T) {
 	}
 	if keys.deleteHits != 1 {
 		t.Fatalf("expected cleanup delete call, got %d", keys.deleteHits)
+	}
+}
+
+func TestAccountServiceRegisterWritesAuditLog(t *testing.T) {
+	keys := &accountKeyStoreStub{
+		create: func(ctx context.Context, userID string) (AccountKey, error) {
+			return AccountKey{
+				PublicKey: "pub-key",
+				Algorithm: "Ed25519",
+				VaultPath: "account-keys/user-1",
+			}, nil
+		},
+	}
+	auditLogger := &auditLoggerStub{
+		log: func(ctx context.Context, input auditInput) error {
+			if input.Action != "account.created" || input.ActorUserID != "user-1" || input.ResourceID != "user-1" {
+				t.Fatalf("unexpected audit input: %#v", input)
+			}
+			return nil
+		},
+	}
+
+	service := NewAccountService(
+		authUserRepoStub{newUserID: "user-1"},
+		userRepoStub{},
+		keys,
+		auditLogger,
+		nil,
+		issuerStub{},
+		time.Hour,
+		"google-client-id",
+	)
+
+	if _, _, _, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User"); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if auditLogger.logHits != 1 {
+		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
 	}
 }
 
@@ -232,6 +306,7 @@ func TestAccountServiceLoginReturnsStoredPublicKey(t *testing.T) {
 			},
 		},
 		userRepoStub{},
+		nil,
 		nil,
 		nil,
 		issuerStub{},
@@ -268,6 +343,7 @@ func TestAccountServiceGoogleLoginCreatesVaultKeyForNewUser(t *testing.T) {
 		},
 		userRepoStub{},
 		keys,
+		nil,
 		googleTokensStub{
 			validate: func(ctx context.Context, idToken, audience string) (GoogleIdentity, error) {
 				return GoogleIdentity{Subject: "google-sub", Email: "user@example.com"}, nil
@@ -304,6 +380,7 @@ func TestAccountServiceGoogleLoginDoesNotRecreateKeyForExistingUser(t *testing.T
 		},
 		userRepoStub{},
 		keys,
+		nil,
 		googleTokensStub{
 			validate: func(ctx context.Context, idToken, audience string) (GoogleIdentity, error) {
 				return GoogleIdentity{Subject: "google-sub", Email: "user@example.com"}, nil

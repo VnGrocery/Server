@@ -155,6 +155,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Shop, e
 		Latitude:    input.Latitude,
 		Longitude:   input.Longitude,
 		Status:      ShopStatusActive,
+		Version:     1,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
@@ -162,8 +163,8 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Shop, e
 	if err := s.shops.Save(ctx, shop); err != nil {
 		return domain.Shop{}, err
 	}
-	if err := s.logMutation(ctx, input.OwnerUserID, "shop", shop.ShopID, "shop.created", map[string]any{
-		"after": shop,
+	if err := s.logMutation(ctx, input.OwnerUserID, "shop", shop.ShopID, shop.Version, "shop.created", audit.MutationPayload{
+		After: shop,
 	}, "created"); err != nil {
 		return domain.Shop{}, err
 	}
@@ -202,14 +203,15 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Shop, e
 	existing.Address = strings.TrimSpace(input.Address)
 	existing.Latitude = input.Latitude
 	existing.Longitude = input.Longitude
+	existing.Version++
 	existing.UpdatedAt = s.now().UTC()
 
 	if err := s.shops.Save(ctx, existing); err != nil {
 		return domain.Shop{}, err
 	}
-	if err := s.logMutation(ctx, input.OwnerUserID, "shop", existing.ShopID, "shop.updated", map[string]any{
-		"before": before,
-		"after":  existing,
+	if err := s.logMutation(ctx, input.OwnerUserID, "shop", existing.ShopID, existing.Version, "shop.updated", audit.MutationPayload{
+		Before: before,
+		After:  existing,
 	}, "updated"); err != nil {
 		return domain.Shop{}, err
 	}
@@ -241,13 +243,14 @@ func (s *Service) Delete(ctx context.Context, input DeleteInput) (domain.Shop, e
 	}
 
 	existing.Status = ShopStatusDeleted
+	existing.Version++
 	existing.UpdatedAt = s.now().UTC()
 	if err := s.shops.Save(ctx, existing); err != nil {
 		return domain.Shop{}, err
 	}
-	if err := s.logMutation(ctx, input.OwnerUserID, "shop", existing.ShopID, "shop.deleted", map[string]any{
-		"before": before,
-		"after":  existing,
+	if err := s.logMutation(ctx, input.OwnerUserID, "shop", existing.ShopID, existing.Version, "shop.deleted", audit.MutationPayload{
+		Before: before,
+		After:  existing,
 	}, "deleted"); err != nil {
 		return domain.Shop{}, err
 	}
@@ -280,6 +283,7 @@ func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.Sho
 
 	now := s.now().UTC()
 	existing.Status = status
+	existing.Version++
 	existing.ModeratedByUserID = strings.TrimSpace(input.ModeratorUserID)
 	existing.ModerationNote = strings.TrimSpace(input.ModerationNote)
 	existing.ModeratedAt = &now
@@ -288,9 +292,9 @@ func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.Sho
 	if err := s.shops.Save(ctx, existing); err != nil {
 		return domain.Shop{}, err
 	}
-	if err := s.logMutation(ctx, input.ModeratorUserID, "shop", existing.ShopID, "shop.moderated", map[string]any{
-		"before": before,
-		"after":  existing,
+	if err := s.logMutation(ctx, input.ModeratorUserID, "shop", existing.ShopID, existing.Version, "shop.moderated", audit.MutationPayload{
+		Before: before,
+		After:  existing,
 	}, "moderated"); err != nil {
 		return domain.Shop{}, err
 	}
@@ -348,13 +352,14 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 		existing.Rating = input.Rating
 		existing.Comment = strings.TrimSpace(input.Comment)
 		existing.Status = ReviewStatusActive
+		existing.Version++
 		existing.UpdatedAt = now
 		if err := s.reviews.Save(ctx, existing); err != nil {
 			return domain.ShopReview{}, err
 		}
-		if err := s.logMutation(ctx, input.ReviewerUserID, "shop_review", existing.ReviewID, "shop_review.updated", map[string]any{
-			"before": before,
-			"after":  existing,
+		if err := s.logMutation(ctx, input.ReviewerUserID, "shop_review", existing.ReviewID, existing.Version, "shop_review.updated", audit.MutationPayload{
+			Before: before,
+			After:  existing,
 		}, "updated"); err != nil {
 			return domain.ShopReview{}, err
 		}
@@ -368,31 +373,33 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 		Rating:         input.Rating,
 		Comment:        strings.TrimSpace(input.Comment),
 		Status:         ReviewStatusActive,
+		Version:        1,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}
 	if err := s.reviews.Save(ctx, review); err != nil {
 		return domain.ShopReview{}, err
 	}
-	if err := s.logMutation(ctx, input.ReviewerUserID, "shop_review", review.ReviewID, "shop_review.created", map[string]any{
-		"after": review,
+	if err := s.logMutation(ctx, input.ReviewerUserID, "shop_review", review.ReviewID, review.Version, "shop_review.created", audit.MutationPayload{
+		After: review,
 	}, "created"); err != nil {
 		return domain.ShopReview{}, err
 	}
 	return review, nil
 }
 
-func (s *Service) logMutation(ctx context.Context, actorUserID, resourceType, resourceID, action string, payload any, status string) error {
+func (s *Service) logMutation(ctx context.Context, actorUserID, resourceType, resourceID string, resourceVersion int, action string, payload any, status string) error {
 	if s.audit == nil {
 		return nil
 	}
 	return s.audit.Log(ctx, audit.Input{
-		ActorUserID:  strings.TrimSpace(actorUserID),
-		ResourceType: resourceType,
-		ResourceID:   resourceID,
-		Action:       action,
-		Status:       status,
-		Payload:      payload,
+		ActorUserID:     strings.TrimSpace(actorUserID),
+		ResourceType:    resourceType,
+		ResourceID:      resourceID,
+		ResourceVersion: resourceVersion,
+		Action:          action,
+		Status:          status,
+		Payload:         payload,
 	})
 }
 

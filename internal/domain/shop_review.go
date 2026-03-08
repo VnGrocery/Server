@@ -9,6 +9,7 @@ type ShopReview struct {
 	Rating         int       `firestore:"rating"`
 	Comment        string    `firestore:"comment"`
 	Status         string    `firestore:"status"`
+	Version        int       `firestore:"version"`
 	CreatedAt      time.Time `firestore:"createdAt"`
 	UpdatedAt      time.Time `firestore:"updatedAt"`
 }

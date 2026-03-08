@@ -44,4 +44,5 @@ type AuthUserRepository interface {
 
 type EventLogRepository interface {
 	Save(ctx context.Context, event domain.EventLog) error
+	GetLatestByResource(ctx context.Context, resourceType, resourceID string) (domain.EventLog, error)
 }

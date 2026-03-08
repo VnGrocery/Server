@@ -45,6 +45,9 @@ func TestCommitCreatesPledge(t *testing.T) {
 			if pledge.Status != PledgeStatusCommitted {
 				t.Fatalf("unexpected status: %s", pledge.Status)
 			}
+			if pledge.Version != 1 {
+				t.Fatalf("unexpected version: %d", pledge.Version)
+			}
 			if pledge.Score != 8.8 {
 				t.Fatalf("unexpected score: %v", pledge.Score)
 			}
@@ -188,7 +191,7 @@ func (s *auditLoggerStub) Log(ctx context.Context, input audit.Input) error {
 func TestCommitWritesAuditLog(t *testing.T) {
 	auditLogger := &auditLoggerStub{
 		log: func(ctx context.Context, input audit.Input) error {
-			if input.Action != "pledge.committed" || input.Status != "committed" || input.ActorUserID != "user-1" || input.ResourceType != "pledge" {
+			if input.Action != "pledge.committed" || input.Status != "committed" || input.ResourceVersion != 1 || input.ActorUserID != "user-1" || input.ResourceType != "pledge" {
 				t.Fatalf("unexpected audit input: %#v", input)
 			}
 			return nil

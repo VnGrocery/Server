@@ -9,6 +9,7 @@ type AuthUser struct {
 	GoogleSub    string    `firestore:"googleSub"`
 	Providers    []string  `firestore:"providers"`
 	Status       string    `firestore:"status"`
+	Version      int       `firestore:"version"`
 	PublicKey    string    `firestore:"publicKey"`
 	KeyAlgorithm string    `firestore:"keyAlgorithm"`
 	VaultKeyPath string    `firestore:"vaultKeyPath"`

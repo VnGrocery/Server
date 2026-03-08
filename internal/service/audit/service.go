@@ -20,15 +20,16 @@ type Signer interface {
 }
 
 type Input struct {
-	ActorUserID    string
-	ResourceType   string
-	ResourceID     string
-	Action         string
-	Status         string
-	Payload        any
-	PublicKey      string
-	KeyAlgorithm   string
-	SignerVaultKey string
+	ActorUserID     string
+	ResourceType    string
+	ResourceID      string
+	ResourceVersion int
+	Action          string
+	Status          string
+	Payload         any
+	PublicKey       string
+	KeyAlgorithm    string
+	SignerVaultKey  string
 }
 
 type Service struct {
@@ -48,12 +49,20 @@ func NewService(events repository.EventLogRepository, authUsers repository.AuthU
 }
 
 type signedEnvelope struct {
-	Action       string          `json:"action"`
-	ActorUserID  string          `json:"actorUserId"`
-	OccurredAt   string          `json:"occurredAt"`
-	Payload      json.RawMessage `json:"payload"`
-	ResourceID   string          `json:"resourceId"`
-	ResourceType string          `json:"resourceType"`
+	Action          string          `json:"action"`
+	ActorUserID     string          `json:"actorUserId"`
+	OccurredAt      string          `json:"occurredAt"`
+	Payload         json.RawMessage `json:"payload"`
+	ResourceID      string          `json:"resourceId"`
+	ResourceType    string          `json:"resourceType"`
+	ResourceVersion int             `json:"resourceVersion"`
+	Sequence        int             `json:"sequence"`
+	PreviousEventID string          `json:"previousEventId,omitempty"`
+}
+
+type MutationPayload struct {
+	Before any `json:"before,omitempty"`
+	After  any `json:"after,omitempty"`
 }
 
 func (s *Service) Log(ctx context.Context, input Input) error {
@@ -71,6 +80,9 @@ func (s *Service) Log(ctx context.Context, input Input) error {
 	}
 	if strings.TrimSpace(input.Status) == "" {
 		return fmt.Errorf("status is required")
+	}
+	if input.ResourceVersion <= 0 {
+		return fmt.Errorf("resourceVersion must be positive")
 	}
 	if s.events == nil || s.signer == nil {
 		return fmt.Errorf("audit dependencies are not configured")
@@ -101,19 +113,29 @@ func (s *Service) Log(ctx context.Context, input Input) error {
 		return fmt.Errorf("signing key metadata is incomplete")
 	}
 
-	payloadBytes, err := json.Marshal(input.Payload)
+	payloadBytes, err := canonicalizePayload(input.Payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal event payload: %w", err)
+		return fmt.Errorf("failed to canonicalize event payload: %w", err)
 	}
+
+	latest, err := s.events.GetLatestByResource(ctx, strings.TrimSpace(input.ResourceType), strings.TrimSpace(input.ResourceID))
+	if err != nil {
+		return fmt.Errorf("failed to resolve previous event: %w", err)
+	}
+	sequence := latest.Sequence + 1
+	previousEventID := latest.EventID
 
 	createdAt := s.now().UTC()
 	envelopeBytes, err := json.Marshal(signedEnvelope{
-		Action:       strings.TrimSpace(input.Action),
-		ActorUserID:  strings.TrimSpace(input.ActorUserID),
-		OccurredAt:   createdAt.Format(time.RFC3339Nano),
-		Payload:      json.RawMessage(payloadBytes),
-		ResourceID:   strings.TrimSpace(input.ResourceID),
-		ResourceType: strings.TrimSpace(input.ResourceType),
+		Action:          strings.TrimSpace(input.Action),
+		ActorUserID:     strings.TrimSpace(input.ActorUserID),
+		OccurredAt:      createdAt.Format(time.RFC3339Nano),
+		Payload:         json.RawMessage(payloadBytes),
+		ResourceID:      strings.TrimSpace(input.ResourceID),
+		ResourceType:    strings.TrimSpace(input.ResourceType),
+		ResourceVersion: input.ResourceVersion,
+		Sequence:        sequence,
+		PreviousEventID: previousEventID,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to marshal signed event envelope: %w", err)
@@ -126,17 +148,33 @@ func (s *Service) Log(ctx context.Context, input Input) error {
 
 	contentHash := sha256.Sum256(envelopeBytes)
 	return s.events.Save(ctx, domain.EventLog{
-		EventID:       uuid.NewString(),
-		ActorUserID:   strings.TrimSpace(input.ActorUserID),
-		ResourceType:  strings.TrimSpace(input.ResourceType),
-		ResourceID:    strings.TrimSpace(input.ResourceID),
-		Action:        strings.TrimSpace(input.Action),
-		Status:        strings.TrimSpace(input.Status),
-		PayloadJSON:   string(payloadBytes),
-		PublicKey:     publicKey,
-		KeyAlgorithm:  keyAlgorithm,
-		Signature:     signature,
-		ContentSHA256: base64.StdEncoding.EncodeToString(contentHash[:]),
-		CreatedAt:     createdAt,
+		EventID:         uuid.NewString(),
+		ActorUserID:     strings.TrimSpace(input.ActorUserID),
+		ResourceType:    strings.TrimSpace(input.ResourceType),
+		ResourceID:      strings.TrimSpace(input.ResourceID),
+		ResourceVersion: input.ResourceVersion,
+		Action:          strings.TrimSpace(input.Action),
+		Status:          strings.TrimSpace(input.Status),
+		Sequence:        sequence,
+		PreviousEventID: previousEventID,
+		PayloadJSON:     string(payloadBytes),
+		PublicKey:       publicKey,
+		KeyAlgorithm:    keyAlgorithm,
+		Signature:       signature,
+		ContentSHA256:   base64.StdEncoding.EncodeToString(contentHash[:]),
+		CreatedAt:       createdAt,
 	})
+}
+
+func canonicalizePayload(payload any) ([]byte, error) {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var normalized any
+	if err := json.Unmarshal(raw, &normalized); err != nil {
+		return nil, err
+	}
+	return json.Marshal(normalized)
 }

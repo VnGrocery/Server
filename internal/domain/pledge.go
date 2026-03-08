@@ -7,6 +7,7 @@ type Pledge struct {
 	ShopID          string    `firestore:"shopId"`
 	CreatedByUserID string    `firestore:"createdByUserId"`
 	Status          string    `firestore:"status"`
+	Version         int       `firestore:"version"`
 	Score           float64   `firestore:"score"`
 	Category        string    `firestore:"category"`
 	Confidence      float64   `firestore:"confidence"`

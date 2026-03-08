@@ -134,6 +134,7 @@ func (s *AccountService) Register(ctx context.Context, email, password, displayN
 		PasswordHash: string(passwordHash),
 		Providers:    []string{"password"},
 		Status:       AccountStatusActive,
+		Version:      1,
 		PublicKey:    key.PublicKey,
 		KeyAlgorithm: key.Algorithm,
 		VaultKeyPath: key.VaultPath,
@@ -152,6 +153,7 @@ func (s *AccountService) Register(ctx context.Context, email, password, displayN
 		DisplayName: strings.TrimSpace(displayName),
 		Role:        "user",
 		Status:      AccountStatusActive,
+		Version:     1,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}); err != nil {
@@ -241,6 +243,7 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 			GoogleSub:    googleSub,
 			Providers:    []string{"google"},
 			Status:       AccountStatusActive,
+			Version:      1,
 			PublicKey:    key.PublicKey,
 			KeyAlgorithm: key.Algorithm,
 			VaultKeyPath: key.VaultPath,
@@ -257,6 +260,7 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 			DisplayName: "",
 			Role:        "user",
 			Status:      AccountStatusActive,
+			Version:     1,
 			CreatedAt:   now,
 			UpdatedAt:   now,
 		}); err != nil {
@@ -303,12 +307,14 @@ func (s *AccountService) Delete(ctx context.Context, userID string) (DeleteResul
 
 	now := time.Now().UTC()
 	authUser.Status = AccountStatusDeleted
+	authUser.Version++
 	authUser.UpdatedAt = now
 	if err := s.authUsers.Save(ctx, authUser); err != nil {
 		return DeleteResult{}, err
 	}
 
 	user.Status = AccountStatusDeleted
+	user.Version++
 	user.UpdatedAt = now
 	if err := s.users.Save(ctx, user); err != nil {
 		return DeleteResult{}, err
@@ -316,18 +322,20 @@ func (s *AccountService) Delete(ctx context.Context, userID string) (DeleteResul
 
 	if s.audit != nil {
 		if err := s.audit.Log(ctx, audit.Input{
-			ActorUserID:    userID,
-			ResourceType:   "account",
-			ResourceID:     userID,
-			Action:         "account.deleted",
-			Status:         "deleted",
-			PublicKey:      authUser.PublicKey,
-			KeyAlgorithm:   authUser.KeyAlgorithm,
-			SignerVaultKey: authUser.VaultKeyPath,
-			Payload: map[string]any{
-				"after": map[string]any{
-					"userId": userID,
-					"status": AccountStatusDeleted,
+			ActorUserID:     userID,
+			ResourceType:    "account",
+			ResourceID:      userID,
+			ResourceVersion: authUser.Version,
+			Action:          "account.deleted",
+			Status:          "deleted",
+			PublicKey:       authUser.PublicKey,
+			KeyAlgorithm:    authUser.KeyAlgorithm,
+			SignerVaultKey:  authUser.VaultKeyPath,
+			Payload: audit.MutationPayload{
+				After: map[string]any{
+					"userId":  userID,
+					"status":  AccountStatusDeleted,
+					"version": authUser.Version,
 				},
 			},
 		}); err != nil {
@@ -350,19 +358,22 @@ func (s *AccountService) logAccountCreated(ctx context.Context, authUser domain.
 		return nil
 	}
 	return s.audit.Log(ctx, audit.Input{
-		ActorUserID:    authUser.UserID,
-		ResourceType:   "account",
-		ResourceID:     authUser.UserID,
-		Action:         "account.created",
-		Status:         "created",
-		PublicKey:      authUser.PublicKey,
-		KeyAlgorithm:   authUser.KeyAlgorithm,
-		SignerVaultKey: authUser.VaultKeyPath,
-		Payload: map[string]any{
-			"after": map[string]any{
+		ActorUserID:     authUser.UserID,
+		ResourceType:    "account",
+		ResourceID:      authUser.UserID,
+		ResourceVersion: authUser.Version,
+		Action:          "account.created",
+		Status:          "created",
+		PublicKey:       authUser.PublicKey,
+		KeyAlgorithm:    authUser.KeyAlgorithm,
+		SignerVaultKey:  authUser.VaultKeyPath,
+		Payload: audit.MutationPayload{
+			After: map[string]any{
 				"userId":       authUser.UserID,
 				"emailLower":   authUser.EmailLower,
 				"providers":    authUser.Providers,
+				"status":       authUser.Status,
+				"version":      authUser.Version,
 				"publicKey":    authUser.PublicKey,
 				"keyAlgorithm": authUser.KeyAlgorithm,
 			},

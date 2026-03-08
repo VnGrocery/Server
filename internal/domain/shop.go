@@ -11,6 +11,7 @@ type Shop struct {
 	Latitude          float64    `firestore:"latitude"`
 	Longitude         float64    `firestore:"longitude"`
 	Status            string     `firestore:"status"`
+	Version           int        `firestore:"version"`
 	ModeratedByUserID string     `firestore:"moderatedByUserId"`
 	ModerationNote    string     `firestore:"moderationNote"`
 	ModeratedAt       *time.Time `firestore:"moderatedAt"`

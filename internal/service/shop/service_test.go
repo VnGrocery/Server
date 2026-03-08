@@ -137,6 +137,9 @@ func TestCreateShop(t *testing.T) {
 	if shop.ShopID == "" {
 		t.Fatal("expected shop id")
 	}
+	if shop.Version != 1 {
+		t.Fatalf("expected version 1, got %d", shop.Version)
+	}
 }
 
 func TestUpdateRejectsNonOwner(t *testing.T) {
@@ -182,6 +185,9 @@ func TestDeleteMarksShopDeleted(t *testing.T) {
 	}
 	if shop.Status != ShopStatusDeleted || savedShop.Status != ShopStatusDeleted {
 		t.Fatalf("expected deleted status, got %#v %#v", shop, savedShop)
+	}
+	if shop.Version != 1 || savedShop.Version != 1 {
+		t.Fatalf("expected deleted version 1, got shop=%d saved=%d", shop.Version, savedShop.Version)
 	}
 	if auditLogger.logHits != 1 {
 		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
@@ -321,12 +327,15 @@ func TestReviewCreatesOrUpdatesRating(t *testing.T) {
 	if review.Status != ReviewStatusActive {
 		t.Fatalf("unexpected review status: %s", review.Status)
 	}
+	if review.Version != 1 {
+		t.Fatalf("unexpected review version: %d", review.Version)
+	}
 }
 
 func TestCreateShopWritesAuditLog(t *testing.T) {
 	auditLogger := &auditLoggerStub{
 		log: func(ctx context.Context, input audit.Input) error {
-			if input.Action != "shop.created" || input.Status != "created" || input.ActorUserID != "user-1" || input.ResourceType != "shop" {
+			if input.Action != "shop.created" || input.Status != "created" || input.ResourceVersion != 1 || input.ActorUserID != "user-1" || input.ResourceType != "shop" {
 				t.Fatalf("unexpected audit input: %#v", input)
 			}
 			return nil

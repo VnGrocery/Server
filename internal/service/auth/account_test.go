@@ -188,11 +188,17 @@ func TestAccountServiceRegisterCreatesVaultKeyAndReturnsPublicKey(t *testing.T) 
 	if savedAuthUser.Status != AccountStatusActive {
 		t.Fatalf("unexpected auth user status: %s", savedAuthUser.Status)
 	}
+	if savedAuthUser.Version != 1 {
+		t.Fatalf("unexpected auth user version: %d", savedAuthUser.Version)
+	}
 	if savedUser.Email != "user@example.com" {
 		t.Fatalf("unexpected saved user email: %s", savedUser.Email)
 	}
 	if savedUser.Status != AccountStatusActive {
 		t.Fatalf("unexpected saved user status: %s", savedUser.Status)
+	}
+	if savedUser.Version != 1 {
+		t.Fatalf("unexpected saved user version: %d", savedUser.Version)
 	}
 	if keys.createHits != 1 || keys.deleteHits != 0 {
 		t.Fatalf("unexpected key store calls: create=%d delete=%d", keys.createHits, keys.deleteHits)
@@ -455,6 +461,7 @@ func TestAccountServiceDeleteMarksAccountDeleted(t *testing.T) {
 				return domain.AuthUser{
 					UserID:       userID,
 					Status:       AccountStatusActive,
+					Version:      1,
 					PublicKey:    "pub-key",
 					KeyAlgorithm: "Ed25519",
 					VaultKeyPath: "account-keys/user-1",
@@ -467,7 +474,7 @@ func TestAccountServiceDeleteMarksAccountDeleted(t *testing.T) {
 		},
 		userRepoStub{
 			getByID: func(ctx context.Context, userID string) (domain.User, error) {
-				return domain.User{UserID: userID, Status: AccountStatusActive}, nil
+				return domain.User{UserID: userID, Status: AccountStatusActive, Version: 1}, nil
 			},
 			save: func(ctx context.Context, user domain.User) error {
 				savedUser = user
@@ -491,6 +498,9 @@ func TestAccountServiceDeleteMarksAccountDeleted(t *testing.T) {
 	}
 	if savedAuthUser.Status != AccountStatusDeleted || savedUser.Status != AccountStatusDeleted {
 		t.Fatalf("expected deleted statuses, got auth=%s user=%s", savedAuthUser.Status, savedUser.Status)
+	}
+	if savedAuthUser.Version != 2 || savedUser.Version != 2 {
+		t.Fatalf("expected incremented versions, got auth=%d user=%d", savedAuthUser.Version, savedUser.Version)
 	}
 	if auditLogger.logHits != 1 {
 		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)

@@ -76,6 +76,7 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 		ShopID:          strings.TrimSpace(input.ShopID),
 		CreatedByUserID: strings.TrimSpace(input.CreatedByUserID),
 		Status:          PledgeStatusCommitted,
+		Version:         1,
 		Score:           input.Score,
 		Category:        strings.TrimSpace(input.Category),
 		Confidence:      input.Confidence,
@@ -88,14 +89,13 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 	}
 	if s.audit != nil {
 		if err := s.audit.Log(ctx, audit.Input{
-			ActorUserID:  pledge.CreatedByUserID,
-			ResourceType: "pledge",
-			ResourceID:   pledge.PledgeID,
-			Action:       "pledge.committed",
-			Status:       "committed",
-			Payload: map[string]any{
-				"after": pledge,
-			},
+			ActorUserID:     pledge.CreatedByUserID,
+			ResourceType:    "pledge",
+			ResourceID:      pledge.PledgeID,
+			ResourceVersion: pledge.Version,
+			Action:          "pledge.committed",
+			Status:          "committed",
+			Payload:         audit.MutationPayload{After: pledge},
 		}); err != nil {
 			return domain.Pledge{}, err
 		}

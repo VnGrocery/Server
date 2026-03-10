@@ -86,9 +86,10 @@ func main() {
 		accountKeys = vaultAccountKeyStore{client: vaultClient}
 		auditSigner = vaultClient
 	}
+	auditQueryService := auditservice.NewService(eventLogRepository, authUserRepository, auditSigner)
 	var auditLogger *auditservice.Service
 	if auditSigner != nil {
-		auditLogger = auditservice.NewService(eventLogRepository, authUserRepository, auditSigner)
+		auditLogger = auditQueryService
 	}
 	accountService := authservice.NewAccountService(authUserRepository, userRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, cfg.GoogleClientID)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, shopReviewRepository, userRepository, auditLogger)
@@ -98,18 +99,20 @@ func main() {
 	healthHandler := handler.NewHealthHandler()
 	docsHandler := handler.NewDocsHandler()
 	authHandler := handler.NewAuthHandler(accountService)
+	eventLogHandler := handler.NewEventLogHandler(auditQueryService)
 	sellerHandler := handler.NewSellerHandler(visionScorer, sellerCommitService)
 	buyerHandler := handler.NewBuyerHandler(buyerCheckService)
 	shopHandler := handler.NewShopHandler(shopManager)
 
 	engine := router.New(router.Dependencies{
-		HealthHandler:  healthHandler,
-		DocsHandler:    docsHandler,
-		AuthHandler:    authHandler,
-		SellerHandler:  sellerHandler,
-		BuyerHandler:   buyerHandler,
-		ShopHandler:    shopHandler,
-		AuthMiddleware: authMiddleware,
+		HealthHandler:   healthHandler,
+		DocsHandler:     docsHandler,
+		AuthHandler:     authHandler,
+		EventLogHandler: eventLogHandler,
+		SellerHandler:   sellerHandler,
+		BuyerHandler:    buyerHandler,
+		ShopHandler:     shopHandler,
+		AuthMiddleware:  authMiddleware,
 	})
 
 	if err := engine.Run(":" + cfg.Port); err != nil {

@@ -154,15 +154,41 @@ func TestUpdateRejectsNonOwner(t *testing.T) {
 	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
 
 	_, err := service.Update(context.Background(), UpdateInput{
-		ShopID:      "shop-1",
-		OwnerUserID: "user-2",
-		Name:        "Name",
-		Address:     "Address",
-		Latitude:    10,
-		Longitude:   106,
+		ShopID:          "shop-1",
+		OwnerUserID:     "user-2",
+		ExpectedVersion: 1,
+		Name:            "Name",
+		Address:         "Address",
+		Latitude:        10,
+		Longitude:       106,
 	})
 	if !errors.Is(err, ErrForbidden) {
 		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
+func TestUpdateRejectsVersionConflict(t *testing.T) {
+	service := NewService(shopRepositoryStub{
+		save: func(ctx context.Context, shop domain.Shop) error {
+			t.Fatal("save should not be called")
+			return nil
+		},
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1", Status: ShopStatusActive, Version: 4}, nil
+		},
+	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
+
+	_, err := service.Update(context.Background(), UpdateInput{
+		ShopID:          "shop-1",
+		OwnerUserID:     "user-1",
+		ExpectedVersion: 3,
+		Name:            "Name",
+		Address:         "Address",
+		Latitude:        10,
+		Longitude:       106,
+	})
+	if !errors.Is(err, ErrVersionConflict) {
+		t.Fatalf("expected ErrVersionConflict, got %v", err)
 	}
 }
 
@@ -175,19 +201,19 @@ func TestDeleteMarksShopDeleted(t *testing.T) {
 			return nil
 		},
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
-			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1", Status: ShopStatusActive}, nil
+			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1", Status: ShopStatusActive, Version: 1}, nil
 		},
 	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, auditLogger)
 
-	shop, err := service.Delete(context.Background(), DeleteInput{ShopID: "shop-1", OwnerUserID: "user-1"})
+	shop, err := service.Delete(context.Background(), DeleteInput{ShopID: "shop-1", OwnerUserID: "user-1", ExpectedVersion: 1})
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 	if shop.Status != ShopStatusDeleted || savedShop.Status != ShopStatusDeleted {
 		t.Fatalf("expected deleted status, got %#v %#v", shop, savedShop)
 	}
-	if shop.Version != 1 || savedShop.Version != 1 {
-		t.Fatalf("expected deleted version 1, got shop=%d saved=%d", shop.Version, savedShop.Version)
+	if shop.Version != 2 || savedShop.Version != 2 {
+		t.Fatalf("expected deleted version 2, got shop=%d saved=%d", shop.Version, savedShop.Version)
 	}
 	if auditLogger.logHits != 1 {
 		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
@@ -285,6 +311,7 @@ func TestModerateRequiresAdmin(t *testing.T) {
 	_, err := service.Moderate(context.Background(), ModerateInput{
 		ShopID:          "shop-1",
 		ModeratorUserID: "user-1",
+		ExpectedVersion: 1,
 		Status:          ShopStatusSuspended,
 	})
 	if !errors.Is(err, ErrAdminRequired) {

@@ -76,13 +76,14 @@ func (h *ShopHandler) Update(c *gin.Context) {
 	}
 
 	shop, err := h.shops.Update(c.Request.Context(), shopsvc.UpdateInput{
-		ShopID:      c.Param("shopId"),
-		OwnerUserID: principal.UserID,
-		Name:        request.Name,
-		Description: request.Description,
-		Address:     request.Address,
-		Latitude:    request.Latitude,
-		Longitude:   request.Longitude,
+		ShopID:          c.Param("shopId"),
+		OwnerUserID:     principal.UserID,
+		ExpectedVersion: request.ExpectedVersion,
+		Name:            request.Name,
+		Description:     request.Description,
+		Address:         request.Address,
+		Latitude:        request.Latitude,
+		Longitude:       request.Longitude,
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -99,9 +100,16 @@ func (h *ShopHandler) Delete(c *gin.Context) {
 		return
 	}
 
+	expectedVersion, parseErr := parsePositiveIntQuery(c.Query("expectedVersion"), "expectedVersion")
+	if parseErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": parseErr.Error()})
+		return
+	}
+
 	shop, err := h.shops.Delete(c.Request.Context(), shopsvc.DeleteInput{
-		ShopID:      c.Param("shopId"),
-		OwnerUserID: principal.UserID,
+		ShopID:          c.Param("shopId"),
+		OwnerUserID:     principal.UserID,
+		ExpectedVersion: expectedVersion,
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -127,6 +135,7 @@ func (h *ShopHandler) Moderate(c *gin.Context) {
 	shop, err := h.shops.Moderate(c.Request.Context(), shopsvc.ModerateInput{
 		ShopID:          c.Param("shopId"),
 		ModeratorUserID: principal.UserID,
+		ExpectedVersion: request.ExpectedVersion,
 		Status:          request.Status,
 		ModerationNote:  request.ModerationNote,
 	})
@@ -286,6 +295,8 @@ func (h *ShopHandler) writeError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, shopsvc.ErrInvalidShop):
 		status = http.StatusBadRequest
+	case errors.Is(err, shopsvc.ErrVersionConflict):
+		status = http.StatusConflict
 	case errors.Is(err, shopsvc.ErrForbidden), errors.Is(err, shopsvc.ErrAdminRequired):
 		status = http.StatusForbidden
 	case errors.Is(err, shopsvc.ErrNotFound):

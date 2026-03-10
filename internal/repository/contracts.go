@@ -45,4 +45,11 @@ type AuthUserRepository interface {
 type EventLogRepository interface {
 	Save(ctx context.Context, event domain.EventLog) error
 	GetLatestByResource(ctx context.Context, resourceType, resourceID string) (domain.EventLog, error)
+	List(ctx context.Context, filter EventLogListFilter) ([]domain.EventLog, error)
+}
+
+type EventLogListFilter struct {
+	ResourceType string
+	ResourceID   string
+	ActorUserID  string
 }

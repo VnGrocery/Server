@@ -14,12 +14,26 @@ import (
 	"vngrocery/internal/api/handler"
 	"vngrocery/internal/api/middleware"
 	"vngrocery/internal/domain"
+	auditservice "vngrocery/internal/service/audit"
 	authservice "vngrocery/internal/service/auth"
 	buyerservice "vngrocery/internal/service/buyer"
 	sellerservice "vngrocery/internal/service/seller"
 	shopservice "vngrocery/internal/service/shop"
 	visionservice "vngrocery/internal/service/vision"
 )
+
+func newTestDependencies(verifier testVerifier) Dependencies {
+	return Dependencies{
+		HealthHandler:   handler.NewHealthHandler(),
+		DocsHandler:     handler.NewDocsHandler(),
+		AuthHandler:     handler.NewAuthHandler(authAccountsStub{}),
+		EventLogHandler: handler.NewEventLogHandler(eventLogUsecaseStub{}),
+		SellerHandler:   handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:    handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:     handler.NewShopHandler(shopHandlerStub{}),
+		AuthMiddleware:  middleware.NewAuthRequired(verifier),
+	}
+}
 
 type testVerifier struct {
 	verify func(ctx context.Context, token string) (authservice.Principal, error)
@@ -31,19 +45,11 @@ func (t testVerifier) Verify(ctx context.Context, token string) (authservice.Pri
 
 func TestRouterHealth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := New(Dependencies{
-		HealthHandler: handler.NewHealthHandler(),
-		DocsHandler:   handler.NewDocsHandler(),
-		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
-			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-				return authservice.Principal{}, nil
-			},
-		}),
-	})
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, nil
+		},
+	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -57,19 +63,11 @@ func TestRouterHealth(t *testing.T) {
 
 func TestRouterMeUnauthorized(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := New(Dependencies{
-		HealthHandler: handler.NewHealthHandler(),
-		DocsHandler:   handler.NewDocsHandler(),
-		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
-			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-				return authservice.Principal{}, authservice.ErrUnauthorized
-			},
-		}),
-	})
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
 	rec := httptest.NewRecorder()
@@ -83,19 +81,11 @@ func TestRouterMeUnauthorized(t *testing.T) {
 
 func TestRouterMeAuthorized(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := New(Dependencies{
-		HealthHandler: handler.NewHealthHandler(),
-		DocsHandler:   handler.NewDocsHandler(),
-		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
-			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-				return authservice.Principal{UserID: "user-123", Email: "u@example.com"}, nil
-			},
-		}),
-	})
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{UserID: "user-123", Email: "u@example.com"}, nil
+		},
+	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/me", nil)
 	req.Header.Set("Authorization", "Bearer good-token")
@@ -108,21 +98,31 @@ func TestRouterMeAuthorized(t *testing.T) {
 	}
 }
 
+func TestRouterEventsProtected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/events", nil)
+	rec := httptest.NewRecorder()
+
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
 func TestRouterSellerScoreProtected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := New(Dependencies{
-		HealthHandler: handler.NewHealthHandler(),
-		DocsHandler:   handler.NewDocsHandler(),
-		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
-			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-				return authservice.Principal{}, authservice.ErrUnauthorized
-			},
-		}),
-	})
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -150,19 +150,11 @@ func TestRouterSellerScoreProtected(t *testing.T) {
 
 func TestRouterSellerCommitProtected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := New(Dependencies{
-		HealthHandler: handler.NewHealthHandler(),
-		DocsHandler:   handler.NewDocsHandler(),
-		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
-			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-				return authservice.Principal{}, authservice.ErrUnauthorized
-			},
-		}),
-	})
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/seller/commit", bytes.NewBufferString(`{"shopId":"shop-1","score":8.5,"category":"fresh_produce","confidence":0.91}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -177,19 +169,11 @@ func TestRouterSellerCommitProtected(t *testing.T) {
 
 func TestRouterBuyerCheckPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := New(Dependencies{
-		HealthHandler: handler.NewHealthHandler(),
-		DocsHandler:   handler.NewDocsHandler(),
-		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
-			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-				return authservice.Principal{}, authservice.ErrUnauthorized
-			},
-		}),
-	})
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
 
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -220,19 +204,11 @@ func TestRouterBuyerCheckPublic(t *testing.T) {
 
 func TestRouterShopCreateProtected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := New(Dependencies{
-		HealthHandler: handler.NewHealthHandler(),
-		DocsHandler:   handler.NewDocsHandler(),
-		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
-			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-				return authservice.Principal{}, authservice.ErrUnauthorized
-			},
-		}),
-	})
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/shops", bytes.NewBufferString(`{"name":"Green Shop","description":"Fresh daily","address":"123 Main St","latitude":10.7,"longitude":106.6}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -247,19 +223,11 @@ func TestRouterShopCreateProtected(t *testing.T) {
 
 func TestRouterShopListPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := New(Dependencies{
-		HealthHandler: handler.NewHealthHandler(),
-		DocsHandler:   handler.NewDocsHandler(),
-		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
-			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-				return authservice.Principal{}, authservice.ErrUnauthorized
-			},
-		}),
-	})
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/shops", nil)
 	rec := httptest.NewRecorder()
@@ -273,19 +241,11 @@ func TestRouterShopListPublic(t *testing.T) {
 
 func TestRouterShopReviewCreateProtected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := New(Dependencies{
-		HealthHandler: handler.NewHealthHandler(),
-		DocsHandler:   handler.NewDocsHandler(),
-		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
-			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-				return authservice.Principal{}, authservice.ErrUnauthorized
-			},
-		}),
-	})
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/shops/shop-1/reviews", bytes.NewBufferString(`{"rating":5,"comment":"Great shop"}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -299,19 +259,11 @@ func TestRouterShopReviewCreateProtected(t *testing.T) {
 
 func TestRouterShopReviewListPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := New(Dependencies{
-		HealthHandler: handler.NewHealthHandler(),
-		DocsHandler:   handler.NewDocsHandler(),
-		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
-			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-				return authservice.Principal{}, authservice.ErrUnauthorized
-			},
-		}),
-	})
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/shops/shop-1/reviews", nil)
 	rec := httptest.NewRecorder()
@@ -324,19 +276,11 @@ func TestRouterShopReviewListPublic(t *testing.T) {
 
 func TestRouterDocsPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := New(Dependencies{
-		HealthHandler: handler.NewHealthHandler(),
-		DocsHandler:   handler.NewDocsHandler(),
-		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
-			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-				return authservice.Principal{}, authservice.ErrUnauthorized
-			},
-		}),
-	})
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/docs", nil)
 	rec := httptest.NewRecorder()
@@ -349,19 +293,11 @@ func TestRouterDocsPublic(t *testing.T) {
 
 func TestRouterOpenAPIPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	engine := New(Dependencies{
-		HealthHandler: handler.NewHealthHandler(),
-		DocsHandler:   handler.NewDocsHandler(),
-		AuthHandler:   handler.NewAuthHandler(authAccountsStub{}),
-		SellerHandler: handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:  handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:   handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware: middleware.NewAuthRequired(testVerifier{
-			verify: func(ctx context.Context, token string) (authservice.Principal, error) {
-				return authservice.Principal{}, authservice.ErrUnauthorized
-			},
-		}),
-	})
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/openapi.json", nil)
 	rec := httptest.NewRecorder()
@@ -430,8 +366,14 @@ func (authAccountsStub) GoogleLogin(ctx context.Context, googleIDToken string) (
 	return "", authservice.Principal{}, "", errors.New("not implemented")
 }
 
-func (authAccountsStub) Delete(ctx context.Context, userID string) (authservice.DeleteResult, error) {
+func (authAccountsStub) Delete(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error) {
 	return authservice.DeleteResult{}, errors.New("not implemented")
+}
+
+type eventLogUsecaseStub struct{}
+
+func (eventLogUsecaseStub) List(ctx context.Context, input auditservice.ListInput) ([]domain.EventLog, error) {
+	return []domain.EventLog{}, nil
 }
 
 type shopHandlerStub struct{}

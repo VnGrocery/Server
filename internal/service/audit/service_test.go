@@ -7,11 +7,13 @@ import (
 	"testing"
 
 	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 )
 
 type eventLogRepoStub struct {
 	save      func(ctx context.Context, event domain.EventLog) error
 	getLatest func(ctx context.Context, resourceType, resourceID string) (domain.EventLog, error)
+	list      func(ctx context.Context, filter repository.EventLogListFilter) ([]domain.EventLog, error)
 }
 
 func (s eventLogRepoStub) Save(ctx context.Context, event domain.EventLog) error {
@@ -26,6 +28,13 @@ func (s eventLogRepoStub) GetLatestByResource(ctx context.Context, resourceType,
 		return s.getLatest(ctx, resourceType, resourceID)
 	}
 	return domain.EventLog{}, nil
+}
+
+func (s eventLogRepoStub) List(ctx context.Context, filter repository.EventLogListFilter) ([]domain.EventLog, error) {
+	if s.list != nil {
+		return s.list(ctx, filter)
+	}
+	return []domain.EventLog{}, nil
 }
 
 type authUserRepoStub struct {

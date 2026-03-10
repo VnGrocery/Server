@@ -3,10 +3,12 @@ package firestore
 import (
 	"context"
 	"fmt"
+	"sort"
 
 	gofirestore "cloud.google.com/go/firestore"
 
 	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 )
 
 type EventLogRepository struct {
@@ -49,4 +51,40 @@ func (r *EventLogRepository) GetLatestByResource(ctx context.Context, resourceTy
 		}
 	}
 	return latest, nil
+}
+
+func (r *EventLogRepository) List(ctx context.Context, filter repository.EventLogListFilter) ([]domain.EventLog, error) {
+	query := r.client.Collection(EventLogsCollection).Query
+	if filter.ResourceType != "" {
+		query = query.Where("resourceType", "==", filter.ResourceType)
+	}
+	if filter.ResourceID != "" {
+		query = query.Where("resourceId", "==", filter.ResourceID)
+	}
+	if filter.ActorUserID != "" {
+		query = query.Where("actorUserId", "==", filter.ActorUserID)
+	}
+
+	docs, err := query.Documents(ctx).GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list event logs: %w", err)
+	}
+
+	events := make([]domain.EventLog, 0, len(docs))
+	for _, doc := range docs {
+		var event domain.EventLog
+		if err := doc.DataTo(&event); err != nil {
+			return nil, fmt.Errorf("failed to decode event log: %w", err)
+		}
+		events = append(events, event)
+	}
+
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].CreatedAt.Equal(events[j].CreatedAt) {
+			return events[i].Sequence > events[j].Sequence
+		}
+		return events[i].CreatedAt.After(events[j].CreatedAt)
+	})
+
+	return events, nil
 }

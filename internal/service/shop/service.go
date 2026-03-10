@@ -17,10 +17,11 @@ import (
 )
 
 var (
-	ErrInvalidShop   = errors.New("invalid shop request")
-	ErrForbidden     = errors.New("forbidden")
-	ErrNotFound      = errors.New("shop not found")
-	ErrAdminRequired = errors.New("admin role is required")
+	ErrInvalidShop     = errors.New("invalid shop request")
+	ErrForbidden       = errors.New("forbidden")
+	ErrNotFound        = errors.New("shop not found")
+	ErrAdminRequired   = errors.New("admin role is required")
+	ErrVersionConflict = errors.New("version conflict")
 )
 
 const (
@@ -45,25 +46,28 @@ type CreateInput struct {
 }
 
 type UpdateInput struct {
-	ShopID      string
-	OwnerUserID string
-	Name        string
-	Description string
-	Address     string
-	Latitude    float64
-	Longitude   float64
+	ShopID          string
+	OwnerUserID     string
+	ExpectedVersion int
+	Name            string
+	Description     string
+	Address         string
+	Latitude        float64
+	Longitude       float64
 }
 
 type ModerateInput struct {
 	ShopID          string
 	ModeratorUserID string
+	ExpectedVersion int
 	Status          string
 	ModerationNote  string
 }
 
 type DeleteInput struct {
-	ShopID      string
-	OwnerUserID string
+	ShopID          string
+	OwnerUserID     string
+	ExpectedVersion int
 }
 
 type ListInput struct {
@@ -197,6 +201,9 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Shop, e
 	if existing.Status == ShopStatusDeleted {
 		return domain.Shop{}, ErrNotFound
 	}
+	if input.ExpectedVersion <= 0 || existing.Version != input.ExpectedVersion {
+		return domain.Shop{}, ErrVersionConflict
+	}
 
 	existing.Name = strings.TrimSpace(input.Name)
 	existing.Description = strings.TrimSpace(input.Description)
@@ -241,6 +248,9 @@ func (s *Service) Delete(ctx context.Context, input DeleteInput) (domain.Shop, e
 	if existing.OwnerUserID != strings.TrimSpace(input.OwnerUserID) {
 		return domain.Shop{}, ErrForbidden
 	}
+	if input.ExpectedVersion <= 0 || existing.Version != input.ExpectedVersion {
+		return domain.Shop{}, ErrVersionConflict
+	}
 
 	existing.Status = ShopStatusDeleted
 	existing.Version++
@@ -280,6 +290,9 @@ func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.Sho
 		return domain.Shop{}, fmt.Errorf("%w: %v", ErrNotFound, err)
 	}
 	before := existing
+	if input.ExpectedVersion <= 0 || existing.Version != input.ExpectedVersion {
+		return domain.Shop{}, ErrVersionConflict
+	}
 
 	now := s.now().UTC()
 	existing.Status = status

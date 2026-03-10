@@ -19,6 +19,7 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailTaken         = errors.New("email is already registered")
 	ErrAccountDeleted     = errors.New("account is deleted")
+	ErrVersionConflict    = errors.New("version conflict")
 )
 
 const (
@@ -284,10 +285,13 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 	return token, principal, authUser.PublicKey, nil
 }
 
-func (s *AccountService) Delete(ctx context.Context, userID string) (DeleteResult, error) {
+func (s *AccountService) Delete(ctx context.Context, userID string, expectedVersion int) (DeleteResult, error) {
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
 		return DeleteResult{}, fmt.Errorf("%w: userId is required", ErrInvalidCredentials)
+	}
+	if expectedVersion <= 0 {
+		return DeleteResult{}, fmt.Errorf("%w: expectedVersion must be positive", ErrInvalidCredentials)
 	}
 	if s.authUsers == nil || s.users == nil {
 		return DeleteResult{}, fmt.Errorf("auth service is not configured")
@@ -296,6 +300,9 @@ func (s *AccountService) Delete(ctx context.Context, userID string) (DeleteResul
 	authUser, err := s.authUsers.GetByID(ctx, userID)
 	if err != nil {
 		return DeleteResult{}, err
+	}
+	if authUser.Version != expectedVersion {
+		return DeleteResult{}, ErrVersionConflict
 	}
 	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {

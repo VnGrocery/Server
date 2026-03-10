@@ -87,23 +87,32 @@ func buildSchemas() gin.H {
 				"email":  gin.H{"type": "string"},
 			},
 		},
+		"DeleteResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"userId": gin.H{"type": "string"},
+				"status": gin.H{"type": "string"},
+			},
+		},
 		"UpsertShopRequest": gin.H{
 			"type":     "object",
 			"required": []string{"name", "address", "latitude", "longitude"},
 			"properties": gin.H{
-				"name":        gin.H{"type": "string"},
-				"description": gin.H{"type": "string"},
-				"address":     gin.H{"type": "string"},
-				"latitude":    gin.H{"type": "number"},
-				"longitude":   gin.H{"type": "number"},
+				"expectedVersion": gin.H{"type": "integer", "minimum": 1},
+				"name":            gin.H{"type": "string"},
+				"description":     gin.H{"type": "string"},
+				"address":         gin.H{"type": "string"},
+				"latitude":        gin.H{"type": "number"},
+				"longitude":       gin.H{"type": "number"},
 			},
 		},
 		"ModerateShopRequest": gin.H{
 			"type":     "object",
-			"required": []string{"status"},
+			"required": []string{"expectedVersion", "status"},
 			"properties": gin.H{
-				"status":         gin.H{"type": "string"},
-				"moderationNote": gin.H{"type": "string"},
+				"expectedVersion": gin.H{"type": "integer", "minimum": 1},
+				"status":          gin.H{"type": "string"},
+				"moderationNote":  gin.H{"type": "string"},
 			},
 		},
 		"CreateShopReviewRequest": gin.H{
@@ -243,6 +252,26 @@ func buildSchemas() gin.H {
 				"status": gin.H{"type": "string"},
 			},
 		},
+		"EventLogResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"eventId":         gin.H{"type": "string"},
+				"actorUserId":     gin.H{"type": "string"},
+				"resourceType":    gin.H{"type": "string"},
+				"resourceId":      gin.H{"type": "string"},
+				"resourceVersion": gin.H{"type": "integer"},
+				"action":          gin.H{"type": "string"},
+				"status":          gin.H{"type": "string"},
+				"sequence":        gin.H{"type": "integer"},
+				"previousEventId": gin.H{"type": "string"},
+				"payloadJson":     gin.H{"type": "string"},
+				"publicKey":       gin.H{"type": "string"},
+				"keyAlgorithm":    gin.H{"type": "string"},
+				"signature":       gin.H{"type": "string"},
+				"contentSha256":   gin.H{"type": "string"},
+				"createdAt":       gin.H{"type": "string", "format": "date-time"},
+			},
+		},
 		"ErrorResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
@@ -326,6 +355,39 @@ func buildPaths() gin.H {
 				"security":  []gin.H{{"bearerAuth": []string{}}},
 				"responses": mergeResponses(success(http.StatusOK, "MeResponse"), errorResponse),
 			},
+			"delete": gin.H{
+				"summary":  "Soft delete current user account",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					requiredQueryParam("expectedVersion", "integer"),
+				},
+				"responses": mergeResponses(success(http.StatusOK, "DeleteResponse"), errorResponse),
+			},
+		},
+		"/v1/events": gin.H{
+			"get": gin.H{
+				"summary":  "List signed event logs",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					queryParam("resourceType", "string"),
+					queryParam("resourceId", "string"),
+					queryParam("actorUserId", "string"),
+				},
+				"responses": gin.H{
+					"200": gin.H{
+						"description": "OK",
+						"content": gin.H{
+							"application/json": gin.H{
+								"schema": gin.H{
+									"type":  "array",
+									"items": gin.H{"$ref": "#/components/schemas/EventLogResponse"},
+								},
+							},
+						},
+					},
+					"default": errorResponse["default"],
+				},
+			},
 		},
 		"/v1/shops": gin.H{
 			"get": gin.H{
@@ -358,6 +420,15 @@ func buildPaths() gin.H {
 				"parameters":  []gin.H{pathParam("shopId")},
 				"requestBody": jsonBody("UpsertShopRequest"),
 				"responses":   mergeResponses(success(http.StatusOK, "ShopResponse"), errorResponse),
+			},
+			"delete": gin.H{
+				"summary":  "Soft delete shop",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					pathParam("shopId"),
+					requiredQueryParam("expectedVersion", "integer"),
+				},
+				"responses": mergeResponses(success(http.StatusOK, "ShopResponse"), errorResponse),
 			},
 		},
 		"/v1/shops/{shopId}/reviews": gin.H{
@@ -488,6 +559,15 @@ func queryParam(name, schemaType string) gin.H {
 		"name":     name,
 		"in":       "query",
 		"required": false,
+		"schema":   gin.H{"type": schemaType},
+	}
+}
+
+func requiredQueryParam(name, schemaType string) gin.H {
+	return gin.H{
+		"name":     name,
+		"in":       "query",
+		"required": true,
 		"schema":   gin.H{"type": schemaType},
 	}
 }

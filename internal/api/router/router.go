@@ -8,13 +8,14 @@ import (
 )
 
 type Dependencies struct {
-	HealthHandler  *handler.HealthHandler
-	DocsHandler    *handler.DocsHandler
-	AuthHandler    *handler.AuthHandler
-	SellerHandler  *handler.SellerHandler
-	BuyerHandler   *handler.BuyerHandler
-	ShopHandler    *handler.ShopHandler
-	AuthMiddleware *middleware.AuthRequired
+	HealthHandler   *handler.HealthHandler
+	DocsHandler     *handler.DocsHandler
+	AuthHandler     *handler.AuthHandler
+	EventLogHandler *handler.EventLogHandler
+	SellerHandler   *handler.SellerHandler
+	BuyerHandler    *handler.BuyerHandler
+	ShopHandler     *handler.ShopHandler
+	AuthMiddleware  *middleware.AuthRequired
 }
 
 func New(deps Dependencies) *gin.Engine {
@@ -43,6 +44,7 @@ func New(deps Dependencies) *gin.Engine {
 		v1.POST("/auth/login", deps.AuthHandler.Login)
 		v1.POST("/auth/google", deps.AuthHandler.GoogleLogin)
 		v1.DELETE("/me", deps.AuthMiddleware.Handle(), deps.AuthHandler.DeleteMe)
+		v1.GET("/events", deps.AuthMiddleware.Handle(), deps.EventLogHandler.List)
 		v1.GET("/shops", deps.ShopHandler.List)
 		v1.GET("/shops/:shopId", deps.ShopHandler.GetByID)
 		v1.GET("/shops/:shopId/reviews", deps.ShopHandler.ListReviews)

@@ -489,7 +489,7 @@ func TestAccountServiceDeleteMarksAccountDeleted(t *testing.T) {
 		"google-client-id",
 	)
 
-	result, err := service.Delete(context.Background(), "user-1")
+	result, err := service.Delete(context.Background(), "user-1", 1)
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
@@ -504,5 +504,31 @@ func TestAccountServiceDeleteMarksAccountDeleted(t *testing.T) {
 	}
 	if auditLogger.logHits != 1 {
 		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
+	}
+}
+
+func TestAccountServiceDeleteRejectsVersionConflict(t *testing.T) {
+	service := NewAccountService(
+		authUserRepoStub{
+			getByID: func(ctx context.Context, userID string) (domain.AuthUser, error) {
+				return domain.AuthUser{UserID: userID, Status: AccountStatusActive, Version: 3}, nil
+			},
+		},
+		userRepoStub{
+			getByID: func(ctx context.Context, userID string) (domain.User, error) {
+				return domain.User{UserID: userID, Status: AccountStatusActive, Version: 3}, nil
+			},
+		},
+		nil,
+		nil,
+		nil,
+		issuerStub{},
+		time.Hour,
+		"google-client-id",
+	)
+
+	_, err := service.Delete(context.Background(), "user-1", 2)
+	if !errors.Is(err, ErrVersionConflict) {
+		t.Fatalf("expected ErrVersionConflict, got %v", err)
 	}
 }

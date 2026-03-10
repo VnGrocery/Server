@@ -3,16 +3,18 @@ package dto
 import "time"
 
 type UpsertShopRequest struct {
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Address     string  `json:"address"`
-	Latitude    float64 `json:"latitude"`
-	Longitude   float64 `json:"longitude"`
+	ExpectedVersion int     `json:"expectedVersion"`
+	Name            string  `json:"name"`
+	Description     string  `json:"description"`
+	Address         string  `json:"address"`
+	Latitude        float64 `json:"latitude"`
+	Longitude       float64 `json:"longitude"`
 }
 
 type ModerateShopRequest struct {
-	Status         string `json:"status"`
-	ModerationNote string `json:"moderationNote"`
+	ExpectedVersion int    `json:"expectedVersion"`
+	Status          string `json:"status"`
+	ModerationNote  string `json:"moderationNote"`
 }
 
 type ShopTrustSummaryResponse struct {

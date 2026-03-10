@@ -20,7 +20,7 @@ type AccountUsecase interface {
 	Register(ctx context.Context, email, password, displayName string) (string, authservice.Principal, string, error)
 	Login(ctx context.Context, email, password string) (string, authservice.Principal, string, error)
 	GoogleLogin(ctx context.Context, googleIDToken string) (string, authservice.Principal, string, error)
-	Delete(ctx context.Context, userID string) (authservice.DeleteResult, error)
+	Delete(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error)
 }
 
 func NewAuthHandler(accounts AccountUsecase) *AuthHandler {
@@ -132,18 +132,26 @@ func (h *AuthHandler) DeleteMe(c *gin.Context) {
 		return
 	}
 
-	result, err := h.accounts.Delete(c.Request.Context(), principal.UserID)
+	expectedVersion, parseErr := parsePositiveIntQuery(c.Query("expectedVersion"), "expectedVersion")
+	if parseErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": parseErr.Error()})
+		return
+	}
+
+	result, err := h.accounts.Delete(c.Request.Context(), principal.UserID, expectedVersion)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, authservice.ErrInvalidCredentials) {
 			status = http.StatusBadRequest
+		} else if errors.Is(err, authservice.ErrVersionConflict) {
+			status = http.StatusConflict
 		}
 		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"userId": result.UserID,
-		"status": result.Status,
+	c.JSON(http.StatusOK, dto.DeleteResponse{
+		UserID: result.UserID,
+		Status: result.Status,
 	})
 }

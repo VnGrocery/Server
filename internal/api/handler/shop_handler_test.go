@@ -134,10 +134,34 @@ func TestDeleteShop(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := NewShopHandler(shopServiceAdapter{
 		deleteFn: func(ctx context.Context, input shopsvc.DeleteInput) (domain.Shop, error) {
-			if input.ShopID != "shop-1" || input.OwnerUserID != "user-1" {
+			if input.ShopID != "shop-1" || input.OwnerUserID != "user-1" || input.ExpectedVersion != 3 {
 				t.Fatalf("unexpected delete input: %+v", input)
 			}
 			return domain.Shop{ShopID: input.ShopID, OwnerUserID: input.OwnerUserID, Status: shopsvc.ShopStatusDeleted}, nil
+		},
+	})
+
+	router := gin.New()
+	router.DELETE("/v1/shops/:shopId", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "user-1"})
+		handler.Delete(c)
+	})
+
+	req := httptest.NewRequest(http.MethodDelete, "/v1/shops/shop-1?expectedVersion=3", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestDeleteShopRequiresExpectedVersion(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewShopHandler(shopServiceAdapter{
+		deleteFn: func(ctx context.Context, input shopsvc.DeleteInput) (domain.Shop, error) {
+			t.Fatal("delete should not be called")
+			return domain.Shop{}, nil
 		},
 	})
 
@@ -151,8 +175,8 @@ func TestDeleteShop(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }
 

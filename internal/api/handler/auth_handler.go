@@ -17,9 +17,11 @@ type AuthHandler struct {
 }
 
 type AccountUsecase interface {
-	Register(ctx context.Context, email, password, displayName string) (string, authservice.Principal, string, error)
-	Login(ctx context.Context, email, password string) (string, authservice.Principal, string, error)
-	GoogleLogin(ctx context.Context, googleIDToken string) (string, authservice.Principal, string, error)
+	Register(ctx context.Context, email, password, displayName string) (authservice.AuthResult, error)
+	Login(ctx context.Context, email, password string) (authservice.AuthResult, error)
+	GoogleLogin(ctx context.Context, googleIDToken string) (authservice.AuthResult, error)
+	Refresh(ctx context.Context, refreshToken string) (authservice.AuthResult, error)
+	Logout(ctx context.Context, refreshToken string) error
 	Delete(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error)
 }
 
@@ -49,7 +51,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	token, principal, publicKey, err := h.accounts.Register(c.Request.Context(), request.Email, request.Password, request.DisplayName)
+	result, err := h.accounts.Register(c.Request.Context(), request.Email, request.Password, request.DisplayName)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, authservice.ErrInvalidCredentials) || errors.Is(err, authservice.ErrEmailTaken) {
@@ -59,12 +61,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, dto.AuthTokenResponse{
-		AccessToken: token,
-		UserID:      principal.UserID,
-		Email:       principal.Email,
-		PublicKey:   publicKey,
-	})
+	c.JSON(http.StatusCreated, toAuthTokenResponse(result))
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -74,7 +71,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, principal, publicKey, err := h.accounts.Login(c.Request.Context(), request.Email, request.Password)
+	result, err := h.accounts.Login(c.Request.Context(), request.Email, request.Password)
 	if err != nil {
 		status := http.StatusUnauthorized
 		if errors.Is(err, authservice.ErrInvalidCredentials) {
@@ -88,12 +85,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, dto.AuthTokenResponse{
-		AccessToken: token,
-		UserID:      principal.UserID,
-		Email:       principal.Email,
-		PublicKey:   publicKey,
-	})
+	c.JSON(http.StatusOK, toAuthTokenResponse(result))
 }
 
 func (h *AuthHandler) GoogleLogin(c *gin.Context) {
@@ -103,7 +95,7 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 		return
 	}
 
-	token, principal, publicKey, err := h.accounts.GoogleLogin(c.Request.Context(), request.IDToken)
+	result, err := h.accounts.GoogleLogin(c.Request.Context(), request.IDToken)
 	if err != nil {
 		status := http.StatusUnauthorized
 		if errors.Is(err, authservice.ErrInvalidCredentials) {
@@ -117,12 +109,48 @@ func (h *AuthHandler) GoogleLogin(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, dto.AuthTokenResponse{
-		AccessToken: token,
-		UserID:      principal.UserID,
-		Email:       principal.Email,
-		PublicKey:   publicKey,
-	})
+	c.JSON(http.StatusOK, toAuthTokenResponse(result))
+}
+
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	var request dto.RefreshTokenRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	result, err := h.accounts.Refresh(c.Request.Context(), request.RefreshToken)
+	if err != nil {
+		status := http.StatusUnauthorized
+		if errors.Is(err, authservice.ErrAccountDeleted) {
+			status = http.StatusForbidden
+		} else if !errors.Is(err, authservice.ErrInvalidRefreshToken) {
+			status = http.StatusInternalServerError
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, toAuthTokenResponse(result))
+}
+
+func (h *AuthHandler) Logout(c *gin.Context) {
+	var request dto.LogoutRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	if err := h.accounts.Logout(c.Request.Context(), request.RefreshToken); err != nil {
+		status := http.StatusUnauthorized
+		if !errors.Is(err, authservice.ErrInvalidRefreshToken) {
+			status = http.StatusInternalServerError
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.LogoutResponse{Status: "logged_out"})
 }
 
 func (h *AuthHandler) DeleteMe(c *gin.Context) {
@@ -154,4 +182,14 @@ func (h *AuthHandler) DeleteMe(c *gin.Context) {
 		UserID: result.UserID,
 		Status: result.Status,
 	})
+}
+
+func toAuthTokenResponse(result authservice.AuthResult) dto.AuthTokenResponse {
+	return dto.AuthTokenResponse{
+		AccessToken:  result.AccessToken,
+		RefreshToken: result.RefreshToken,
+		UserID:       result.Principal.UserID,
+		Email:        result.Principal.Email,
+		PublicKey:    result.PublicKey,
+	}
 }

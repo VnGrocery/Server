@@ -18,6 +18,9 @@ func TestCollectionNames(t *testing.T) {
 	if ProductsCollection != "products" {
 		t.Fatalf("expected products collection, got %s", ProductsCollection)
 	}
+	if RefreshTokensCollection != "refresh_tokens" {
+		t.Fatalf("expected refresh_tokens collection, got %s", RefreshTokensCollection)
+	}
 	if PledgesCollection != "pledges" {
 		t.Fatalf("expected pledges collection, got %s", PledgesCollection)
 	}
@@ -77,6 +80,15 @@ func TestDomainStructTags(t *testing.T) {
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+	refreshToken := domain.RefreshToken{
+		TokenID:   "refresh-1",
+		UserID:    "user-1",
+		TokenHash: "hash",
+		Status:    "active",
+		ExpiresAt: now,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
 
 	assertFirestoreTag(t, user, "UserID", "userId")
 	assertFirestoreTag(t, shop, "OwnerUserID", "ownerUserId")
@@ -91,6 +103,8 @@ func TestDomainStructTags(t *testing.T) {
 	assertFirestoreTag(t, product, "ProductID", "productId")
 	assertFirestoreTag(t, product, "OwnerUserID", "ownerUserId")
 	assertFirestoreTag(t, product, "Currency", "currency")
+	assertFirestoreTag(t, refreshToken, "TokenHash", "tokenHash")
+	assertFirestoreTag(t, refreshToken, "ExpiresAt", "expiresAt")
 }
 
 func assertFirestoreTag(t *testing.T, value any, fieldName, expected string) {

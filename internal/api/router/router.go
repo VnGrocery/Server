@@ -44,6 +44,8 @@ func New(deps Dependencies) *gin.Engine {
 		v1.POST("/auth/register", deps.AuthHandler.Register)
 		v1.POST("/auth/login", deps.AuthHandler.Login)
 		v1.POST("/auth/google", deps.AuthHandler.GoogleLogin)
+		v1.POST("/auth/refresh", deps.AuthHandler.Refresh)
+		v1.POST("/auth/logout", deps.AuthHandler.Logout)
 		v1.DELETE("/me", deps.AuthMiddleware.Handle(), deps.AuthHandler.DeleteMe)
 		v1.GET("/events", deps.AuthMiddleware.Handle(), deps.EventLogHandler.List)
 		v1.GET("/shops", deps.ShopHandler.List)

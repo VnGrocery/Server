@@ -71,13 +71,34 @@ func buildSchemas() gin.H {
 				"idToken": gin.H{"type": "string"},
 			},
 		},
+		"RefreshTokenRequest": gin.H{
+			"type":     "object",
+			"required": []string{"refreshToken"},
+			"properties": gin.H{
+				"refreshToken": gin.H{"type": "string"},
+			},
+		},
+		"LogoutRequest": gin.H{
+			"type":     "object",
+			"required": []string{"refreshToken"},
+			"properties": gin.H{
+				"refreshToken": gin.H{"type": "string"},
+			},
+		},
 		"AuthTokenResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
-				"accessToken": gin.H{"type": "string"},
-				"userId":      gin.H{"type": "string"},
-				"email":       gin.H{"type": "string"},
-				"publicKey":   gin.H{"type": "string"},
+				"accessToken":  gin.H{"type": "string"},
+				"refreshToken": gin.H{"type": "string"},
+				"userId":       gin.H{"type": "string"},
+				"email":        gin.H{"type": "string"},
+				"publicKey":    gin.H{"type": "string"},
+			},
+		},
+		"LogoutResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"status": gin.H{"type": "string"},
 			},
 		},
 		"MeResponse": gin.H{
@@ -383,6 +404,20 @@ func buildPaths() gin.H {
 				"summary":     "Login with Google ID token",
 				"requestBody": jsonBody("GoogleLoginRequest"),
 				"responses":   mergeResponses(success(http.StatusOK, "AuthTokenResponse"), errorResponse),
+			},
+		},
+		"/v1/auth/refresh": gin.H{
+			"post": gin.H{
+				"summary":     "Refresh access token",
+				"requestBody": jsonBody("RefreshTokenRequest"),
+				"responses":   mergeResponses(success(http.StatusOK, "AuthTokenResponse"), errorResponse),
+			},
+		},
+		"/v1/auth/logout": gin.H{
+			"post": gin.H{
+				"summary":     "Logout by revoking refresh token",
+				"requestBody": jsonBody("LogoutRequest"),
+				"responses":   mergeResponses(success(http.StatusOK, "LogoutResponse"), errorResponse),
 			},
 		},
 		"/v1/me": gin.H{

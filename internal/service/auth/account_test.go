@@ -65,6 +65,27 @@ func (s userRepoStub) GetByID(ctx context.Context, userID string) (domain.User, 
 	return domain.User{}, errors.New("not implemented")
 }
 
+type refreshTokenRepoStub struct {
+	save           func(ctx context.Context, token domain.RefreshToken) error
+	getByTokenHash func(ctx context.Context, tokenHash string) (domain.RefreshToken, error)
+	saveHits       int
+}
+
+func (s *refreshTokenRepoStub) Save(ctx context.Context, token domain.RefreshToken) error {
+	s.saveHits++
+	if s.save != nil {
+		return s.save(ctx, token)
+	}
+	return nil
+}
+
+func (s *refreshTokenRepoStub) GetByTokenHash(ctx context.Context, tokenHash string) (domain.RefreshToken, error) {
+	if s.getByTokenHash != nil {
+		return s.getByTokenHash(ctx, tokenHash)
+	}
+	return domain.RefreshToken{}, errors.New("not found")
+}
+
 type accountKeyStoreStub struct {
 	create     func(ctx context.Context, userID string) (AccountKey, error)
 	delete     func(ctx context.Context, vaultPath string) error
@@ -161,26 +182,28 @@ func TestAccountServiceRegisterCreatesVaultKeyAndReturnsPublicKey(t *testing.T) 
 				return nil
 			},
 		},
+		&refreshTokenRepoStub{},
 		keys,
 		nil,
 		nil,
 		issuerStub{},
 		time.Hour,
+		30*24*time.Hour,
 		"google-client-id",
 	)
 
-	token, principal, publicKey, err := service.Register(context.Background(), "USER@example.com", "password123", "Demo User")
+	result, err := service.Register(context.Background(), "USER@example.com", "password123", "Demo User")
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-	if token != "token-for-user-1" {
-		t.Fatalf("unexpected token: %s", token)
+	if result.AccessToken != "token-for-user-1" || result.RefreshToken == "" {
+		t.Fatalf("unexpected tokens: %#v", result)
 	}
-	if principal.UserID != "user-1" {
-		t.Fatalf("unexpected principal: %#v", principal)
+	if result.Principal.UserID != "user-1" {
+		t.Fatalf("unexpected principal: %#v", result.Principal)
 	}
-	if publicKey != "pub-key" {
-		t.Fatalf("unexpected public key: %s", publicKey)
+	if result.PublicKey != "pub-key" {
+		t.Fatalf("unexpected public key: %s", result.PublicKey)
 	}
 	if savedAuthUser.PublicKey != "pub-key" || savedAuthUser.KeyAlgorithm != "Ed25519" || savedAuthUser.VaultKeyPath != "account-keys/user-1" {
 		t.Fatalf("auth user key metadata not persisted: %#v", savedAuthUser)
@@ -215,15 +238,17 @@ func TestAccountServiceRegisterDoesNotCreateKeyWhenEmailExists(t *testing.T) {
 			},
 		},
 		userRepoStub{},
+		&refreshTokenRepoStub{},
 		keys,
 		nil,
 		nil,
 		issuerStub{},
 		time.Hour,
+		30*24*time.Hour,
 		"google-client-id",
 	)
 
-	_, _, _, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User")
+	_, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User")
 	if !errors.Is(err, ErrEmailTaken) {
 		t.Fatalf("expected ErrEmailTaken, got %v", err)
 	}
@@ -249,15 +274,17 @@ func TestAccountServiceRegisterCleansVaultKeyWhenUserSaveFails(t *testing.T) {
 				return errors.New("user save failed")
 			},
 		},
+		&refreshTokenRepoStub{},
 		keys,
 		nil,
 		nil,
 		issuerStub{},
 		time.Hour,
+		30*24*time.Hour,
 		"google-client-id",
 	)
 
-	_, _, _, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User")
+	_, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -288,15 +315,17 @@ func TestAccountServiceRegisterWritesAuditLog(t *testing.T) {
 	service := NewAccountService(
 		authUserRepoStub{newUserID: "user-1"},
 		userRepoStub{},
+		&refreshTokenRepoStub{},
 		keys,
 		auditLogger,
 		nil,
 		issuerStub{},
 		time.Hour,
+		30*24*time.Hour,
 		"google-client-id",
 	)
 
-	if _, _, _, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User"); err != nil {
+	if _, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User"); err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 	if auditLogger.logHits != 1 {
@@ -322,20 +351,22 @@ func TestAccountServiceLoginReturnsStoredPublicKey(t *testing.T) {
 			},
 		},
 		userRepoStub{},
+		&refreshTokenRepoStub{},
 		nil,
 		nil,
 		nil,
 		issuerStub{},
 		time.Hour,
+		30*24*time.Hour,
 		"google-client-id",
 	)
 
-	token, principal, publicKey, err := service.Login(context.Background(), "user@example.com", "password123")
+	result, err := service.Login(context.Background(), "user@example.com", "password123")
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-	if token != "token-for-user-1" || principal.UserID != "user-1" || publicKey != "pub-key" {
-		t.Fatalf("unexpected login response: token=%s principal=%#v publicKey=%s", token, principal, publicKey)
+	if result.AccessToken != "token-for-user-1" || result.RefreshToken == "" || result.Principal.UserID != "user-1" || result.PublicKey != "pub-key" {
+		t.Fatalf("unexpected login response: %#v", result)
 	}
 }
 
@@ -358,6 +389,7 @@ func TestAccountServiceGoogleLoginCreatesVaultKeyForNewUser(t *testing.T) {
 			},
 		},
 		userRepoStub{},
+		&refreshTokenRepoStub{},
 		keys,
 		nil,
 		googleTokensStub{
@@ -367,15 +399,16 @@ func TestAccountServiceGoogleLoginCreatesVaultKeyForNewUser(t *testing.T) {
 		},
 		issuerStub{},
 		time.Hour,
+		30*24*time.Hour,
 		"google-client-id",
 	)
 
-	token, principal, publicKey, err := service.GoogleLogin(context.Background(), "google-token")
+	result, err := service.GoogleLogin(context.Background(), "google-token")
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-	if token != "token-for-user-2" || principal.UserID != "user-2" || publicKey != "pub-key" {
-		t.Fatalf("unexpected google login response: token=%s principal=%#v publicKey=%s", token, principal, publicKey)
+	if result.AccessToken != "token-for-user-2" || result.RefreshToken == "" || result.Principal.UserID != "user-2" || result.PublicKey != "pub-key" {
+		t.Fatalf("unexpected google login response: %#v", result)
 	}
 	if keys.createHits != 1 {
 		t.Fatalf("expected key generation once, got %d", keys.createHits)
@@ -395,6 +428,7 @@ func TestAccountServiceGoogleLoginDoesNotRecreateKeyForExistingUser(t *testing.T
 			},
 		},
 		userRepoStub{},
+		&refreshTokenRepoStub{},
 		keys,
 		nil,
 		googleTokensStub{
@@ -404,15 +438,16 @@ func TestAccountServiceGoogleLoginDoesNotRecreateKeyForExistingUser(t *testing.T
 		},
 		issuerStub{},
 		time.Hour,
+		30*24*time.Hour,
 		"google-client-id",
 	)
 
-	_, _, publicKey, err := service.GoogleLogin(context.Background(), "google-token")
+	result, err := service.GoogleLogin(context.Background(), "google-token")
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-	if publicKey != "existing-pub" {
-		t.Fatalf("unexpected public key: %s", publicKey)
+	if result.PublicKey != "existing-pub" {
+		t.Fatalf("unexpected public key: %s", result.PublicKey)
 	}
 	if keys.createHits != 0 {
 		t.Fatalf("expected no key recreation, got %d", keys.createHits)
@@ -437,15 +472,17 @@ func TestAccountServiceLoginRejectsDeletedAccount(t *testing.T) {
 			},
 		},
 		userRepoStub{},
+		&refreshTokenRepoStub{},
 		nil,
 		nil,
 		nil,
 		issuerStub{},
 		time.Hour,
+		30*24*time.Hour,
 		"google-client-id",
 	)
 
-	_, _, _, err = service.Login(context.Background(), "user@example.com", "password123")
+	_, err = service.Login(context.Background(), "user@example.com", "password123")
 	if !errors.Is(err, ErrAccountDeleted) {
 		t.Fatalf("expected ErrAccountDeleted, got %v", err)
 	}
@@ -481,11 +518,13 @@ func TestAccountServiceDeleteMarksAccountDeleted(t *testing.T) {
 				return nil
 			},
 		},
+		&refreshTokenRepoStub{},
 		nil,
 		auditLogger,
 		nil,
 		issuerStub{},
 		time.Hour,
+		30*24*time.Hour,
 		"google-client-id",
 	)
 
@@ -519,11 +558,13 @@ func TestAccountServiceDeleteRejectsVersionConflict(t *testing.T) {
 				return domain.User{UserID: userID, Status: AccountStatusActive, Version: 3}, nil
 			},
 		},
+		&refreshTokenRepoStub{},
 		nil,
 		nil,
 		nil,
 		issuerStub{},
 		time.Hour,
+		30*24*time.Hour,
 		"google-client-id",
 	)
 

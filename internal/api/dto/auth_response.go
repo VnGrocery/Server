@@ -13,3 +13,7 @@ type DeleteResponse struct {
 	UserID string `json:"userId"`
 	Status string `json:"status"`
 }
+
+type LogoutResponse struct {
+	Status string `json:"status"`
+}

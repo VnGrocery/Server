@@ -391,16 +391,24 @@ func (buyerCheckRouteStub) Check(ctx context.Context, input buyerservice.CheckIn
 
 type authAccountsStub struct{}
 
-func (authAccountsStub) Register(ctx context.Context, email, password, displayName string) (string, authservice.Principal, string, error) {
-	return "", authservice.Principal{}, "", errors.New("not implemented")
+func (authAccountsStub) Register(ctx context.Context, email, password, displayName string) (authservice.AuthResult, error) {
+	return authservice.AuthResult{}, errors.New("not implemented")
 }
 
-func (authAccountsStub) Login(ctx context.Context, email, password string) (string, authservice.Principal, string, error) {
-	return "", authservice.Principal{}, "", errors.New("not implemented")
+func (authAccountsStub) Login(ctx context.Context, email, password string) (authservice.AuthResult, error) {
+	return authservice.AuthResult{}, errors.New("not implemented")
 }
 
-func (authAccountsStub) GoogleLogin(ctx context.Context, googleIDToken string) (string, authservice.Principal, string, error) {
-	return "", authservice.Principal{}, "", errors.New("not implemented")
+func (authAccountsStub) GoogleLogin(ctx context.Context, googleIDToken string) (authservice.AuthResult, error) {
+	return authservice.AuthResult{}, errors.New("not implemented")
+}
+
+func (authAccountsStub) Refresh(ctx context.Context, refreshToken string) (authservice.AuthResult, error) {
+	return authservice.AuthResult{}, errors.New("not implemented")
+}
+
+func (authAccountsStub) Logout(ctx context.Context, refreshToken string) error {
+	return errors.New("not implemented")
 }
 
 func (authAccountsStub) Delete(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error) {

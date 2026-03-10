@@ -22,6 +22,11 @@ type UserRepository interface {
 	GetByID(ctx context.Context, userID string) (domain.User, error)
 }
 
+type RefreshTokenRepository interface {
+	Save(ctx context.Context, token domain.RefreshToken) error
+	GetByTokenHash(ctx context.Context, tokenHash string) (domain.RefreshToken, error)
+}
+
 type ShopRepository interface {
 	Save(ctx context.Context, shop domain.Shop) error
 	GetByID(ctx context.Context, shopID string) (domain.Shop, error)

@@ -15,9 +15,18 @@ type GoogleLoginRequest struct {
 	IDToken string `json:"idToken"`
 }
 
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refreshToken"`
+}
+
+type LogoutRequest struct {
+	RefreshToken string `json:"refreshToken"`
+}
+
 type AuthTokenResponse struct {
-	AccessToken string `json:"accessToken"`
-	UserID      string `json:"userId"`
-	Email       string `json:"email,omitempty"`
-	PublicKey   string `json:"publicKey,omitempty"`
+	AccessToken  string `json:"accessToken"`
+	RefreshToken string `json:"refreshToken,omitempty"`
+	UserID       string `json:"userId"`
+	Email        string `json:"email,omitempty"`
+	PublicKey    string `json:"publicKey,omitempty"`
 }

@@ -75,6 +75,7 @@ func main() {
 	shopReviewRepository := firestorerepo.NewShopReviewRepository(app.Firestore)
 	userRepository := firestorerepo.NewUserRepository(app.Firestore)
 	authUserRepository := firestorerepo.NewAuthUserRepository(app.Firestore)
+	refreshTokenRepository := firestorerepo.NewRefreshTokenRepository(app.Firestore)
 	eventLogRepository := firestorerepo.NewEventLogRepository(app.Firestore)
 	var accountKeys authservice.AccountKeyStore
 	var auditSigner auditservice.Signer
@@ -93,7 +94,7 @@ func main() {
 	if auditSigner != nil {
 		auditLogger = auditQueryService
 	}
-	accountService := authservice.NewAccountService(authUserRepository, userRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, cfg.GoogleClientID)
+	accountService := authservice.NewAccountService(authUserRepository, userRepository, refreshTokenRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, 30*24*time.Hour, cfg.GoogleClientID)
 	productManager := productservice.NewService(productRepository, shopRepository, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, shopReviewRepository, userRepository, auditLogger)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, auditLogger)

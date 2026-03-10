@@ -12,6 +12,7 @@ import (
 	auditservice "vngrocery/internal/service/audit"
 	authservice "vngrocery/internal/service/auth"
 	buyerservice "vngrocery/internal/service/buyer"
+	productservice "vngrocery/internal/service/product"
 	sellerservice "vngrocery/internal/service/seller"
 	shopservice "vngrocery/internal/service/shop"
 	visionservice "vngrocery/internal/service/vision"
@@ -69,6 +70,7 @@ func main() {
 		visionScorer = visionservice.NewService(visionClient)
 	}
 	pledgeRepository := firestorerepo.NewPledgeRepository(app.Firestore)
+	productRepository := firestorerepo.NewProductRepository(app.Firestore)
 	shopRepository := firestorerepo.NewShopRepository(app.Firestore)
 	shopReviewRepository := firestorerepo.NewShopReviewRepository(app.Firestore)
 	userRepository := firestorerepo.NewUserRepository(app.Firestore)
@@ -92,6 +94,7 @@ func main() {
 		auditLogger = auditQueryService
 	}
 	accountService := authservice.NewAccountService(authUserRepository, userRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, cfg.GoogleClientID)
+	productManager := productservice.NewService(productRepository, shopRepository, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, shopReviewRepository, userRepository, auditLogger)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, auditLogger)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, visionScorer)
@@ -100,6 +103,7 @@ func main() {
 	docsHandler := handler.NewDocsHandler()
 	authHandler := handler.NewAuthHandler(accountService)
 	eventLogHandler := handler.NewEventLogHandler(auditQueryService)
+	productHandler := handler.NewProductHandler(productManager)
 	sellerHandler := handler.NewSellerHandler(visionScorer, sellerCommitService)
 	buyerHandler := handler.NewBuyerHandler(buyerCheckService)
 	shopHandler := handler.NewShopHandler(shopManager)
@@ -109,6 +113,7 @@ func main() {
 		DocsHandler:     docsHandler,
 		AuthHandler:     authHandler,
 		EventLogHandler: eventLogHandler,
+		ProductHandler:  productHandler,
 		SellerHandler:   sellerHandler,
 		BuyerHandler:    buyerHandler,
 		ShopHandler:     shopHandler,

@@ -17,6 +17,7 @@ import (
 	auditservice "vngrocery/internal/service/audit"
 	authservice "vngrocery/internal/service/auth"
 	buyerservice "vngrocery/internal/service/buyer"
+	productservice "vngrocery/internal/service/product"
 	sellerservice "vngrocery/internal/service/seller"
 	shopservice "vngrocery/internal/service/shop"
 	visionservice "vngrocery/internal/service/vision"
@@ -28,6 +29,7 @@ func newTestDependencies(verifier testVerifier) Dependencies {
 		DocsHandler:     handler.NewDocsHandler(),
 		AuthHandler:     handler.NewAuthHandler(authAccountsStub{}),
 		EventLogHandler: handler.NewEventLogHandler(eventLogUsecaseStub{}),
+		ProductHandler:  handler.NewProductHandler(productHandlerStub{}),
 		SellerHandler:   handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:    handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		ShopHandler:     handler.NewShopHandler(shopHandlerStub{}),
@@ -257,6 +259,41 @@ func TestRouterShopReviewCreateProtected(t *testing.T) {
 	}
 }
 
+func TestRouterProductCreateProtected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/shops/shop-1/products", bytes.NewBufferString(`{"name":"Apple","price":10,"currency":"VND"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
+func TestRouterProductListPublic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/shops/shop-1/products", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
 func TestRouterShopReviewListPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(newTestDependencies(testVerifier{
@@ -478,4 +515,70 @@ func (shopHandlerStub) ListReviews(ctx context.Context, shopID string) ([]domain
 			Comment:        "Good",
 		},
 	}, nil
+}
+
+type productHandlerStub struct{}
+
+func (productHandlerStub) Create(ctx context.Context, input productservice.CreateInput) (domain.Product, error) {
+	return domain.Product{
+		ProductID:   "product-1",
+		ShopID:      input.ShopID,
+		OwnerUserID: input.OwnerUserID,
+		Name:        input.Name,
+		Description: input.Description,
+		Price:       input.Price,
+		Currency:    input.Currency,
+		Status:      productservice.ProductStatusActive,
+		Version:     1,
+	}, nil
+}
+
+func (productHandlerStub) Update(ctx context.Context, input productservice.UpdateInput) (domain.Product, error) {
+	return domain.Product{
+		ProductID:   input.ProductID,
+		ShopID:      input.ShopID,
+		OwnerUserID: input.OwnerUserID,
+		Name:        input.Name,
+		Description: input.Description,
+		Price:       input.Price,
+		Currency:    input.Currency,
+		Status:      productservice.ProductStatusActive,
+		Version:     input.ExpectedVersion + 1,
+	}, nil
+}
+
+func (productHandlerStub) Delete(ctx context.Context, input productservice.DeleteInput) (domain.Product, error) {
+	return domain.Product{
+		ProductID:   input.ProductID,
+		ShopID:      input.ShopID,
+		OwnerUserID: input.OwnerUserID,
+		Status:      productservice.ProductStatusDeleted,
+		Version:     input.ExpectedVersion + 1,
+	}, nil
+}
+
+func (productHandlerStub) GetByID(ctx context.Context, shopID, productID string) (domain.Product, error) {
+	return domain.Product{
+		ProductID:   productID,
+		ShopID:      shopID,
+		OwnerUserID: "user-1",
+		Name:        "Apple",
+		Price:       10,
+		Currency:    "VND",
+		Status:      productservice.ProductStatusActive,
+		Version:     1,
+	}, nil
+}
+
+func (productHandlerStub) List(ctx context.Context, input productservice.ListInput) ([]domain.Product, error) {
+	return []domain.Product{{
+		ProductID:   "product-1",
+		ShopID:      input.ShopID,
+		OwnerUserID: "user-1",
+		Name:        "Apple",
+		Price:       10,
+		Currency:    "VND",
+		Status:      productservice.ProductStatusActive,
+		Version:     1,
+	}}, nil
 }

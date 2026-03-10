@@ -193,6 +193,42 @@ func buildSchemas() gin.H {
 				"updatedAt":      gin.H{"type": "string", "format": "date-time"},
 			},
 		},
+		"UpsertProductRequest": gin.H{
+			"type":     "object",
+			"required": []string{"name", "price", "currency"},
+			"properties": gin.H{
+				"expectedVersion": gin.H{"type": "integer", "minimum": 1},
+				"name":            gin.H{"type": "string"},
+				"description":     gin.H{"type": "string"},
+				"price":           gin.H{"type": "number"},
+				"currency":        gin.H{"type": "string"},
+			},
+		},
+		"ProductResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"productId":   gin.H{"type": "string"},
+				"shopId":      gin.H{"type": "string"},
+				"ownerUserId": gin.H{"type": "string"},
+				"name":        gin.H{"type": "string"},
+				"description": gin.H{"type": "string"},
+				"price":       gin.H{"type": "number"},
+				"currency":    gin.H{"type": "string"},
+				"status":      gin.H{"type": "string"},
+				"version":     gin.H{"type": "integer"},
+				"createdAt":   gin.H{"type": "string", "format": "date-time"},
+				"updatedAt":   gin.H{"type": "string", "format": "date-time"},
+			},
+		},
+		"ProductListResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"items": gin.H{
+					"type":  "array",
+					"items": gin.H{"$ref": "#/components/schemas/ProductResponse"},
+				},
+			},
+		},
 		"SellerCommitRequest": gin.H{
 			"type":     "object",
 			"required": []string{"shopId", "score", "category", "confidence"},
@@ -429,6 +465,50 @@ func buildPaths() gin.H {
 					requiredQueryParam("expectedVersion", "integer"),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "ShopResponse"), errorResponse),
+			},
+		},
+		"/v1/shops/{shopId}/products": gin.H{
+			"get": gin.H{
+				"summary":    "List shop products",
+				"parameters": []gin.H{pathParam("shopId")},
+				"responses":  mergeResponses(success(http.StatusOK, "ProductListResponse"), errorResponse),
+			},
+			"post": gin.H{
+				"summary":     "Create product",
+				"security":    []gin.H{{"bearerAuth": []string{}}},
+				"parameters":  []gin.H{pathParam("shopId")},
+				"requestBody": jsonBody("UpsertProductRequest"),
+				"responses":   mergeResponses(success(http.StatusCreated, "ProductResponse"), errorResponse),
+			},
+		},
+		"/v1/shops/{shopId}/products/{productId}": gin.H{
+			"get": gin.H{
+				"summary": "Get product detail",
+				"parameters": []gin.H{
+					pathParam("shopId"),
+					pathParam("productId"),
+				},
+				"responses": mergeResponses(success(http.StatusOK, "ProductResponse"), errorResponse),
+			},
+			"put": gin.H{
+				"summary":  "Update product",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					pathParam("shopId"),
+					pathParam("productId"),
+				},
+				"requestBody": jsonBody("UpsertProductRequest"),
+				"responses":   mergeResponses(success(http.StatusOK, "ProductResponse"), errorResponse),
+			},
+			"delete": gin.H{
+				"summary":  "Soft delete product",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					pathParam("shopId"),
+					pathParam("productId"),
+					requiredQueryParam("expectedVersion", "integer"),
+				},
+				"responses": mergeResponses(success(http.StatusOK, "ProductResponse"), errorResponse),
 			},
 		},
 		"/v1/shops/{shopId}/reviews": gin.H{

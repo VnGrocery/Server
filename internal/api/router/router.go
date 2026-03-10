@@ -12,6 +12,7 @@ type Dependencies struct {
 	DocsHandler     *handler.DocsHandler
 	AuthHandler     *handler.AuthHandler
 	EventLogHandler *handler.EventLogHandler
+	ProductHandler  *handler.ProductHandler
 	SellerHandler   *handler.SellerHandler
 	BuyerHandler    *handler.BuyerHandler
 	ShopHandler     *handler.ShopHandler
@@ -47,11 +48,16 @@ func New(deps Dependencies) *gin.Engine {
 		v1.GET("/events", deps.AuthMiddleware.Handle(), deps.EventLogHandler.List)
 		v1.GET("/shops", deps.ShopHandler.List)
 		v1.GET("/shops/:shopId", deps.ShopHandler.GetByID)
+		v1.GET("/shops/:shopId/products", deps.ProductHandler.List)
+		v1.GET("/shops/:shopId/products/:productId", deps.ProductHandler.GetByID)
 		v1.GET("/shops/:shopId/reviews", deps.ShopHandler.ListReviews)
 		v1.GET("/me", deps.AuthMiddleware.Handle(), deps.AuthHandler.Me)
 		v1.POST("/shops", deps.AuthMiddleware.Handle(), deps.ShopHandler.Create)
+		v1.POST("/shops/:shopId/products", deps.AuthMiddleware.Handle(), deps.ProductHandler.Create)
 		v1.PUT("/shops/:shopId", deps.AuthMiddleware.Handle(), deps.ShopHandler.Update)
+		v1.PUT("/shops/:shopId/products/:productId", deps.AuthMiddleware.Handle(), deps.ProductHandler.Update)
 		v1.DELETE("/shops/:shopId", deps.AuthMiddleware.Handle(), deps.ShopHandler.Delete)
+		v1.DELETE("/shops/:shopId/products/:productId", deps.AuthMiddleware.Handle(), deps.ProductHandler.Delete)
 		v1.POST("/shops/:shopId/reviews", deps.AuthMiddleware.Handle(), deps.ShopHandler.CreateReview)
 		v1.GET("/admin/shops", deps.AuthMiddleware.Handle(), deps.ShopHandler.AdminList)
 		v1.PATCH("/admin/shops/:shopId/moderation", deps.AuthMiddleware.Handle(), deps.ShopHandler.Moderate)

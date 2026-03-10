@@ -11,6 +11,12 @@ type ShopListFilter struct {
 	OwnerUserID string
 }
 
+type ProductListFilter struct {
+	ShopID      string
+	Status      string
+	OwnerUserID string
+}
+
 type UserRepository interface {
 	Save(ctx context.Context, user domain.User) error
 	GetByID(ctx context.Context, userID string) (domain.User, error)
@@ -20,6 +26,12 @@ type ShopRepository interface {
 	Save(ctx context.Context, shop domain.Shop) error
 	GetByID(ctx context.Context, shopID string) (domain.Shop, error)
 	List(ctx context.Context, filter ShopListFilter) ([]domain.Shop, error)
+}
+
+type ProductRepository interface {
+	Save(ctx context.Context, product domain.Product) error
+	GetByID(ctx context.Context, productID string) (domain.Product, error)
+	List(ctx context.Context, filter ProductListFilter) ([]domain.Product, error)
 }
 
 type PledgeRepository interface {

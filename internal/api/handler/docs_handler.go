@@ -137,6 +137,27 @@ func buildSchemas() gin.H {
 				"resetToken": gin.H{"type": "string"},
 			},
 		},
+		"UpdateUserRoleRequest": gin.H{
+			"type":     "object",
+			"required": []string{"expectedVersion", "role"},
+			"properties": gin.H{
+				"expectedVersion": gin.H{"type": "integer", "minimum": 1},
+				"role":            gin.H{"type": "string"},
+			},
+		},
+		"AdminUserResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"userId":      gin.H{"type": "string"},
+				"email":       gin.H{"type": "string"},
+				"displayName": gin.H{"type": "string"},
+				"role":        gin.H{"type": "string"},
+				"status":      gin.H{"type": "string"},
+				"version":     gin.H{"type": "integer"},
+				"createdAt":   gin.H{"type": "string", "format": "date-time"},
+				"updatedAt":   gin.H{"type": "string", "format": "date-time"},
+			},
+		},
 		"MeResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
@@ -652,6 +673,17 @@ func buildPaths() gin.H {
 				"parameters":  []gin.H{pathParam("shopId")},
 				"requestBody": jsonBody("ModerateShopRequest"),
 				"responses":   mergeResponses(success(http.StatusOK, "ShopResponse"), errorResponse),
+			},
+		},
+		"/v1/admin/users/{userId}/role": gin.H{
+			"patch": gin.H{
+				"summary":  "Admin update user role",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					pathParam("userId"),
+				},
+				"requestBody": jsonBody("UpdateUserRoleRequest"),
+				"responses":   mergeResponses(success(http.StatusOK, "AdminUserResponse"), errorResponse),
 			},
 		},
 		"/v1/seller/score": gin.H{

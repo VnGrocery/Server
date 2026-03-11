@@ -15,6 +15,7 @@ import (
 	productservice "vngrocery/internal/service/product"
 	sellerservice "vngrocery/internal/service/seller"
 	shopservice "vngrocery/internal/service/shop"
+	useradminservice "vngrocery/internal/service/useradmin"
 	visionservice "vngrocery/internal/service/vision"
 	"vngrocery/pkg/config"
 	firebasepkg "vngrocery/pkg/firebase"
@@ -97,6 +98,7 @@ func main() {
 	}
 	accountService := authservice.NewAccountService(authUserRepository, userRepository, refreshTokenRepository, passwordResetTokenRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, 30*24*time.Hour, cfg.GoogleClientID)
 	productManager := productservice.NewService(productRepository, shopRepository, auditLogger)
+	userAdminService := useradminservice.NewService(userRepository, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, shopReviewRepository, userRepository, auditLogger)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, auditLogger)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, visionScorer)
@@ -104,6 +106,7 @@ func main() {
 	healthHandler := handler.NewHealthHandler()
 	docsHandler := handler.NewDocsHandler()
 	authHandler := handler.NewAuthHandler(accountService)
+	adminUserHandler := handler.NewAdminUserHandler(userAdminService)
 	eventLogHandler := handler.NewEventLogHandler(auditQueryService)
 	productHandler := handler.NewProductHandler(productManager)
 	sellerHandler := handler.NewSellerHandler(visionScorer, sellerCommitService)
@@ -111,15 +114,16 @@ func main() {
 	shopHandler := handler.NewShopHandler(shopManager)
 
 	engine := router.New(router.Dependencies{
-		HealthHandler:   healthHandler,
-		DocsHandler:     docsHandler,
-		AuthHandler:     authHandler,
-		EventLogHandler: eventLogHandler,
-		ProductHandler:  productHandler,
-		SellerHandler:   sellerHandler,
-		BuyerHandler:    buyerHandler,
-		ShopHandler:     shopHandler,
-		AuthMiddleware:  authMiddleware,
+		HealthHandler:    healthHandler,
+		DocsHandler:      docsHandler,
+		AuthHandler:      authHandler,
+		AdminUserHandler: adminUserHandler,
+		EventLogHandler:  eventLogHandler,
+		ProductHandler:   productHandler,
+		SellerHandler:    sellerHandler,
+		BuyerHandler:     buyerHandler,
+		ShopHandler:      shopHandler,
+		AuthMiddleware:   authMiddleware,
 	})
 
 	if err := engine.Run(":" + cfg.Port); err != nil {

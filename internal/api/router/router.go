@@ -8,15 +8,16 @@ import (
 )
 
 type Dependencies struct {
-	HealthHandler   *handler.HealthHandler
-	DocsHandler     *handler.DocsHandler
-	AuthHandler     *handler.AuthHandler
-	EventLogHandler *handler.EventLogHandler
-	ProductHandler  *handler.ProductHandler
-	SellerHandler   *handler.SellerHandler
-	BuyerHandler    *handler.BuyerHandler
-	ShopHandler     *handler.ShopHandler
-	AuthMiddleware  *middleware.AuthRequired
+	HealthHandler    *handler.HealthHandler
+	DocsHandler      *handler.DocsHandler
+	AuthHandler      *handler.AuthHandler
+	AdminUserHandler *handler.AdminUserHandler
+	EventLogHandler  *handler.EventLogHandler
+	ProductHandler   *handler.ProductHandler
+	SellerHandler    *handler.SellerHandler
+	BuyerHandler     *handler.BuyerHandler
+	ShopHandler      *handler.ShopHandler
+	AuthMiddleware   *middleware.AuthRequired
 }
 
 func New(deps Dependencies) *gin.Engine {
@@ -66,6 +67,7 @@ func New(deps Dependencies) *gin.Engine {
 		v1.POST("/shops/:shopId/reviews", deps.AuthMiddleware.Handle(), deps.ShopHandler.CreateReview)
 		v1.GET("/admin/shops", deps.AuthMiddleware.Handle(), deps.ShopHandler.AdminList)
 		v1.PATCH("/admin/shops/:shopId/moderation", deps.AuthMiddleware.Handle(), deps.ShopHandler.Moderate)
+		v1.PATCH("/admin/users/:userId/role", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.UpdateRole)
 		v1.POST("/seller/score", deps.AuthMiddleware.Handle(), deps.SellerHandler.Score)
 		v1.POST("/seller/commit", deps.AuthMiddleware.Handle(), deps.SellerHandler.Commit)
 		v1.POST("/buyer/check", deps.BuyerHandler.Check)

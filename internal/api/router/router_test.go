@@ -20,20 +20,22 @@ import (
 	productservice "vngrocery/internal/service/product"
 	sellerservice "vngrocery/internal/service/seller"
 	shopservice "vngrocery/internal/service/shop"
+	useradminservice "vngrocery/internal/service/useradmin"
 	visionservice "vngrocery/internal/service/vision"
 )
 
 func newTestDependencies(verifier testVerifier) Dependencies {
 	return Dependencies{
-		HealthHandler:   handler.NewHealthHandler(),
-		DocsHandler:     handler.NewDocsHandler(),
-		AuthHandler:     handler.NewAuthHandler(authAccountsStub{}),
-		EventLogHandler: handler.NewEventLogHandler(eventLogUsecaseStub{}),
-		ProductHandler:  handler.NewProductHandler(productHandlerStub{}),
-		SellerHandler:   handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:    handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:     handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware:  middleware.NewAuthRequired(verifier),
+		HealthHandler:    handler.NewHealthHandler(),
+		DocsHandler:      handler.NewDocsHandler(),
+		AuthHandler:      handler.NewAuthHandler(authAccountsStub{}),
+		AdminUserHandler: handler.NewAdminUserHandler(adminUserHandlerStub{}),
+		EventLogHandler:  handler.NewEventLogHandler(eventLogUsecaseStub{}),
+		ProductHandler:   handler.NewProductHandler(productHandlerStub{}),
+		SellerHandler:    handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:     handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:      handler.NewShopHandler(shopHandlerStub{}),
+		AuthMiddleware:   middleware.NewAuthRequired(verifier),
 	}
 }
 
@@ -311,6 +313,24 @@ func TestRouterShopReviewListPublic(t *testing.T) {
 	}
 }
 
+func TestRouterAdminUserRoleProtected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/admin/users/user-1/role", bytes.NewBufferString(`{"expectedVersion":1,"role":"admin"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}
+
 func TestRouterDocsPublic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(newTestDependencies(testVerifier{
@@ -431,6 +451,17 @@ type eventLogUsecaseStub struct{}
 
 func (eventLogUsecaseStub) List(ctx context.Context, input auditservice.ListInput) ([]domain.EventLog, error) {
 	return []domain.EventLog{}, nil
+}
+
+type adminUserHandlerStub struct{}
+
+func (adminUserHandlerStub) UpdateRole(ctx context.Context, input useradminservice.UpdateRoleInput) (domain.User, error) {
+	return domain.User{
+		UserID:  input.TargetUserID,
+		Role:    input.Role,
+		Status:  "active",
+		Version: input.ExpectedVersion + 1,
+	}, nil
 }
 
 type shopHandlerStub struct{}

@@ -85,6 +85,29 @@ func buildSchemas() gin.H {
 				"refreshToken": gin.H{"type": "string"},
 			},
 		},
+		"ChangePasswordRequest": gin.H{
+			"type":     "object",
+			"required": []string{"currentPassword", "newPassword"},
+			"properties": gin.H{
+				"currentPassword": gin.H{"type": "string"},
+				"newPassword":     gin.H{"type": "string"},
+			},
+		},
+		"ForgotPasswordRequest": gin.H{
+			"type":     "object",
+			"required": []string{"email"},
+			"properties": gin.H{
+				"email": gin.H{"type": "string", "format": "email"},
+			},
+		},
+		"ResetPasswordRequest": gin.H{
+			"type":     "object",
+			"required": []string{"resetToken", "newPassword"},
+			"properties": gin.H{
+				"resetToken":  gin.H{"type": "string"},
+				"newPassword": gin.H{"type": "string"},
+			},
+		},
 		"AuthTokenResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
@@ -99,6 +122,19 @@ func buildSchemas() gin.H {
 			"type": "object",
 			"properties": gin.H{
 				"status": gin.H{"type": "string"},
+			},
+		},
+		"StatusResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"status": gin.H{"type": "string"},
+			},
+		},
+		"PasswordResetResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"status":     gin.H{"type": "string"},
+				"resetToken": gin.H{"type": "string"},
 			},
 		},
 		"MeResponse": gin.H{
@@ -420,6 +456,20 @@ func buildPaths() gin.H {
 				"responses":   mergeResponses(success(http.StatusOK, "LogoutResponse"), errorResponse),
 			},
 		},
+		"/v1/auth/password/forgot": gin.H{
+			"post": gin.H{
+				"summary":     "Request password reset",
+				"requestBody": jsonBody("ForgotPasswordRequest"),
+				"responses":   mergeResponses(success(http.StatusOK, "PasswordResetResponse"), errorResponse),
+			},
+		},
+		"/v1/auth/password/reset": gin.H{
+			"post": gin.H{
+				"summary":     "Reset password with reset token",
+				"requestBody": jsonBody("ResetPasswordRequest"),
+				"responses":   mergeResponses(success(http.StatusOK, "StatusResponse"), errorResponse),
+			},
+		},
 		"/v1/me": gin.H{
 			"get": gin.H{
 				"summary":   "Get current user",
@@ -433,6 +483,14 @@ func buildPaths() gin.H {
 					requiredQueryParam("expectedVersion", "integer"),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "DeleteResponse"), errorResponse),
+			},
+		},
+		"/v1/me/password": gin.H{
+			"post": gin.H{
+				"summary":     "Change current user password",
+				"security":    []gin.H{{"bearerAuth": []string{}}},
+				"requestBody": jsonBody("ChangePasswordRequest"),
+				"responses":   mergeResponses(success(http.StatusOK, "StatusResponse"), errorResponse),
 			},
 		},
 		"/v1/events": gin.H{

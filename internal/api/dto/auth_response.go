@@ -17,3 +17,12 @@ type DeleteResponse struct {
 type LogoutResponse struct {
 	Status string `json:"status"`
 }
+
+type StatusResponse struct {
+	Status string `json:"status"`
+}
+
+type PasswordResetResponse struct {
+	Status     string `json:"status"`
+	ResetToken string `json:"resetToken,omitempty"`
+}

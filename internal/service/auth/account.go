@@ -24,27 +24,32 @@ var (
 	ErrEmailTaken          = errors.New("email is already registered")
 	ErrAccountDeleted      = errors.New("account is deleted")
 	ErrInvalidRefreshToken = errors.New("invalid refresh token")
+	ErrInvalidResetToken   = errors.New("invalid password reset token")
 	ErrVersionConflict     = errors.New("version conflict")
 )
 
 const (
-	AccountStatusActive       = "active"
-	AccountStatusDeleted      = "deleted"
-	RefreshTokenStatusActive  = "active"
-	RefreshTokenStatusRevoked = "revoked"
+	AccountStatusActive            = "active"
+	AccountStatusDeleted           = "deleted"
+	RefreshTokenStatusActive       = "active"
+	RefreshTokenStatusRevoked      = "revoked"
+	PasswordResetTokenStatusActive = "active"
+	PasswordResetTokenStatusUsed   = "used"
 )
 
 type AccountService struct {
-	authUsers      repository.AuthUserRepository
-	users          repository.UserRepository
-	refreshTokens  repository.RefreshTokenRepository
-	keys           AccountKeyStore
-	audit          AuditLogger
-	googleTokens   GoogleTokenValidator
-	jwt            Issuer
-	jwtTTL         time.Duration
-	refreshTTL     time.Duration
-	googleClientID string
+	authUsers        repository.AuthUserRepository
+	users            repository.UserRepository
+	refreshTokens    repository.RefreshTokenRepository
+	passwordResets   repository.PasswordResetTokenRepository
+	keys             AccountKeyStore
+	audit            AuditLogger
+	googleTokens     GoogleTokenValidator
+	jwt              Issuer
+	jwtTTL           time.Duration
+	refreshTTL       time.Duration
+	passwordResetTTL time.Duration
+	googleClientID   string
 }
 
 type AccountKey struct {
@@ -84,6 +89,10 @@ type AuthResult struct {
 	PublicKey    string
 }
 
+type PasswordResetResult struct {
+	ResetToken string
+}
+
 type googleTokenValidator struct{}
 
 func (googleTokenValidator) Validate(ctx context.Context, idToken, audience string) (GoogleIdentity, error) {
@@ -99,7 +108,7 @@ func (googleTokenValidator) Validate(ctx context.Context, idToken, audience stri
 	}, nil
 }
 
-func NewAccountService(authUsers repository.AuthUserRepository, users repository.UserRepository, refreshTokens repository.RefreshTokenRepository, keys AccountKeyStore, auditLogger AuditLogger, googleTokens GoogleTokenValidator, jwt Issuer, jwtTTL, refreshTTL time.Duration, googleClientID string) *AccountService {
+func NewAccountService(authUsers repository.AuthUserRepository, users repository.UserRepository, refreshTokens repository.RefreshTokenRepository, passwordResets repository.PasswordResetTokenRepository, keys AccountKeyStore, auditLogger AuditLogger, googleTokens GoogleTokenValidator, jwt Issuer, jwtTTL, refreshTTL time.Duration, googleClientID string) *AccountService {
 	if googleTokens == nil {
 		googleTokens = googleTokenValidator{}
 	}
@@ -107,16 +116,18 @@ func NewAccountService(authUsers repository.AuthUserRepository, users repository
 		refreshTTL = 30 * 24 * time.Hour
 	}
 	return &AccountService{
-		authUsers:      authUsers,
-		users:          users,
-		refreshTokens:  refreshTokens,
-		keys:           keys,
-		audit:          auditLogger,
-		googleTokens:   googleTokens,
-		jwt:            jwt,
-		jwtTTL:         jwtTTL,
-		refreshTTL:     refreshTTL,
-		googleClientID: googleClientID,
+		authUsers:        authUsers,
+		users:            users,
+		refreshTokens:    refreshTokens,
+		passwordResets:   passwordResets,
+		keys:             keys,
+		audit:            auditLogger,
+		googleTokens:     googleTokens,
+		jwt:              jwt,
+		jwtTTL:           jwtTTL,
+		refreshTTL:       refreshTTL,
+		passwordResetTTL: time.Hour,
+		googleClientID:   googleClientID,
 	}
 }
 
@@ -342,6 +353,107 @@ func (s *AccountService) Logout(ctx context.Context, refreshToken string) error 
 	return s.refreshTokens.Save(ctx, stored)
 }
 
+func (s *AccountService) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	userID = strings.TrimSpace(userID)
+	if userID == "" || currentPassword == "" || newPassword == "" {
+		return fmt.Errorf("%w: userId, currentPassword, and newPassword are required", ErrInvalidCredentials)
+	}
+	if len(newPassword) < 8 {
+		return fmt.Errorf("%w: newPassword must be at least 8 characters", ErrInvalidCredentials)
+	}
+	if s.authUsers == nil {
+		return fmt.Errorf("auth service is not configured")
+	}
+
+	authUser, err := s.authUsers.GetByID(ctx, userID)
+	if err != nil || authUser.UserID == "" {
+		return ErrInvalidCredentials
+	}
+	if authUser.Status == AccountStatusDeleted {
+		return ErrAccountDeleted
+	}
+	if authUser.PasswordHash == "" {
+		return ErrInvalidCredentials
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(authUser.PasswordHash), []byte(currentPassword)); err != nil {
+		return ErrInvalidCredentials
+	}
+
+	return s.updatePassword(ctx, authUser, newPassword, "account.password_changed")
+}
+
+func (s *AccountService) RequestPasswordReset(ctx context.Context, email string) (PasswordResetResult, error) {
+	emailLower := strings.ToLower(strings.TrimSpace(email))
+	if emailLower == "" {
+		return PasswordResetResult{}, fmt.Errorf("%w: email is required", ErrInvalidCredentials)
+	}
+	if s.authUsers == nil || s.passwordResets == nil {
+		return PasswordResetResult{}, fmt.Errorf("auth service is not configured")
+	}
+
+	authUser, err := s.authUsers.GetByEmail(ctx, emailLower)
+	if err != nil || authUser.UserID == "" || authUser.Status == AccountStatusDeleted {
+		return PasswordResetResult{}, ErrInvalidCredentials
+	}
+
+	resetToken, err := newRefreshToken()
+	if err != nil {
+		return PasswordResetResult{}, err
+	}
+	now := time.Now().UTC()
+	if err := s.passwordResets.Save(ctx, domain.PasswordResetToken{
+		TokenID:   uuid.NewString(),
+		UserID:    authUser.UserID,
+		TokenHash: hashSecret(resetToken),
+		Status:    PasswordResetTokenStatusActive,
+		ExpiresAt: now.Add(s.passwordResetTTL),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}); err != nil {
+		return PasswordResetResult{}, err
+	}
+
+	return PasswordResetResult{ResetToken: resetToken}, nil
+}
+
+func (s *AccountService) ResetPassword(ctx context.Context, resetToken, newPassword string) error {
+	resetToken = strings.TrimSpace(resetToken)
+	if resetToken == "" || newPassword == "" {
+		return fmt.Errorf("%w: resetToken and newPassword are required", ErrInvalidResetToken)
+	}
+	if len(newPassword) < 8 {
+		return fmt.Errorf("%w: newPassword must be at least 8 characters", ErrInvalidCredentials)
+	}
+	if s.authUsers == nil || s.passwordResets == nil {
+		return fmt.Errorf("auth service is not configured")
+	}
+
+	stored, err := s.passwordResets.GetByTokenHash(ctx, hashSecret(resetToken))
+	if err != nil || stored.TokenID == "" {
+		return ErrInvalidResetToken
+	}
+	if stored.Status != PasswordResetTokenStatusActive || time.Now().UTC().After(stored.ExpiresAt) {
+		return ErrInvalidResetToken
+	}
+	authUser, err := s.authUsers.GetByID(ctx, stored.UserID)
+	if err != nil || authUser.UserID == "" {
+		return ErrInvalidResetToken
+	}
+	if authUser.Status == AccountStatusDeleted {
+		return ErrAccountDeleted
+	}
+
+	if err := s.updatePassword(ctx, authUser, newPassword, "account.password_reset"); err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	stored.Status = PasswordResetTokenStatusUsed
+	stored.UsedAt = &now
+	stored.UpdatedAt = now
+	return s.passwordResets.Save(ctx, stored)
+}
+
 func (s *AccountService) issueAuthResult(ctx context.Context, principal Principal, publicKey string) (AuthResult, error) {
 	accessToken, err := s.jwt.IssueToken(principal, s.jwtTTL)
 	if err != nil {
@@ -356,7 +468,7 @@ func (s *AccountService) issueAuthResult(ctx context.Context, principal Principa
 	if err := s.refreshTokens.Save(ctx, domain.RefreshToken{
 		TokenID:   uuid.NewString(),
 		UserID:    principal.UserID,
-		TokenHash: hashRefreshToken(refreshToken),
+		TokenHash: hashSecret(refreshToken),
 		Status:    RefreshTokenStatusActive,
 		ExpiresAt: now.Add(s.refreshTTL),
 		CreatedAt: now,
@@ -457,8 +569,47 @@ func newRefreshToken() (string, error) {
 }
 
 func hashRefreshToken(token string) string {
+	return hashSecret(token)
+}
+
+func hashSecret(token string) string {
 	sum := sha256.Sum256([]byte(strings.TrimSpace(token)))
 	return base64.StdEncoding.EncodeToString(sum[:])
+}
+
+func (s *AccountService) updatePassword(ctx context.Context, authUser domain.AuthUser, newPassword, action string) error {
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	authUser.PasswordHash = string(passwordHash)
+	authUser.Version++
+	authUser.UpdatedAt = time.Now().UTC()
+	if err := s.authUsers.Save(ctx, authUser); err != nil {
+		return err
+	}
+	if s.audit == nil {
+		return nil
+	}
+	return s.audit.Log(ctx, audit.Input{
+		ActorUserID:     authUser.UserID,
+		ResourceType:    "account",
+		ResourceID:      authUser.UserID,
+		ResourceVersion: authUser.Version,
+		Action:          action,
+		Status:          "updated",
+		PublicKey:       authUser.PublicKey,
+		KeyAlgorithm:    authUser.KeyAlgorithm,
+		SignerVaultKey:  authUser.VaultKeyPath,
+		Payload: audit.MutationPayload{
+			After: map[string]any{
+				"userId":  authUser.UserID,
+				"status":  authUser.Status,
+				"version": authUser.Version,
+			},
+		},
+	})
 }
 
 func (s *AccountService) logAccountCreated(ctx context.Context, authUser domain.AuthUser) error {

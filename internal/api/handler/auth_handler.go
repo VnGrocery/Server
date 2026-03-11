@@ -22,6 +22,9 @@ type AccountUsecase interface {
 	GoogleLogin(ctx context.Context, googleIDToken string) (authservice.AuthResult, error)
 	Refresh(ctx context.Context, refreshToken string) (authservice.AuthResult, error)
 	Logout(ctx context.Context, refreshToken string) error
+	ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error
+	RequestPasswordReset(ctx context.Context, email string) (authservice.PasswordResetResult, error)
+	ResetPassword(ctx context.Context, resetToken, newPassword string) error
 	Delete(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error)
 }
 
@@ -153,6 +156,58 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.LogoutResponse{Status: "logged_out"})
 }
 
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	var request dto.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	if err := h.accounts.ChangePassword(c.Request.Context(), principal.UserID, request.CurrentPassword, request.NewPassword); err != nil {
+		c.JSON(authStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.StatusResponse{Status: "password_changed"})
+}
+
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var request dto.ForgotPasswordRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	result, err := h.accounts.RequestPasswordReset(c.Request.Context(), request.Email)
+	if err != nil {
+		c.JSON(authStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.PasswordResetResponse{Status: "reset_requested", ResetToken: result.ResetToken})
+}
+
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var request dto.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	if err := h.accounts.ResetPassword(c.Request.Context(), request.ResetToken, request.NewPassword); err != nil {
+		c.JSON(authStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.StatusResponse{Status: "password_reset"})
+}
+
 func (h *AuthHandler) DeleteMe(c *gin.Context) {
 	principal, ok := middleware.GetPrincipal(c)
 	if !ok {
@@ -191,5 +246,16 @@ func toAuthTokenResponse(result authservice.AuthResult) dto.AuthTokenResponse {
 		UserID:       result.Principal.UserID,
 		Email:        result.Principal.Email,
 		PublicKey:    result.PublicKey,
+	}
+}
+
+func authStatus(err error) int {
+	switch {
+	case errors.Is(err, authservice.ErrInvalidCredentials), errors.Is(err, authservice.ErrInvalidResetToken):
+		return http.StatusBadRequest
+	case errors.Is(err, authservice.ErrAccountDeleted):
+		return http.StatusForbidden
+	default:
+		return http.StatusInternalServerError
 	}
 }

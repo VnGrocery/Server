@@ -14,9 +14,12 @@ import (
 )
 
 type authAccountAdapter struct {
-	refresh func(ctx context.Context, refreshToken string) (authservice.AuthResult, error)
-	logout  func(ctx context.Context, refreshToken string) error
-	delete  func(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error)
+	refresh              func(ctx context.Context, refreshToken string) (authservice.AuthResult, error)
+	logout               func(ctx context.Context, refreshToken string) error
+	changePassword       func(ctx context.Context, userID, currentPassword, newPassword string) error
+	requestPasswordReset func(ctx context.Context, email string) (authservice.PasswordResetResult, error)
+	resetPassword        func(ctx context.Context, resetToken, newPassword string) error
+	delete               func(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error)
 }
 
 func (a authAccountAdapter) Register(ctx context.Context, email, password, displayName string) (authservice.AuthResult, error) {
@@ -37,6 +40,18 @@ func (a authAccountAdapter) Refresh(ctx context.Context, refreshToken string) (a
 
 func (a authAccountAdapter) Logout(ctx context.Context, refreshToken string) error {
 	return a.logout(ctx, refreshToken)
+}
+
+func (a authAccountAdapter) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	return a.changePassword(ctx, userID, currentPassword, newPassword)
+}
+
+func (a authAccountAdapter) RequestPasswordReset(ctx context.Context, email string) (authservice.PasswordResetResult, error) {
+	return a.requestPasswordReset(ctx, email)
+}
+
+func (a authAccountAdapter) ResetPassword(ctx context.Context, resetToken, newPassword string) error {
+	return a.resetPassword(ctx, resetToken, newPassword)
 }
 
 func (a authAccountAdapter) Delete(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error) {

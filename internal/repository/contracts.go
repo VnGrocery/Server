@@ -27,6 +27,11 @@ type RefreshTokenRepository interface {
 	GetByTokenHash(ctx context.Context, tokenHash string) (domain.RefreshToken, error)
 }
 
+type PasswordResetTokenRepository interface {
+	Save(ctx context.Context, token domain.PasswordResetToken) error
+	GetByTokenHash(ctx context.Context, tokenHash string) (domain.PasswordResetToken, error)
+}
+
 type ShopRepository interface {
 	Save(ctx context.Context, shop domain.Shop) error
 	GetByID(ctx context.Context, shopID string) (domain.Shop, error)

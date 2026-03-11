@@ -411,6 +411,18 @@ func (authAccountsStub) Logout(ctx context.Context, refreshToken string) error {
 	return errors.New("not implemented")
 }
 
+func (authAccountsStub) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	return errors.New("not implemented")
+}
+
+func (authAccountsStub) RequestPasswordReset(ctx context.Context, email string) (authservice.PasswordResetResult, error) {
+	return authservice.PasswordResetResult{}, errors.New("not implemented")
+}
+
+func (authAccountsStub) ResetPassword(ctx context.Context, resetToken, newPassword string) error {
+	return errors.New("not implemented")
+}
+
 func (authAccountsStub) Delete(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error) {
 	return authservice.DeleteResult{}, errors.New("not implemented")
 }

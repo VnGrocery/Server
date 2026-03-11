@@ -86,6 +86,27 @@ func (s *refreshTokenRepoStub) GetByTokenHash(ctx context.Context, tokenHash str
 	return domain.RefreshToken{}, errors.New("not found")
 }
 
+type passwordResetTokenRepoStub struct {
+	save           func(ctx context.Context, token domain.PasswordResetToken) error
+	getByTokenHash func(ctx context.Context, tokenHash string) (domain.PasswordResetToken, error)
+	saveHits       int
+}
+
+func (s *passwordResetTokenRepoStub) Save(ctx context.Context, token domain.PasswordResetToken) error {
+	s.saveHits++
+	if s.save != nil {
+		return s.save(ctx, token)
+	}
+	return nil
+}
+
+func (s *passwordResetTokenRepoStub) GetByTokenHash(ctx context.Context, tokenHash string) (domain.PasswordResetToken, error) {
+	if s.getByTokenHash != nil {
+		return s.getByTokenHash(ctx, tokenHash)
+	}
+	return domain.PasswordResetToken{}, errors.New("not found")
+}
+
 type accountKeyStoreStub struct {
 	create     func(ctx context.Context, userID string) (AccountKey, error)
 	delete     func(ctx context.Context, vaultPath string) error
@@ -183,6 +204,7 @@ func TestAccountServiceRegisterCreatesVaultKeyAndReturnsPublicKey(t *testing.T) 
 			},
 		},
 		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
 		keys,
 		nil,
 		nil,
@@ -239,6 +261,7 @@ func TestAccountServiceRegisterDoesNotCreateKeyWhenEmailExists(t *testing.T) {
 		},
 		userRepoStub{},
 		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
 		keys,
 		nil,
 		nil,
@@ -275,6 +298,7 @@ func TestAccountServiceRegisterCleansVaultKeyWhenUserSaveFails(t *testing.T) {
 			},
 		},
 		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
 		keys,
 		nil,
 		nil,
@@ -316,6 +340,7 @@ func TestAccountServiceRegisterWritesAuditLog(t *testing.T) {
 		authUserRepoStub{newUserID: "user-1"},
 		userRepoStub{},
 		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
 		keys,
 		auditLogger,
 		nil,
@@ -352,6 +377,7 @@ func TestAccountServiceLoginReturnsStoredPublicKey(t *testing.T) {
 		},
 		userRepoStub{},
 		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
 		nil,
 		nil,
 		nil,
@@ -390,6 +416,7 @@ func TestAccountServiceGoogleLoginCreatesVaultKeyForNewUser(t *testing.T) {
 		},
 		userRepoStub{},
 		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
 		keys,
 		nil,
 		googleTokensStub{
@@ -429,6 +456,7 @@ func TestAccountServiceGoogleLoginDoesNotRecreateKeyForExistingUser(t *testing.T
 		},
 		userRepoStub{},
 		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
 		keys,
 		nil,
 		googleTokensStub{
@@ -473,6 +501,7 @@ func TestAccountServiceLoginRejectsDeletedAccount(t *testing.T) {
 		},
 		userRepoStub{},
 		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
 		nil,
 		nil,
 		nil,
@@ -519,6 +548,7 @@ func TestAccountServiceDeleteMarksAccountDeleted(t *testing.T) {
 			},
 		},
 		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
 		nil,
 		auditLogger,
 		nil,
@@ -559,6 +589,7 @@ func TestAccountServiceDeleteRejectsVersionConflict(t *testing.T) {
 			},
 		},
 		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
 		nil,
 		nil,
 		nil,
@@ -571,5 +602,111 @@ func TestAccountServiceDeleteRejectsVersionConflict(t *testing.T) {
 	_, err := service.Delete(context.Background(), "user-1", 2)
 	if !errors.Is(err, ErrVersionConflict) {
 		t.Fatalf("expected ErrVersionConflict, got %v", err)
+	}
+}
+
+func TestAccountServiceChangePassword(t *testing.T) {
+	oldHash, err := bcrypt.GenerateFromPassword([]byte("old-password"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("failed to hash password: %v", err)
+	}
+	var saved domain.AuthUser
+	service := NewAccountService(
+		authUserRepoStub{
+			getByID: func(ctx context.Context, userID string) (domain.AuthUser, error) {
+				return domain.AuthUser{
+					UserID:       userID,
+					EmailLower:   "user@example.com",
+					PasswordHash: string(oldHash),
+					Status:       AccountStatusActive,
+					Version:      1,
+				}, nil
+			},
+			save: func(ctx context.Context, user domain.AuthUser) error {
+				saved = user
+				return nil
+			},
+		},
+		userRepoStub{},
+		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
+		nil,
+		nil,
+		nil,
+		issuerStub{},
+		time.Hour,
+		30*24*time.Hour,
+		"google-client-id",
+	)
+
+	if err := service.ChangePassword(context.Background(), "user-1", "old-password", "new-password"); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if saved.Version != 2 {
+		t.Fatalf("expected version 2, got %d", saved.Version)
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(saved.PasswordHash), []byte("new-password")); err != nil {
+		t.Fatalf("saved password hash did not match new password: %v", err)
+	}
+}
+
+func TestAccountServiceRequestAndResetPassword(t *testing.T) {
+	resetTokens := &passwordResetTokenRepoStub{}
+	var savedReset domain.PasswordResetToken
+	resetTokens.save = func(ctx context.Context, token domain.PasswordResetToken) error {
+		savedReset = token
+		return nil
+	}
+	service := NewAccountService(
+		authUserRepoStub{
+			getByEmail: func(ctx context.Context, emailLower string) (domain.AuthUser, error) {
+				return domain.AuthUser{UserID: "user-1", EmailLower: emailLower, Status: AccountStatusActive, Version: 1}, nil
+			},
+		},
+		userRepoStub{},
+		&refreshTokenRepoStub{},
+		resetTokens,
+		nil,
+		nil,
+		nil,
+		issuerStub{},
+		time.Hour,
+		30*24*time.Hour,
+		"google-client-id",
+	)
+
+	result, err := service.RequestPasswordReset(context.Background(), "user@example.com")
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.ResetToken == "" || savedReset.TokenHash != hashSecret(result.ResetToken) {
+		t.Fatalf("unexpected reset token result=%#v saved=%#v", result, savedReset)
+	}
+
+	var savedAuth domain.AuthUser
+	resetTokens.getByTokenHash = func(ctx context.Context, tokenHash string) (domain.PasswordResetToken, error) {
+		if tokenHash != savedReset.TokenHash {
+			t.Fatalf("unexpected reset token hash: %s", tokenHash)
+		}
+		return savedReset, nil
+	}
+	service.authUsers = authUserRepoStub{
+		getByID: func(ctx context.Context, userID string) (domain.AuthUser, error) {
+			return domain.AuthUser{UserID: userID, PasswordHash: "old-hash", Status: AccountStatusActive, Version: 1}, nil
+		},
+		save: func(ctx context.Context, user domain.AuthUser) error {
+			savedAuth = user
+			return nil
+		},
+	}
+
+	if err := service.ResetPassword(context.Background(), result.ResetToken, "new-password"); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if savedAuth.Version != 2 {
+		t.Fatalf("expected auth version 2, got %d", savedAuth.Version)
+	}
+	if savedReset.Status != PasswordResetTokenStatusUsed {
+		t.Fatalf("expected reset token used, got %s", savedReset.Status)
 	}
 }

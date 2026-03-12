@@ -7,6 +7,7 @@ import (
 	gofirestore "cloud.google.com/go/firestore"
 
 	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 )
 
 type UserRepository struct {
@@ -38,4 +39,29 @@ func (r *UserRepository) GetByID(ctx context.Context, userID string) (domain.Use
 	}
 
 	return user, nil
+}
+
+func (r *UserRepository) List(ctx context.Context, filter repository.UserListFilter) ([]domain.User, error) {
+	query := r.client.Collection(UsersCollection).Query
+	if filter.Status != "" {
+		query = query.Where("status", "==", filter.Status)
+	}
+	if filter.Role != "" {
+		query = query.Where("role", "==", filter.Role)
+	}
+
+	docs, err := query.Documents(ctx).GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
+	}
+
+	users := make([]domain.User, 0, len(docs))
+	for _, doc := range docs {
+		var user domain.User
+		if err := doc.DataTo(&user); err != nil {
+			return nil, fmt.Errorf("failed to decode user document: %w", err)
+		}
+		users = append(users, user)
+	}
+	return users, nil
 }

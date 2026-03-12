@@ -9,6 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 	"vngrocery/internal/service/audit"
 )
 
@@ -63,6 +64,10 @@ func (s userRepoStub) GetByID(ctx context.Context, userID string) (domain.User, 
 		return s.getByID(ctx, userID)
 	}
 	return domain.User{}, errors.New("not implemented")
+}
+
+func (s userRepoStub) List(ctx context.Context, filter repository.UserListFilter) ([]domain.User, error) {
+	return nil, errors.New("not implemented")
 }
 
 type refreshTokenRepoStub struct {
@@ -372,6 +377,7 @@ func TestAccountServiceLoginReturnsStoredPublicKey(t *testing.T) {
 					EmailLower:   emailLower,
 					PasswordHash: string(passwordHash),
 					PublicKey:    "pub-key",
+					Status:       AccountStatusActive,
 				}, nil
 			},
 		},
@@ -451,6 +457,7 @@ func TestAccountServiceGoogleLoginDoesNotRecreateKeyForExistingUser(t *testing.T
 					UserID:     "user-3",
 					EmailLower: "user@example.com",
 					PublicKey:  "existing-pub",
+					Status:     AccountStatusActive,
 				}, nil
 			},
 		},

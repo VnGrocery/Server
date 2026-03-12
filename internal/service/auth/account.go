@@ -214,7 +214,7 @@ func (s *AccountService) Login(ctx context.Context, email, password string) (Aut
 	if err != nil || authUser.UserID == "" {
 		return AuthResult{}, ErrInvalidCredentials
 	}
-	if authUser.Status == AccountStatusDeleted {
+	if authUser.Status != AccountStatusActive {
 		return AuthResult{}, ErrAccountDeleted
 	}
 	if authUser.PasswordHash == "" {
@@ -294,7 +294,7 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 			return AuthResult{}, err
 		}
 	}
-	if authUser.Status == AccountStatusDeleted {
+	if authUser.Status != AccountStatusActive {
 		return AuthResult{}, ErrAccountDeleted
 	}
 
@@ -322,7 +322,7 @@ func (s *AccountService) Refresh(ctx context.Context, refreshToken string) (Auth
 	if err != nil || authUser.UserID == "" {
 		return AuthResult{}, ErrInvalidRefreshToken
 	}
-	if authUser.Status == AccountStatusDeleted {
+	if authUser.Status != AccountStatusActive {
 		return AuthResult{}, ErrAccountDeleted
 	}
 
@@ -369,7 +369,7 @@ func (s *AccountService) ChangePassword(ctx context.Context, userID, currentPass
 	if err != nil || authUser.UserID == "" {
 		return ErrInvalidCredentials
 	}
-	if authUser.Status == AccountStatusDeleted {
+	if authUser.Status != AccountStatusActive {
 		return ErrAccountDeleted
 	}
 	if authUser.PasswordHash == "" {
@@ -392,7 +392,7 @@ func (s *AccountService) RequestPasswordReset(ctx context.Context, email string)
 	}
 
 	authUser, err := s.authUsers.GetByEmail(ctx, emailLower)
-	if err != nil || authUser.UserID == "" || authUser.Status == AccountStatusDeleted {
+	if err != nil || authUser.UserID == "" || authUser.Status != AccountStatusActive {
 		return PasswordResetResult{}, ErrInvalidCredentials
 	}
 
@@ -439,7 +439,7 @@ func (s *AccountService) ResetPassword(ctx context.Context, resetToken, newPassw
 	if err != nil || authUser.UserID == "" {
 		return ErrInvalidResetToken
 	}
-	if authUser.Status == AccountStatusDeleted {
+	if authUser.Status != AccountStatusActive {
 		return ErrAccountDeleted
 	}
 

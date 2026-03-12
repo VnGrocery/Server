@@ -58,6 +58,9 @@ func (u userRepositoryStub) GetByID(ctx context.Context, userID string) (domain.
 	}
 	return u.getByID(ctx, userID)
 }
+func (u userRepositoryStub) List(ctx context.Context, filter repository.UserListFilter) ([]domain.User, error) {
+	return nil, errors.New("not implemented")
+}
 
 type reviewRepositoryStub struct {
 	save             func(ctx context.Context, review domain.ShopReview) error

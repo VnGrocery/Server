@@ -145,6 +145,14 @@ func buildSchemas() gin.H {
 				"role":            gin.H{"type": "string"},
 			},
 		},
+		"UpdateUserStatusRequest": gin.H{
+			"type":     "object",
+			"required": []string{"expectedVersion", "status"},
+			"properties": gin.H{
+				"expectedVersion": gin.H{"type": "integer", "minimum": 1},
+				"status":          gin.H{"type": "string"},
+			},
+		},
 		"AdminUserResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
@@ -156,6 +164,15 @@ func buildSchemas() gin.H {
 				"version":     gin.H{"type": "integer"},
 				"createdAt":   gin.H{"type": "string", "format": "date-time"},
 				"updatedAt":   gin.H{"type": "string", "format": "date-time"},
+			},
+		},
+		"AdminUserListResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"items": gin.H{
+					"type":  "array",
+					"items": gin.H{"$ref": "#/components/schemas/AdminUserResponse"},
+				},
 			},
 		},
 		"MeResponse": gin.H{
@@ -675,6 +692,17 @@ func buildPaths() gin.H {
 				"responses":   mergeResponses(success(http.StatusOK, "ShopResponse"), errorResponse),
 			},
 		},
+		"/v1/admin/users": gin.H{
+			"get": gin.H{
+				"summary":  "Admin list users",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					queryParam("status", "string"),
+					queryParam("role", "string"),
+				},
+				"responses": mergeResponses(success(http.StatusOK, "AdminUserListResponse"), errorResponse),
+			},
+		},
 		"/v1/admin/users/{userId}/role": gin.H{
 			"patch": gin.H{
 				"summary":  "Admin update user role",
@@ -683,6 +711,17 @@ func buildPaths() gin.H {
 					pathParam("userId"),
 				},
 				"requestBody": jsonBody("UpdateUserRoleRequest"),
+				"responses":   mergeResponses(success(http.StatusOK, "AdminUserResponse"), errorResponse),
+			},
+		},
+		"/v1/admin/users/{userId}/status": gin.H{
+			"patch": gin.H{
+				"summary":  "Admin moderate user status",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					pathParam("userId"),
+				},
+				"requestBody": jsonBody("UpdateUserStatusRequest"),
 				"responses":   mergeResponses(success(http.StatusOK, "AdminUserResponse"), errorResponse),
 			},
 		},

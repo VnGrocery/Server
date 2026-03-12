@@ -455,11 +455,24 @@ func (eventLogUsecaseStub) List(ctx context.Context, input auditservice.ListInpu
 
 type adminUserHandlerStub struct{}
 
+func (adminUserHandlerStub) List(ctx context.Context, input useradminservice.ListInput) ([]domain.User, error) {
+	return []domain.User{{UserID: "user-1", Role: "user", Status: "active", Version: 1}}, nil
+}
+
 func (adminUserHandlerStub) UpdateRole(ctx context.Context, input useradminservice.UpdateRoleInput) (domain.User, error) {
 	return domain.User{
 		UserID:  input.TargetUserID,
 		Role:    input.Role,
 		Status:  "active",
+		Version: input.ExpectedVersion + 1,
+	}, nil
+}
+
+func (adminUserHandlerStub) UpdateStatus(ctx context.Context, input useradminservice.UpdateStatusInput) (domain.User, error) {
+	return domain.User{
+		UserID:  input.TargetUserID,
+		Role:    "user",
+		Status:  input.Status,
 		Version: input.ExpectedVersion + 1,
 	}, nil
 }

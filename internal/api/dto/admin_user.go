@@ -7,6 +7,11 @@ type UpdateUserRoleRequest struct {
 	Role            string `json:"role"`
 }
 
+type UpdateUserStatusRequest struct {
+	ExpectedVersion int    `json:"expectedVersion"`
+	Status          string `json:"status"`
+}
+
 type AdminUserResponse struct {
 	UserID      string    `json:"userId"`
 	Email       string    `json:"email"`
@@ -16,4 +21,8 @@ type AdminUserResponse struct {
 	Version     int       `json:"version"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type AdminUserListResponse struct {
+	Items []AdminUserResponse `json:"items"`
 }

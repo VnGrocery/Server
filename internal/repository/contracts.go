@@ -17,9 +17,15 @@ type ProductListFilter struct {
 	OwnerUserID string
 }
 
+type UserListFilter struct {
+	Status string
+	Role   string
+}
+
 type UserRepository interface {
 	Save(ctx context.Context, user domain.User) error
 	GetByID(ctx context.Context, userID string) (domain.User, error)
+	List(ctx context.Context, filter UserListFilter) ([]domain.User, error)
 }
 
 type RefreshTokenRepository interface {

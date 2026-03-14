@@ -98,7 +98,7 @@ func main() {
 	}
 	accountService := authservice.NewAccountService(authUserRepository, userRepository, refreshTokenRepository, passwordResetTokenRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, 30*24*time.Hour, cfg.GoogleClientID)
 	productManager := productservice.NewService(productRepository, shopRepository, auditLogger)
-	userAdminService := useradminservice.NewService(userRepository, authUserRepository, auditLogger)
+	userAdminService := useradminservice.NewService(userRepository, authUserRepository, accountKeys, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, shopReviewRepository, userRepository, auditLogger)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, auditLogger)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, visionScorer)

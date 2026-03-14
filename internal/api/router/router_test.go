@@ -477,6 +477,18 @@ func (adminUserHandlerStub) UpdateStatus(ctx context.Context, input useradminser
 	}, nil
 }
 
+func (adminUserHandlerStub) RotateAccountKey(ctx context.Context, input useradminservice.AccountKeyInput) (useradminservice.AccountKeyResult, error) {
+	return useradminservice.AccountKeyResult{UserID: input.TargetUserID, PublicKey: "pub-key", KeyAlgorithm: "Ed25519", VaultKeyPath: "account-keys/user-1", Version: input.ExpectedVersion + 1}, nil
+}
+
+func (adminUserHandlerStub) RecoverAccountKey(ctx context.Context, input useradminservice.AccountKeyInput) (useradminservice.AccountKeyResult, error) {
+	return useradminservice.AccountKeyResult{UserID: input.TargetUserID, PublicKey: "pub-key", KeyAlgorithm: "Ed25519", VaultKeyPath: "account-keys/user-1", Version: input.ExpectedVersion + 1}, nil
+}
+
+func (adminUserHandlerStub) BackfillAccountKey(ctx context.Context, input useradminservice.AccountKeyInput) (useradminservice.AccountKeyResult, error) {
+	return useradminservice.AccountKeyResult{UserID: input.TargetUserID, PublicKey: "pub-key", KeyAlgorithm: "Ed25519", VaultKeyPath: "account-keys/user-1", Version: input.ExpectedVersion + 1}, nil
+}
+
 type shopHandlerStub struct{}
 
 func (shopHandlerStub) Create(ctx context.Context, input shopservice.CreateInput) (domain.Shop, error) {

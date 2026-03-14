@@ -17,6 +17,9 @@ type AdminUserService interface {
 	List(ctx context.Context, input useradminsvc.ListInput) ([]domain.User, error)
 	UpdateRole(ctx context.Context, input useradminsvc.UpdateRoleInput) (domain.User, error)
 	UpdateStatus(ctx context.Context, input useradminsvc.UpdateStatusInput) (domain.User, error)
+	RotateAccountKey(ctx context.Context, input useradminsvc.AccountKeyInput) (useradminsvc.AccountKeyResult, error)
+	RecoverAccountKey(ctx context.Context, input useradminsvc.AccountKeyInput) (useradminsvc.AccountKeyResult, error)
+	BackfillAccountKey(ctx context.Context, input useradminsvc.AccountKeyInput) (useradminsvc.AccountKeyResult, error)
 }
 
 type AdminUserHandler struct {
@@ -103,6 +106,51 @@ func (h *AdminUserHandler) UpdateStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, toAdminUserResponse(user))
+}
+
+func (h *AdminUserHandler) RotateAccountKey(c *gin.Context) {
+	h.accountKeyAction(c, h.users.RotateAccountKey, "rotate")
+}
+
+func (h *AdminUserHandler) RecoverAccountKey(c *gin.Context) {
+	h.accountKeyAction(c, h.users.RecoverAccountKey, "recover")
+}
+
+func (h *AdminUserHandler) BackfillAccountKey(c *gin.Context) {
+	h.accountKeyAction(c, h.users.BackfillAccountKey, "backfill")
+}
+
+func (h *AdminUserHandler) accountKeyAction(c *gin.Context, action func(context.Context, useradminsvc.AccountKeyInput) (useradminsvc.AccountKeyResult, error), mode string) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	var request dto.AccountKeyRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	result, err := action(c.Request.Context(), useradminsvc.AccountKeyInput{
+		ActorUserID:     principal.UserID,
+		TargetUserID:    c.Param("userId"),
+		ExpectedVersion: request.ExpectedVersion,
+		Mode:            mode,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.AccountKeyResponse{
+		UserID:       result.UserID,
+		PublicKey:    result.PublicKey,
+		KeyAlgorithm: result.KeyAlgorithm,
+		VaultKeyPath: result.VaultKeyPath,
+		Version:      result.Version,
+	})
 }
 
 func (h *AdminUserHandler) writeError(c *gin.Context, err error) {

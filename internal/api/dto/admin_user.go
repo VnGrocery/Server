@@ -12,6 +12,10 @@ type UpdateUserStatusRequest struct {
 	Status          string `json:"status"`
 }
 
+type AccountKeyRequest struct {
+	ExpectedVersion int `json:"expectedVersion"`
+}
+
 type AdminUserResponse struct {
 	UserID      string    `json:"userId"`
 	Email       string    `json:"email"`
@@ -25,4 +29,12 @@ type AdminUserResponse struct {
 
 type AdminUserListResponse struct {
 	Items []AdminUserResponse `json:"items"`
+}
+
+type AccountKeyResponse struct {
+	UserID       string `json:"userId"`
+	PublicKey    string `json:"publicKey"`
+	KeyAlgorithm string `json:"keyAlgorithm"`
+	VaultKeyPath string `json:"vaultKeyPath"`
+	Version      int    `json:"version"`
 }

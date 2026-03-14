@@ -153,6 +153,13 @@ func buildSchemas() gin.H {
 				"status":          gin.H{"type": "string"},
 			},
 		},
+		"AccountKeyRequest": gin.H{
+			"type":     "object",
+			"required": []string{"expectedVersion"},
+			"properties": gin.H{
+				"expectedVersion": gin.H{"type": "integer", "minimum": 1},
+			},
+		},
 		"AdminUserResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
@@ -173,6 +180,16 @@ func buildSchemas() gin.H {
 					"type":  "array",
 					"items": gin.H{"$ref": "#/components/schemas/AdminUserResponse"},
 				},
+			},
+		},
+		"AccountKeyResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"userId":       gin.H{"type": "string"},
+				"publicKey":    gin.H{"type": "string"},
+				"keyAlgorithm": gin.H{"type": "string"},
+				"vaultKeyPath": gin.H{"type": "string"},
+				"version":      gin.H{"type": "integer"},
 			},
 		},
 		"MeResponse": gin.H{
@@ -723,6 +740,39 @@ func buildPaths() gin.H {
 				},
 				"requestBody": jsonBody("UpdateUserStatusRequest"),
 				"responses":   mergeResponses(success(http.StatusOK, "AdminUserResponse"), errorResponse),
+			},
+		},
+		"/v1/admin/users/{userId}/keys/rotate": gin.H{
+			"post": gin.H{
+				"summary":  "Admin rotate account key",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					pathParam("userId"),
+				},
+				"requestBody": jsonBody("AccountKeyRequest"),
+				"responses":   mergeResponses(success(http.StatusOK, "AccountKeyResponse"), errorResponse),
+			},
+		},
+		"/v1/admin/users/{userId}/keys/recover": gin.H{
+			"post": gin.H{
+				"summary":  "Admin recover account key",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					pathParam("userId"),
+				},
+				"requestBody": jsonBody("AccountKeyRequest"),
+				"responses":   mergeResponses(success(http.StatusOK, "AccountKeyResponse"), errorResponse),
+			},
+		},
+		"/v1/admin/users/{userId}/keys/backfill": gin.H{
+			"post": gin.H{
+				"summary":  "Admin backfill missing account key metadata",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					pathParam("userId"),
+				},
+				"requestBody": jsonBody("AccountKeyRequest"),
+				"responses":   mergeResponses(success(http.StatusOK, "AccountKeyResponse"), errorResponse),
 			},
 		},
 		"/v1/seller/score": gin.H{

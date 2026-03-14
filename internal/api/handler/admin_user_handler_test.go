@@ -19,6 +19,9 @@ type adminUserServiceAdapter struct {
 	list         func(ctx context.Context, input useradminsvc.ListInput) ([]domain.User, error)
 	updateRole   func(ctx context.Context, input useradminsvc.UpdateRoleInput) (domain.User, error)
 	updateStatus func(ctx context.Context, input useradminsvc.UpdateStatusInput) (domain.User, error)
+	rotateKey    func(ctx context.Context, input useradminsvc.AccountKeyInput) (useradminsvc.AccountKeyResult, error)
+	recoverKey   func(ctx context.Context, input useradminsvc.AccountKeyInput) (useradminsvc.AccountKeyResult, error)
+	backfillKey  func(ctx context.Context, input useradminsvc.AccountKeyInput) (useradminsvc.AccountKeyResult, error)
 }
 
 func (a adminUserServiceAdapter) List(ctx context.Context, input useradminsvc.ListInput) ([]domain.User, error) {
@@ -31,6 +34,18 @@ func (a adminUserServiceAdapter) UpdateRole(ctx context.Context, input useradmin
 
 func (a adminUserServiceAdapter) UpdateStatus(ctx context.Context, input useradminsvc.UpdateStatusInput) (domain.User, error) {
 	return a.updateStatus(ctx, input)
+}
+
+func (a adminUserServiceAdapter) RotateAccountKey(ctx context.Context, input useradminsvc.AccountKeyInput) (useradminsvc.AccountKeyResult, error) {
+	return a.rotateKey(ctx, input)
+}
+
+func (a adminUserServiceAdapter) RecoverAccountKey(ctx context.Context, input useradminsvc.AccountKeyInput) (useradminsvc.AccountKeyResult, error) {
+	return a.recoverKey(ctx, input)
+}
+
+func (a adminUserServiceAdapter) BackfillAccountKey(ctx context.Context, input useradminsvc.AccountKeyInput) (useradminsvc.AccountKeyResult, error) {
+	return a.backfillKey(ctx, input)
 }
 
 func TestUpdateUserRole(t *testing.T) {
@@ -111,6 +126,39 @@ func TestUpdateUserStatus(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodPatch, "/v1/admin/users/user-1/status", bytes.NewBufferString(`{"expectedVersion":2,"status":"suspended"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestRotateAccountKey(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewAdminUserHandler(adminUserServiceAdapter{
+		rotateKey: func(ctx context.Context, input useradminsvc.AccountKeyInput) (useradminsvc.AccountKeyResult, error) {
+			if input.ActorUserID != "admin-1" || input.TargetUserID != "user-1" || input.ExpectedVersion != 4 || input.Mode != "rotate" {
+				t.Fatalf("unexpected input: %+v", input)
+			}
+			return useradminsvc.AccountKeyResult{
+				UserID:       input.TargetUserID,
+				PublicKey:    "pub-key",
+				KeyAlgorithm: "Ed25519",
+				VaultKeyPath: "account-keys/user-1",
+				Version:      5,
+			}, nil
+		},
+	})
+
+	router := gin.New()
+	router.POST("/v1/admin/users/:userId/keys/rotate", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "admin-1"})
+		handler.RotateAccountKey(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/user-1/keys/rotate", bytes.NewBufferString(`{"expectedVersion":4}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)

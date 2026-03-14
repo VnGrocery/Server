@@ -8,6 +8,7 @@ import (
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
 	"vngrocery/internal/service/audit"
+	authservice "vngrocery/internal/service/auth"
 )
 
 type userRepositoryStub struct {
@@ -48,6 +49,18 @@ func (s *auditLoggerStub) Log(ctx context.Context, input audit.Input) error {
 
 var _ repository.UserRepository = userRepositoryStub{}
 
+type accountKeyStoreStub struct {
+	create func(ctx context.Context, userID string) (authservice.AccountKey, error)
+}
+
+func (s accountKeyStoreStub) CreateAccountKey(ctx context.Context, userID string) (authservice.AccountKey, error) {
+	return s.create(ctx, userID)
+}
+
+func (s accountKeyStoreStub) DeleteAccountKey(ctx context.Context, vaultPath string) error {
+	return nil
+}
+
 type authUserRepositoryStub struct {
 	save    func(ctx context.Context, user domain.AuthUser) error
 	getByID func(ctx context.Context, userID string) (domain.AuthUser, error)
@@ -87,7 +100,7 @@ func TestUpdateRole(t *testing.T) {
 			saved = user
 			return nil
 		},
-	}, authUserRepositoryStub{}, auditLogger)
+	}, authUserRepositoryStub{}, nil, auditLogger)
 
 	user, err := service.UpdateRole(context.Background(), UpdateRoleInput{
 		ActorUserID:     "admin-1",
@@ -111,7 +124,7 @@ func TestUpdateRoleRejectsNonAdmin(t *testing.T) {
 		getByID: func(ctx context.Context, userID string) (domain.User, error) {
 			return domain.User{UserID: userID, Role: RoleUser, Status: "active", Version: 1}, nil
 		},
-	}, authUserRepositoryStub{}, nil)
+	}, authUserRepositoryStub{}, nil, nil)
 
 	_, err := service.UpdateRole(context.Background(), UpdateRoleInput{
 		ActorUserID:     "user-1",
@@ -135,7 +148,7 @@ func TestListUsers(t *testing.T) {
 			}
 			return []domain.User{{UserID: "user-1", Role: RoleUser, Status: StatusActive}}, nil
 		},
-	}, authUserRepositoryStub{}, nil)
+	}, authUserRepositoryStub{}, nil, nil)
 
 	users, err := service.List(context.Background(), ListInput{ActorUserID: "admin-1", Status: StatusActive, Role: RoleUser})
 	if err != nil {
@@ -169,7 +182,7 @@ func TestUpdateStatusUpdatesUserAndAuthUser(t *testing.T) {
 			savedAuthUser = user
 			return nil
 		},
-	}, auditLogger)
+	}, nil, auditLogger)
 
 	user, err := service.UpdateStatus(context.Background(), UpdateStatusInput{
 		ActorUserID:     "admin-1",
@@ -188,5 +201,71 @@ func TestUpdateStatusUpdatesUserAndAuthUser(t *testing.T) {
 	}
 	if auditLogger.logHits != 1 {
 		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
+	}
+}
+
+func TestRotateAccountKey(t *testing.T) {
+	auditLogger := &auditLoggerStub{}
+	var saved domain.AuthUser
+	service := NewService(userRepositoryStub{
+		getByID: func(ctx context.Context, userID string) (domain.User, error) {
+			return domain.User{UserID: userID, Role: RoleAdmin, Status: StatusActive, Version: 1}, nil
+		},
+	}, authUserRepositoryStub{
+		getByID: func(ctx context.Context, userID string) (domain.AuthUser, error) {
+			return domain.AuthUser{UserID: userID, PublicKey: "old-pub", KeyAlgorithm: "Ed25519", VaultKeyPath: "account-keys/user-1", Version: 4}, nil
+		},
+		save: func(ctx context.Context, user domain.AuthUser) error {
+			saved = user
+			return nil
+		},
+	}, accountKeyStoreStub{
+		create: func(ctx context.Context, userID string) (authservice.AccountKey, error) {
+			if userID != "user-1" {
+				t.Fatalf("unexpected userID: %s", userID)
+			}
+			return authservice.AccountKey{PublicKey: "new-pub", Algorithm: "Ed25519", VaultPath: "account-keys/user-1"}, nil
+		},
+	}, auditLogger)
+
+	result, err := service.RotateAccountKey(context.Background(), AccountKeyInput{
+		ActorUserID:     "admin-1",
+		TargetUserID:    "user-1",
+		ExpectedVersion: 4,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.PublicKey != "new-pub" || saved.PublicKey != "new-pub" || result.Version != 5 {
+		t.Fatalf("unexpected rotation result=%#v saved=%#v", result, saved)
+	}
+	if auditLogger.logHits != 1 {
+		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
+	}
+}
+
+func TestBackfillAccountKeyRejectsExistingMetadata(t *testing.T) {
+	service := NewService(userRepositoryStub{
+		getByID: func(ctx context.Context, userID string) (domain.User, error) {
+			return domain.User{UserID: userID, Role: RoleAdmin, Status: StatusActive, Version: 1}, nil
+		},
+	}, authUserRepositoryStub{
+		getByID: func(ctx context.Context, userID string) (domain.AuthUser, error) {
+			return domain.AuthUser{UserID: userID, PublicKey: "pub", KeyAlgorithm: "Ed25519", VaultKeyPath: "account-keys/user-1", Version: 1}, nil
+		},
+	}, accountKeyStoreStub{
+		create: func(ctx context.Context, userID string) (authservice.AccountKey, error) {
+			t.Fatal("key creation should not be called")
+			return authservice.AccountKey{}, nil
+		},
+	}, nil)
+
+	_, err := service.BackfillAccountKey(context.Background(), AccountKeyInput{
+		ActorUserID:     "admin-1",
+		TargetUserID:    "user-1",
+		ExpectedVersion: 1,
+	})
+	if !errors.Is(err, ErrInvalidUser) {
+		t.Fatalf("expected ErrInvalidUser, got %v", err)
 	}
 }

@@ -1,7 +1,11 @@
 package handler
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -58,10 +62,31 @@ func (h *SellerHandler) Score(c *gin.Context) {
 	}
 	defer file.Close()
 
+	imageBytes, err := io.ReadAll(io.LimitReader(file, maxSellerImageBytes+1))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "failed to read uploaded image",
+		})
+		return
+	}
+	if len(imageBytes) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "image file must not be empty",
+		})
+		return
+	}
+	if len(imageBytes) > maxSellerImageBytes {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+			"error": "image file exceeds 10 MB limit",
+		})
+		return
+	}
+
+	imageHash := sha256Hex(imageBytes)
 	result, err := h.scorer.Score(c.Request.Context(), visionservice.ImageInput{
 		Filename: fileHeader.Filename,
-		Size:     fileHeader.Size,
-		Content:  file,
+		Size:     int64(len(imageBytes)),
+		Content:  bytes.NewReader(imageBytes),
 	})
 	if err != nil {
 		status := http.StatusInternalServerError
@@ -82,6 +107,7 @@ func (h *SellerHandler) Score(c *gin.Context) {
 		Score:      result.Score,
 		Category:   result.Category,
 		Confidence: result.Confidence,
+		ImageHash:  imageHash,
 	})
 }
 
@@ -108,6 +134,7 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 		Score:           request.Score,
 		Category:        request.Category,
 		Confidence:      request.Confidence,
+		ImageHash:       request.ImageHash,
 	})
 	if err != nil {
 		status := http.StatusInternalServerError
@@ -133,7 +160,13 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 		Score:           pledge.Score,
 		Category:        pledge.Category,
 		Confidence:      pledge.Confidence,
+		ImageHash:       pledge.ImageHash,
 		CreatedAt:       pledge.CreatedAt,
 		UpdatedAt:       pledge.UpdatedAt,
 	})
+}
+
+func sha256Hex(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }

@@ -19,6 +19,9 @@ func (s pledgeRepositoryStub) Save(ctx context.Context, pledge domain.Pledge) er
 }
 
 func (s pledgeRepositoryStub) GetByID(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+	if s.getByID == nil {
+		return domain.Pledge{}, errors.New("not implemented")
+	}
 	return s.getByID(ctx, pledgeID)
 }
 
@@ -69,6 +72,9 @@ func TestCheckReturnsTrustedVerdict(t *testing.T) {
 	}
 	if !result.Trusted {
 		t.Fatal("expected trusted result")
+	}
+	if !result.HasPledge {
+		t.Fatal("expected result to include seller pledge")
 	}
 	if result.Verdict != "trusted" {
 		t.Fatalf("unexpected verdict: %s", result.Verdict)
@@ -183,7 +189,7 @@ func TestCheckReturnsWarningForLowConfidence(t *testing.T) {
 	}
 }
 
-func TestCheckRejectsMissingPledgeID(t *testing.T) {
+func TestCheckWithoutPledgeReturnsStandaloneQuality(t *testing.T) {
 	service := NewService(
 		pledgeRepositoryStub{
 			getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
@@ -193,14 +199,37 @@ func TestCheckRejectsMissingPledgeID(t *testing.T) {
 		},
 		scorerStub{
 			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
-				t.Fatal("scorer should not be called")
-				return visionservice.ScoreResult{}, nil
+				return visionservice.ScoreResult{
+					Score:      6.2,
+					Category:   "bruised_fruit",
+					Confidence: 0.86,
+				}, nil
 			},
 		},
 	)
 
-	_, err := service.Check(context.Background(), CheckInput{})
-	if !errors.Is(err, ErrInvalidCheck) {
-		t.Fatalf("expected ErrInvalidCheck, got %v", err)
+	result, err := service.Check(context.Background(), CheckInput{
+		Image: visionservice.ImageInput{
+			Filename: "buyer.jpg",
+			Content:  bytes.NewBuffer([]byte("fake")),
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.HasPledge {
+		t.Fatal("expected result without seller pledge")
+	}
+	if result.Trusted {
+		t.Fatal("standalone quality check should not be marked trusted")
+	}
+	if result.Verdict != "no_pledge" {
+		t.Fatalf("unexpected verdict: %s", result.Verdict)
+	}
+	if result.ActualScore != 6.2 || result.ActualCategory != "bruised_fruit" {
+		t.Fatalf("unexpected actual quality result: %#v", result)
+	}
+	if len(result.Reasons) != 1 || result.Reasons[0] != "no_seller_pledge" {
+		t.Fatalf("unexpected reasons: %v", result.Reasons)
 	}
 }

@@ -57,6 +57,9 @@ func TestCommitCreatesPledge(t *testing.T) {
 			if pledge.Confidence != 0.93 {
 				t.Fatalf("unexpected confidence: %v", pledge.Confidence)
 			}
+			if pledge.ImageHash != "hash-1" {
+				t.Fatalf("unexpected image hash: %s", pledge.ImageHash)
+			}
 			if pledge.PledgeID == "" {
 				t.Fatal("expected generated pledge id")
 			}
@@ -78,6 +81,7 @@ func TestCommitCreatesPledge(t *testing.T) {
 		Score:           8.8,
 		Category:        "fresh_produce",
 		Confidence:      0.93,
+		ImageHash:       "hash-1",
 	})
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
@@ -105,6 +109,7 @@ func TestCommitRejectsInvalidInput(t *testing.T) {
 		Score:           8.8,
 		Category:        "fresh_produce",
 		Confidence:      0.93,
+		ImageHash:       "hash-1",
 	})
 	if !errors.Is(err, ErrInvalidCommit) {
 		t.Fatalf("expected ErrInvalidCommit, got %v", err)
@@ -129,6 +134,7 @@ func TestCommitRejectsMissingShop(t *testing.T) {
 		Score:           8.8,
 		Category:        "fresh_produce",
 		Confidence:      0.93,
+		ImageHash:       "hash-1",
 	})
 	if !errors.Is(err, ErrShopNotFound) {
 		t.Fatalf("expected ErrShopNotFound, got %v", err)
@@ -153,6 +159,7 @@ func TestCommitRejectsNonOwnerShop(t *testing.T) {
 		Score:           8.8,
 		Category:        "fresh_produce",
 		Confidence:      0.93,
+		ImageHash:       "hash-1",
 	})
 	if !errors.Is(err, ErrShopOwnership) {
 		t.Fatalf("expected ErrShopOwnership, got %v", err)
@@ -212,6 +219,7 @@ func TestCommitWritesAuditLog(t *testing.T) {
 		Score:           8.8,
 		Category:        "fresh_produce",
 		Confidence:      0.93,
+		ImageHash:       "hash-1",
 	}); err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}

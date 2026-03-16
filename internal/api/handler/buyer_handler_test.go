@@ -23,12 +23,23 @@ func (s buyerCheckStub) Check(ctx context.Context, input buyerservice.CheckInput
 	return s.check(ctx, input)
 }
 
-func TestBuyerCheckRequiresPledgeID(t *testing.T) {
+func TestBuyerCheckAllowsMissingPledgeID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := NewBuyerHandler(buyerCheckStub{
 		check: func(ctx context.Context, input buyerservice.CheckInput) (buyerservice.CheckResult, error) {
-			t.Fatal("check should not be called when pledgeId is missing")
-			return buyerservice.CheckResult{}, nil
+			if input.PledgeID != "" {
+				t.Fatalf("expected empty pledge id, got %q", input.PledgeID)
+			}
+			return buyerservice.CheckResult{
+				PolicyVersion:    "trust_policy_v1",
+				HasPledge:        false,
+				Trusted:          false,
+				Verdict:          "no_pledge",
+				ActualScore:      6.2,
+				ActualCategory:   "bruised_fruit",
+				ActualConfidence: 0.86,
+				Reasons:          []string{"no_seller_pledge"},
+			}, nil
 		},
 	})
 
@@ -54,8 +65,19 @@ func TestBuyerCheckRequiresPledgeID(t *testing.T) {
 
 	router.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", rec.Code)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var response map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if response["hasPledge"] != false {
+		t.Fatalf("expected hasPledge=false, got %v", response["hasPledge"])
+	}
+	if response["verdict"] != "no_pledge" {
+		t.Fatalf("unexpected verdict: %v", response["verdict"])
 	}
 }
 
@@ -68,6 +90,7 @@ func TestBuyerCheckReturnsComparison(t *testing.T) {
 			}
 			return buyerservice.CheckResult{
 				PolicyVersion:    "trust_policy_v1",
+				HasPledge:        true,
 				PledgeID:         "pledge-1",
 				Trusted:          true,
 				Verdict:          "trusted",
@@ -122,6 +145,9 @@ func TestBuyerCheckReturnsComparison(t *testing.T) {
 	}
 	if response["categoryMatch"] != true {
 		t.Fatalf("expected categoryMatch=true, got %v", response["categoryMatch"])
+	}
+	if response["hasPledge"] != true {
+		t.Fatalf("expected hasPledge=true, got %v", response["hasPledge"])
 	}
 }
 

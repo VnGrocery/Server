@@ -11,6 +11,7 @@ type Pledge struct {
 	Score           float64   `firestore:"score"`
 	Category        string    `firestore:"category"`
 	Confidence      float64   `firestore:"confidence"`
+	ImageHash       string    `firestore:"imageHash"`
 	CreatedAt       time.Time `firestore:"createdAt"`
 	UpdatedAt       time.Time `firestore:"updatedAt"`
 }

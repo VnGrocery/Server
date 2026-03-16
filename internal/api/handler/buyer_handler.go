@@ -23,12 +23,6 @@ func NewBuyerHandler(checker buyerservice.CheckService) *BuyerHandler {
 
 func (h *BuyerHandler) Check(c *gin.Context) {
 	pledgeID := c.PostForm("pledgeId")
-	if pledgeID == "" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "pledgeId is required in multipart field 'pledgeId'",
-		})
-		return
-	}
 
 	fileHeader, err := c.FormFile("image")
 	if err != nil {
@@ -86,6 +80,7 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 
 	c.JSON(http.StatusOK, dto.BuyerCheckResponse{
 		PolicyVersion:    result.PolicyVersion,
+		HasPledge:        result.HasPledge,
 		PledgeID:         result.PledgeID,
 		Trusted:          result.Trusted,
 		Verdict:          result.Verdict,

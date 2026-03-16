@@ -7,6 +7,7 @@ type SellerCommitRequest struct {
 	Score      float64 `json:"score"`
 	Category   string  `json:"category"`
 	Confidence float64 `json:"confidence"`
+	ImageHash  string  `json:"imageHash"`
 }
 
 type SellerCommitResponse struct {
@@ -17,6 +18,7 @@ type SellerCommitResponse struct {
 	Score           float64   `json:"score"`
 	Category        string    `json:"category"`
 	Confidence      float64   `json:"confidence"`
+	ImageHash       string    `json:"imageHash"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
 }

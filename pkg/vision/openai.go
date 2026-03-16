@@ -49,7 +49,7 @@ func (c *OpenAIClient) ScoreImage(ctx context.Context, image visionservice.Image
 			{
 				Role: "user",
 				Content: []openAIContentItem{
-					{Type: "input_text", Text: "Analyze this grocery shop image and return a strict JSON assessment."},
+					{Type: "input_text", Text: "Analyze this grocery product image and return a strict JSON freshness and quality assessment."},
 					{Type: "input_image", ImageURL: dataURL(image.ContentType, image.Data), Detail: "high"},
 				},
 			},
@@ -58,7 +58,7 @@ func (c *OpenAIClient) ScoreImage(ctx context.Context, image visionservice.Image
 			Format: openAIFormat{
 				Type:        "json_schema",
 				Name:        "seller_score",
-				Description: "Structured quality score for a grocery shop image.",
+				Description: "Structured freshness and quality score for a grocery product image.",
 				Strict:      true,
 				Schema: map[string]any{
 					"type":                 "object",
@@ -133,9 +133,9 @@ func dataURL(contentType string, data []byte) string {
 	return fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(data))
 }
 
-const sellerScoringInstruction = "You are a food retail quality assessor. Analyze the uploaded grocery shop image and return JSON only. " +
-	"Estimate overall shop quality on a 0 to 10 scale, where higher means cleaner, fresher, better organized, and more trustworthy. " +
-	"Set category to a short snake_case label that best describes the observed scene quality or merchandising state. " +
+const sellerScoringInstruction = "You are a grocery freshness and quality assessor. Analyze the uploaded product or produce image and return JSON only. " +
+	"Estimate visible item freshness and quality on a 0 to 10 scale, where higher means fresher, less damaged, safer-looking, and more consistent with what a buyer should expect today. " +
+	"Set category to a short snake_case label that best describes the observed item type or freshness condition, such as fresh_leafy_greens, bruised_fruit, stale_fish, or mixed_produce. " +
 	"Set confidence to a value between 0 and 1."
 
 type openAIResponseRequest struct {

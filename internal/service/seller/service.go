@@ -26,6 +26,7 @@ type CommitInput struct {
 	Score           float64
 	Category        string
 	Confidence      float64
+	ImageHash       string
 }
 
 type CommitService interface {
@@ -80,6 +81,7 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 		Score:           input.Score,
 		Category:        strings.TrimSpace(input.Category),
 		Confidence:      input.Confidence,
+		ImageHash:       strings.TrimSpace(input.ImageHash),
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -113,6 +115,9 @@ func validateCommitInput(input CommitInput) error {
 	}
 	if strings.TrimSpace(input.Category) == "" {
 		return fmt.Errorf("%w: category is required", ErrInvalidCommit)
+	}
+	if strings.TrimSpace(input.ImageHash) == "" {
+		return fmt.Errorf("%w: imageHash is required", ErrInvalidCommit)
 	}
 	if input.Score < 0 || input.Score > 10 {
 		return fmt.Errorf("%w: score must be between 0 and 10", ErrInvalidCommit)

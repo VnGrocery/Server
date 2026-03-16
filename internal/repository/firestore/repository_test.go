@@ -60,6 +60,7 @@ func TestDomainStructTags(t *testing.T) {
 		ShopID:          "shop-1",
 		CreatedByUserID: "user-1",
 		Status:          "pending",
+		ImageHash:       "hash-1",
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}

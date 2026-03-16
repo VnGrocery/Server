@@ -67,6 +67,13 @@ func TestSellerScoreReturnsStructuredResponse(t *testing.T) {
 			if input.Size <= 0 {
 				t.Fatal("expected non-empty upload")
 			}
+			var payload bytes.Buffer
+			if _, err := payload.ReadFrom(input.Content); err != nil {
+				t.Fatalf("failed to read score input: %v", err)
+			}
+			if payload.String() != "fake-image-content" {
+				t.Fatalf("unexpected score input content: %q", payload.String())
+			}
 
 			return visionservice.ScoreResult{
 				Score:      8.7,
@@ -108,6 +115,9 @@ func TestSellerScoreReturnsStructuredResponse(t *testing.T) {
 	}
 	if response["category"] != "fresh_produce" {
 		t.Fatalf("unexpected category: %#v", response["category"])
+	}
+	if response["imageHash"] == "" {
+		t.Fatal("expected image hash in response")
 	}
 }
 
@@ -193,6 +203,9 @@ func TestSellerCommitCreatesPledge(t *testing.T) {
 			if input.CreatedByUserID != "user-1" {
 				t.Fatalf("unexpected user id: %s", input.CreatedByUserID)
 			}
+			if input.ImageHash != "hash-1" {
+				t.Fatalf("unexpected image hash: %s", input.ImageHash)
+			}
 			return domain.Pledge{
 				PledgeID:        "pledge-1",
 				ShopID:          input.ShopID,
@@ -201,6 +214,7 @@ func TestSellerCommitCreatesPledge(t *testing.T) {
 				Score:           input.Score,
 				Category:        input.Category,
 				Confidence:      input.Confidence,
+				ImageHash:       input.ImageHash,
 				CreatedAt:       now,
 				UpdatedAt:       now,
 			}, nil
@@ -213,7 +227,7 @@ func TestSellerCommitCreatesPledge(t *testing.T) {
 		handler.Commit(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/seller/commit", bytes.NewBufferString(`{"shopId":"shop-1","score":8.5,"category":"fresh_produce","confidence":0.91}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/seller/commit", bytes.NewBufferString(`{"shopId":"shop-1","score":8.5,"category":"fresh_produce","confidence":0.91,"imageHash":"hash-1"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -221,6 +235,14 @@ func TestSellerCommitCreatesPledge(t *testing.T) {
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", rec.Code)
+	}
+
+	var response map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if response["imageHash"] != "hash-1" {
+		t.Fatalf("unexpected image hash: %v", response["imageHash"])
 	}
 }
 
@@ -264,7 +286,7 @@ func TestSellerCommitRejectsForbiddenShop(t *testing.T) {
 		handler.Commit(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/seller/commit", bytes.NewBufferString(`{"shopId":"shop-1","score":8.5,"category":"fresh_produce","confidence":0.91}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/seller/commit", bytes.NewBufferString(`{"shopId":"shop-1","score":8.5,"category":"fresh_produce","confidence":0.91,"imageHash":"hash-1"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 

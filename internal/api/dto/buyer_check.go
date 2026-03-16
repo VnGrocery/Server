@@ -2,14 +2,15 @@ package dto
 
 type BuyerCheckResponse struct {
 	PolicyVersion    string   `json:"policyVersion"`
-	PledgeID         string   `json:"pledgeId"`
+	HasPledge        bool     `json:"hasPledge"`
+	PledgeID         string   `json:"pledgeId,omitempty"`
 	Trusted          bool     `json:"trusted"`
 	Verdict          string   `json:"verdict"`
-	PledgedScore     float64  `json:"pledgedScore"`
+	PledgedScore     float64  `json:"pledgedScore,omitempty"`
 	ActualScore      float64  `json:"actualScore"`
-	ScoreDelta       float64  `json:"scoreDelta"`
-	ScoreDeltaAbs    float64  `json:"scoreDeltaAbs"`
-	PledgedCategory  string   `json:"pledgedCategory"`
+	ScoreDelta       float64  `json:"scoreDelta,omitempty"`
+	ScoreDeltaAbs    float64  `json:"scoreDeltaAbs,omitempty"`
+	PledgedCategory  string   `json:"pledgedCategory,omitempty"`
 	ActualCategory   string   `json:"actualCategory"`
 	ActualConfidence float64  `json:"actualConfidence"`
 	CategoryMatch    bool     `json:"categoryMatch"`

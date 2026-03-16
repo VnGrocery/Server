@@ -386,6 +386,7 @@ func (sellerCommitStub) Commit(ctx context.Context, input sellerservice.CommitIn
 		Score:           input.Score,
 		Category:        input.Category,
 		Confidence:      input.Confidence,
+		ImageHash:       input.ImageHash,
 	}, nil
 }
 
@@ -394,6 +395,7 @@ type buyerCheckRouteStub struct{}
 func (buyerCheckRouteStub) Check(ctx context.Context, input buyerservice.CheckInput) (buyerservice.CheckResult, error) {
 	return buyerservice.CheckResult{
 		PolicyVersion:    "trust_policy_v1",
+		HasPledge:        input.PledgeID != "",
 		PledgeID:         input.PledgeID,
 		Trusted:          true,
 		Verdict:          "trusted",

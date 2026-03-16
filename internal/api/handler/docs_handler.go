@@ -343,12 +343,13 @@ func buildSchemas() gin.H {
 		},
 		"SellerCommitRequest": gin.H{
 			"type":     "object",
-			"required": []string{"shopId", "score", "category", "confidence"},
+			"required": []string{"shopId", "score", "category", "confidence", "imageHash"},
 			"properties": gin.H{
 				"shopId":     gin.H{"type": "string"},
 				"score":      gin.H{"type": "number"},
 				"category":   gin.H{"type": "string"},
 				"confidence": gin.H{"type": "number"},
+				"imageHash":  gin.H{"type": "string"},
 			},
 		},
 		"SellerCommitResponse": gin.H{
@@ -361,6 +362,7 @@ func buildSchemas() gin.H {
 				"score":           gin.H{"type": "number"},
 				"category":        gin.H{"type": "string"},
 				"confidence":      gin.H{"type": "number"},
+				"imageHash":       gin.H{"type": "string"},
 				"createdAt":       gin.H{"type": "string", "format": "date-time"},
 				"updatedAt":       gin.H{"type": "string", "format": "date-time"},
 			},
@@ -371,12 +373,14 @@ func buildSchemas() gin.H {
 				"score":      gin.H{"type": "number"},
 				"category":   gin.H{"type": "string"},
 				"confidence": gin.H{"type": "number"},
+				"imageHash":  gin.H{"type": "string"},
 			},
 		},
 		"BuyerCheckResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
 				"policyVersion":    gin.H{"type": "string"},
+				"hasPledge":        gin.H{"type": "boolean"},
 				"pledgeId":         gin.H{"type": "string"},
 				"trusted":          gin.H{"type": "boolean"},
 				"verdict":          gin.H{"type": "string"},
@@ -806,14 +810,14 @@ func buildPaths() gin.H {
 		},
 		"/v1/buyer/check": gin.H{
 			"post": gin.H{
-				"summary": "Check buyer image against pledge",
+				"summary": "Check buyer image against optional seller pledge",
 				"requestBody": gin.H{
 					"required": true,
 					"content": gin.H{
 						"multipart/form-data": gin.H{
 							"schema": gin.H{
 								"type":     "object",
-								"required": []string{"pledgeId", "image"},
+								"required": []string{"image"},
 								"properties": gin.H{
 									"pledgeId": gin.H{"type": "string"},
 									"image":    gin.H{"type": "string", "format": "binary"},

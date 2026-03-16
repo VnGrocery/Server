@@ -21,6 +21,7 @@ type CheckInput struct {
 
 type CheckResult struct {
 	PolicyVersion    string
+	HasPledge        bool
 	PledgeID         string
 	Trusted          bool
 	Verdict          string
@@ -52,24 +53,31 @@ func NewService(pledges repository.PledgeRepository, scorer visionservice.ImageS
 }
 
 func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, error) {
-	if strings.TrimSpace(input.PledgeID) == "" {
-		return CheckResult{}, fmt.Errorf("%w: pledgeId is required", ErrInvalidCheck)
-	}
-	if s.pledges == nil {
-		return CheckResult{}, fmt.Errorf("pledge repository is not configured")
-	}
 	if s.scorer == nil {
 		return CheckResult{}, visionservice.ErrProviderUnavailable
 	}
 
-	pledge, err := s.pledges.GetByID(ctx, strings.TrimSpace(input.PledgeID))
-	if err != nil {
-		return CheckResult{}, err
+	pledgeID := strings.TrimSpace(input.PledgeID)
+	var pledge domain.Pledge
+	if s.pledges == nil {
+		if pledgeID != "" {
+			return CheckResult{}, fmt.Errorf("pledge repository is not configured")
+		}
+	} else if pledgeID != "" {
+		var err error
+		pledge, err = s.pledges.GetByID(ctx, pledgeID)
+		if err != nil {
+			return CheckResult{}, err
+		}
 	}
 
 	scored, err := s.scorer.Score(ctx, input.Image)
 	if err != nil {
 		return CheckResult{}, err
+	}
+
+	if pledgeID == "" {
+		return standaloneQualityResult(scored), nil
 	}
 
 	return comparePledge(pledge, scored), nil
@@ -81,6 +89,20 @@ const (
 	warningMaxScoreDelta  = 2.5
 	minRequiredConfidence = 0.60
 )
+
+func standaloneQualityResult(scored visionservice.ScoreResult) CheckResult {
+	return CheckResult{
+		PolicyVersion:    policyVersionV1,
+		HasPledge:        false,
+		Trusted:          false,
+		Verdict:          "no_pledge",
+		ActualScore:      scored.Score,
+		ActualCategory:   scored.Category,
+		ActualConfidence: scored.Confidence,
+		CategoryMatch:    false,
+		Reasons:          []string{"no_seller_pledge"},
+	}
+}
 
 func comparePledge(pledge domain.Pledge, scored visionservice.ScoreResult) CheckResult {
 	scoreDelta := scored.Score - pledge.Score
@@ -114,6 +136,7 @@ func comparePledge(pledge domain.Pledge, scored visionservice.ScoreResult) Check
 
 	return CheckResult{
 		PolicyVersion:    policyVersionV1,
+		HasPledge:        true,
 		PledgeID:         pledge.PledgeID,
 		Trusted:          trusted,
 		Verdict:          verdict,

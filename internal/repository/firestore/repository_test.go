@@ -27,6 +27,9 @@ func TestCollectionNames(t *testing.T) {
 	if PledgesCollection != "pledges" {
 		t.Fatalf("expected pledges collection, got %s", PledgesCollection)
 	}
+	if BuyerChecksCollection != "buyer_checks" {
+		t.Fatalf("expected buyer_checks collection, got %s", BuyerChecksCollection)
+	}
 	if ShopReviewsCollection != "shop_reviews" {
 		t.Fatalf("expected shop_reviews collection, got %s", ShopReviewsCollection)
 	}

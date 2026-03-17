@@ -8,6 +8,7 @@ const (
 	ShopsCollection               = "shops"
 	ProductsCollection            = "products"
 	PledgesCollection             = "pledges"
+	BuyerChecksCollection         = "buyer_checks"
 	ShopReviewsCollection         = "shop_reviews"
 	EventLogsCollection           = "event_logs"
 )

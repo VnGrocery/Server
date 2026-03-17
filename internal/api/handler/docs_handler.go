@@ -246,6 +246,19 @@ func buildSchemas() gin.H {
 				"latestCategory":     gin.H{"type": "string"},
 				"latestConfidence":   gin.H{"type": "number"},
 				"lastCommittedAt":    gin.H{"type": "string", "format": "date-time"},
+				"score":              gin.H{"type": "number"},
+				"grade":              gin.H{"type": "string"},
+				"formulaVersion":     gin.H{"type": "string"},
+				"pledgeScore":        gin.H{"type": "number"},
+				"reviewScore":        gin.H{"type": "number"},
+				"buyerCheckScore":    gin.H{"type": "number"},
+				"buyerCheckCount":    gin.H{"type": "integer"},
+				"trustedCheckCount":  gin.H{"type": "integer"},
+				"highRiskCheckCount": gin.H{"type": "integer"},
+				"reasons": gin.H{
+					"type":  "array",
+					"items": gin.H{"type": "string"},
+				},
 			},
 		},
 		"ShopRatingSummaryResponse": gin.H{
@@ -380,6 +393,8 @@ func buildSchemas() gin.H {
 			"type": "object",
 			"properties": gin.H{
 				"policyVersion":    gin.H{"type": "string"},
+				"checkId":          gin.H{"type": "string"},
+				"shopId":           gin.H{"type": "string"},
 				"hasPledge":        gin.H{"type": "boolean"},
 				"pledgeId":         gin.H{"type": "string"},
 				"trusted":          gin.H{"type": "boolean"},

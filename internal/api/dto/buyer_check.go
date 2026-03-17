@@ -1,6 +1,8 @@
 package dto
 
 type BuyerCheckResponse struct {
+	CheckID          string   `json:"checkId,omitempty"`
+	ShopID           string   `json:"shopId,omitempty"`
 	PolicyVersion    string   `json:"policyVersion"`
 	HasPledge        bool     `json:"hasPledge"`
 	PledgeID         string   `json:"pledgeId,omitempty"`

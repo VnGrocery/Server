@@ -47,6 +47,25 @@ func (p pledgeRepositoryStub) ListByShopID(ctx context.Context, shopID string) (
 	return p.listByShopID(ctx, shopID)
 }
 
+type buyerCheckRepositoryStub struct {
+	save         func(ctx context.Context, check domain.BuyerCheck) error
+	listByShopID func(ctx context.Context, shopID string) ([]domain.BuyerCheck, error)
+}
+
+func (b buyerCheckRepositoryStub) Save(ctx context.Context, check domain.BuyerCheck) error {
+	if b.save == nil {
+		return nil
+	}
+	return b.save(ctx, check)
+}
+
+func (b buyerCheckRepositoryStub) ListByShopID(ctx context.Context, shopID string) ([]domain.BuyerCheck, error) {
+	if b.listByShopID == nil {
+		return nil, nil
+	}
+	return b.listByShopID(ctx, shopID)
+}
+
 type userRepositoryStub struct {
 	getByID func(ctx context.Context, userID string) (domain.User, error)
 }
@@ -123,7 +142,7 @@ func TestCreateShop(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
 		},
-	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
 	service.now = func() time.Time { return fixedTime }
 
 	shop, err := service.Create(context.Background(), CreateInput{
@@ -154,7 +173,7 @@ func TestUpdateRejectsNonOwner(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "owner-1"}, nil
 		},
-	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
 
 	_, err := service.Update(context.Background(), UpdateInput{
 		ShopID:          "shop-1",
@@ -179,7 +198,7 @@ func TestUpdateRejectsVersionConflict(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1", Status: ShopStatusActive, Version: 4}, nil
 		},
-	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
 
 	_, err := service.Update(context.Background(), UpdateInput{
 		ShopID:          "shop-1",
@@ -206,7 +225,7 @@ func TestDeleteMarksShopDeleted(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1", Status: ShopStatusActive, Version: 1}, nil
 		},
-	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, auditLogger)
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, auditLogger)
 
 	shop, err := service.Delete(context.Background(), DeleteInput{ShopID: "shop-1", OwnerUserID: "user-1", ExpectedVersion: 1})
 	if err != nil {
@@ -232,7 +251,7 @@ func TestCreateRejectsInvalidCoordinates(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
 		},
-	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
 
 	_, err := service.Create(context.Background(), CreateInput{
 		OwnerUserID: "user-1",
@@ -269,6 +288,13 @@ func TestListReturnsTrustSummary(t *testing.T) {
 				CreatedAt:  committedAt,
 			}}, nil
 		},
+	}, buyerCheckRepositoryStub{
+		listByShopID: func(ctx context.Context, shopID string) ([]domain.BuyerCheck, error) {
+			return []domain.BuyerCheck{
+				{ShopID: shopID, Verdict: "trusted", Trusted: true, CategoryMatch: true, ScoreDeltaAbs: 0.4},
+				{ShopID: shopID, Verdict: "warning", CategoryMatch: true, ScoreDeltaAbs: 1.8},
+			}, nil
+		},
 	}, reviewRepositoryStub{
 		listByShopID: func(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
 			return []domain.ShopReview{
@@ -297,6 +323,15 @@ func TestListReturnsTrustSummary(t *testing.T) {
 	if result.Items[0].RatingSummary.AverageRating != 4 {
 		t.Fatalf("expected average rating 4, got %v", result.Items[0].RatingSummary.AverageRating)
 	}
+	if result.Items[0].TrustSummary.Score <= 0 {
+		t.Fatalf("expected trust score, got %v", result.Items[0].TrustSummary.Score)
+	}
+	if result.Items[0].TrustSummary.BuyerCheckCount != 2 {
+		t.Fatalf("expected buyer check count 2, got %d", result.Items[0].TrustSummary.BuyerCheckCount)
+	}
+	if result.Items[0].TrustSummary.TrustedCheckCount != 1 {
+		t.Fatalf("expected trusted check count 1, got %d", result.Items[0].TrustSummary.TrustedCheckCount)
+	}
 }
 
 func TestModerateRequiresAdmin(t *testing.T) {
@@ -305,7 +340,7 @@ func TestModerateRequiresAdmin(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, Status: ShopStatusActive}, nil
 		},
-	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{
 		getByID: func(ctx context.Context, userID string) (domain.User, error) {
 			return domain.User{UserID: userID, Role: "user"}, nil
 		},
@@ -329,7 +364,7 @@ func TestReviewCreatesOrUpdatesRating(t *testing.T) {
 			return domain.Shop{ShopID: shopID, Status: ShopStatusActive}, nil
 		},
 		save: func(ctx context.Context, shop domain.Shop) error { return nil },
-	}, pledgeRepositoryStub{}, reviewRepositoryStub{
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{
 		save: func(ctx context.Context, review domain.ShopReview) error {
 			if review.Rating != 5 {
 				t.Fatalf("unexpected rating: %d", review.Rating)
@@ -377,7 +412,7 @@ func TestCreateShopWritesAuditLog(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
 		},
-	}, pledgeRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, auditLogger)
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, auditLogger)
 
 	if _, err := service.Create(context.Background(), CreateInput{
 		OwnerUserID: "user-1",

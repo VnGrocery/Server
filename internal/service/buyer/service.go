@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
+
+	"github.com/google/uuid"
 
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
@@ -20,6 +23,8 @@ type CheckInput struct {
 }
 
 type CheckResult struct {
+	CheckID          string
+	ShopID           string
 	PolicyVersion    string
 	HasPledge        bool
 	PledgeID         string
@@ -42,13 +47,17 @@ type CheckService interface {
 
 type Service struct {
 	pledges repository.PledgeRepository
+	checks  repository.BuyerCheckRepository
 	scorer  visionservice.ImageScorer
+	now     func() time.Time
 }
 
-func NewService(pledges repository.PledgeRepository, scorer visionservice.ImageScorer) *Service {
+func NewService(pledges repository.PledgeRepository, checks repository.BuyerCheckRepository, scorer visionservice.ImageScorer) *Service {
 	return &Service{
 		pledges: pledges,
+		checks:  checks,
 		scorer:  scorer,
+		now:     time.Now,
 	}
 }
 
@@ -80,7 +89,16 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 		return standaloneQualityResult(scored), nil
 	}
 
-	return comparePledge(pledge, scored), nil
+	result := comparePledge(pledge, scored)
+	if s.checks != nil {
+		check := result.toBuyerCheck(uuid.NewString(), s.now().UTC())
+		if err := s.checks.Save(ctx, check); err != nil {
+			return CheckResult{}, err
+		}
+		result.CheckID = check.CheckID
+	}
+
+	return result, nil
 }
 
 const (
@@ -135,6 +153,7 @@ func comparePledge(pledge domain.Pledge, scored visionservice.ScoreResult) Check
 	}
 
 	return CheckResult{
+		ShopID:           pledge.ShopID,
 		PolicyVersion:    policyVersionV1,
 		HasPledge:        true,
 		PledgeID:         pledge.PledgeID,
@@ -149,5 +168,27 @@ func comparePledge(pledge domain.Pledge, scored visionservice.ScoreResult) Check
 		ActualConfidence: scored.Confidence,
 		CategoryMatch:    categoryMatch,
 		Reasons:          reasons,
+	}
+}
+
+func (r CheckResult) toBuyerCheck(checkID string, createdAt time.Time) domain.BuyerCheck {
+	return domain.BuyerCheck{
+		CheckID:          checkID,
+		ShopID:           r.ShopID,
+		PledgeID:         r.PledgeID,
+		Status:           "completed",
+		PolicyVersion:    r.PolicyVersion,
+		Trusted:          r.Trusted,
+		Verdict:          r.Verdict,
+		PledgedScore:     r.PledgedScore,
+		ActualScore:      r.ActualScore,
+		ScoreDelta:       r.ScoreDelta,
+		ScoreDeltaAbs:    r.ScoreDeltaAbs,
+		PledgedCategory:  r.PledgedCategory,
+		ActualCategory:   r.ActualCategory,
+		ActualConfidence: r.ActualConfidence,
+		CategoryMatch:    r.CategoryMatch,
+		Reasons:          r.Reasons,
+		CreatedAt:        createdAt,
 	}
 }

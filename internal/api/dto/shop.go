@@ -26,6 +26,16 @@ type ShopTrustSummaryResponse struct {
 	LatestCategory     string     `json:"latestCategory,omitempty"`
 	LatestConfidence   float64    `json:"latestConfidence,omitempty"`
 	LastCommittedAt    *time.Time `json:"lastCommittedAt,omitempty"`
+	Score              float64    `json:"score"`
+	Grade              string     `json:"grade"`
+	FormulaVersion     string     `json:"formulaVersion"`
+	PledgeScore        float64    `json:"pledgeScore"`
+	ReviewScore        float64    `json:"reviewScore"`
+	BuyerCheckScore    float64    `json:"buyerCheckScore"`
+	BuyerCheckCount    int        `json:"buyerCheckCount"`
+	TrustedCheckCount  int        `json:"trustedCheckCount"`
+	HighRiskCheckCount int        `json:"highRiskCheckCount"`
+	Reasons            []string   `json:"reasons"`
 }
 
 type ShopRatingSummaryResponse struct {

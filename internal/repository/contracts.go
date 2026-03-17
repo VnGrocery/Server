@@ -56,6 +56,11 @@ type PledgeRepository interface {
 	ListByShopID(ctx context.Context, shopID string) ([]domain.Pledge, error)
 }
 
+type BuyerCheckRepository interface {
+	Save(ctx context.Context, check domain.BuyerCheck) error
+	ListByShopID(ctx context.Context, shopID string) ([]domain.BuyerCheck, error)
+}
+
 type ShopReviewRepository interface {
 	Save(ctx context.Context, review domain.ShopReview) error
 	GetByShopAndUser(ctx context.Context, shopID, reviewerUserID string) (domain.ShopReview, error)

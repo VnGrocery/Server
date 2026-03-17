@@ -29,6 +29,21 @@ func (s pledgeRepositoryStub) ListByShopID(ctx context.Context, shopID string) (
 	return nil, nil
 }
 
+type buyerCheckRepositoryStub struct {
+	save func(ctx context.Context, check domain.BuyerCheck) error
+}
+
+func (s buyerCheckRepositoryStub) Save(ctx context.Context, check domain.BuyerCheck) error {
+	if s.save == nil {
+		return nil
+	}
+	return s.save(ctx, check)
+}
+
+func (s buyerCheckRepositoryStub) ListByShopID(ctx context.Context, shopID string) ([]domain.BuyerCheck, error) {
+	return nil, nil
+}
+
 type scorerStub struct {
 	score func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error)
 }
@@ -43,10 +58,19 @@ func TestCheckReturnsTrustedVerdict(t *testing.T) {
 			getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
 				return domain.Pledge{
 					PledgeID:   pledgeID,
+					ShopID:     "shop-1",
 					Score:      8.5,
 					Category:   "fresh_produce",
 					Confidence: 0.91,
 				}, nil
+			},
+		},
+		buyerCheckRepositoryStub{
+			save: func(ctx context.Context, check domain.BuyerCheck) error {
+				if check.ShopID != "shop-1" || check.PledgeID != "pledge-1" || !check.Trusted {
+					t.Fatalf("unexpected persisted buyer check: %#v", check)
+				}
+				return nil
 			},
 		},
 		scorerStub{
@@ -99,11 +123,13 @@ func TestCheckReturnsHighRiskOnMismatch(t *testing.T) {
 			getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
 				return domain.Pledge{
 					PledgeID: pledgeID,
+					ShopID:   "shop-1",
 					Score:    9.0,
 					Category: "fresh_produce",
 				}, nil
 			},
 		},
+		buyerCheckRepositoryStub{},
 		scorerStub{
 			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
 				return visionservice.ScoreResult{
@@ -142,11 +168,13 @@ func TestCheckReturnsWarningForLowConfidence(t *testing.T) {
 			getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
 				return domain.Pledge{
 					PledgeID: pledgeID,
+					ShopID:   "shop-1",
 					Score:    7.5,
 					Category: "fresh_produce",
 				}, nil
 			},
 		},
+		buyerCheckRepositoryStub{},
 		scorerStub{
 			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
 				return visionservice.ScoreResult{
@@ -197,6 +225,7 @@ func TestCheckWithoutPledgeReturnsStandaloneQuality(t *testing.T) {
 				return domain.Pledge{}, nil
 			},
 		},
+		buyerCheckRepositoryStub{},
 		scorerStub{
 			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
 				return visionservice.ScoreResult{

@@ -89,6 +89,16 @@ type TrustSummary struct {
 	LatestCategory     string
 	LatestConfidence   float64
 	LastCommittedAt    *time.Time
+	Score              float64
+	Grade              string
+	FormulaVersion     string
+	PledgeScore        float64
+	ReviewScore        float64
+	BuyerCheckScore    float64
+	BuyerCheckCount    int
+	TrustedCheckCount  int
+	HighRiskCheckCount int
+	Reasons            []string
 }
 
 type RatingSummary struct {
@@ -113,6 +123,7 @@ type ListResult struct {
 type Service struct {
 	shops   repository.ShopRepository
 	pledges repository.PledgeRepository
+	checks  repository.BuyerCheckRepository
 	reviews repository.ShopReviewRepository
 	users   repository.UserRepository
 	audit   AuditLogger
@@ -123,10 +134,11 @@ type AuditLogger interface {
 	Log(ctx context.Context, input audit.Input) error
 }
 
-func NewService(shops repository.ShopRepository, pledges repository.PledgeRepository, reviews repository.ShopReviewRepository, users repository.UserRepository, auditLogger AuditLogger) *Service {
+func NewService(shops repository.ShopRepository, pledges repository.PledgeRepository, checks repository.BuyerCheckRepository, reviews repository.ShopReviewRepository, users repository.UserRepository, auditLogger AuditLogger) *Service {
 	return &Service{
 		shops:   shops,
 		pledges: pledges,
+		checks:  checks,
 		reviews: reviews,
 		users:   users,
 		audit:   auditLogger,
@@ -513,8 +525,12 @@ func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error)
 
 func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView, error) {
 	shopView := ShopView{Shop: shop}
+	var pledges []domain.Pledge
+	var reviews []domain.ShopReview
+	var checks []domain.BuyerCheck
 	if s.pledges != nil {
-		pledges, err := s.pledges.ListByShopID(ctx, shop.ShopID)
+		var err error
+		pledges, err = s.pledges.ListByShopID(ctx, shop.ShopID)
 		if err != nil {
 			return ShopView{}, err
 		}
@@ -533,7 +549,8 @@ func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView
 		}
 	}
 	if s.reviews != nil {
-		reviews, err := s.reviews.ListByShopID(ctx, shop.ShopID)
+		var err error
+		reviews, err = s.reviews.ListByShopID(ctx, shop.ShopID)
 		if err != nil {
 			return ShopView{}, err
 		}
@@ -548,7 +565,195 @@ func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView
 			}
 		}
 	}
+	if s.checks != nil {
+		var err error
+		checks, err = s.checks.ListByShopID(ctx, shop.ShopID)
+		if err != nil {
+			return ShopView{}, err
+		}
+	}
+	applyTrustScore(&shopView.TrustSummary, shopView.RatingSummary, pledges, reviews, checks)
 	return shopView, nil
+}
+
+const trustScoreFormulaVersion = "trust_score_v1"
+
+func applyTrustScore(summary *TrustSummary, rating RatingSummary, pledges []domain.Pledge, reviews []domain.ShopReview, checks []domain.BuyerCheck) {
+	pledgeScore, pledgeReasons := calculatePledgeTrustScore(pledges)
+	reviewScore, reviewReasons := calculateReviewTrustScore(rating, len(reviews))
+	buyerCheckScore, trustedChecks, highRiskChecks, checkReasons := calculateBuyerCheckTrustScore(checks)
+
+	weights := []weightedTrustComponent{
+		{score: pledgeScore, weight: 0.45, available: len(pledges) > 0},
+		{score: reviewScore, weight: 0.30, available: len(reviews) > 0},
+		{score: buyerCheckScore, weight: 0.25, available: len(checks) > 0},
+	}
+
+	score, reasons := weightedTrustScore(weights)
+	reasons = append(reasons, pledgeReasons...)
+	reasons = append(reasons, reviewReasons...)
+	reasons = append(reasons, checkReasons...)
+
+	summary.Score = round(score, 1)
+	summary.Grade = trustGrade(summary.Score)
+	summary.FormulaVersion = trustScoreFormulaVersion
+	summary.PledgeScore = round(pledgeScore, 1)
+	summary.ReviewScore = round(reviewScore, 1)
+	summary.BuyerCheckScore = round(buyerCheckScore, 1)
+	summary.BuyerCheckCount = len(checks)
+	summary.TrustedCheckCount = trustedChecks
+	summary.HighRiskCheckCount = highRiskChecks
+	summary.Reasons = uniqueStrings(reasons)
+}
+
+type weightedTrustComponent struct {
+	score     float64
+	weight    float64
+	available bool
+}
+
+func weightedTrustScore(components []weightedTrustComponent) (float64, []string) {
+	totalWeight := 0.0
+	total := 0.0
+	reasons := make([]string, 0, 3)
+	for _, component := range components {
+		if !component.available {
+			continue
+		}
+		total += component.score * component.weight
+		totalWeight += component.weight
+	}
+	if totalWeight == 0 {
+		return 50, []string{"insufficient_trust_data"}
+	}
+	if totalWeight < 1 {
+		reasons = append(reasons, "partial_trust_data")
+	}
+	return clamp(total/totalWeight, 0, 100), reasons
+}
+
+func calculatePledgeTrustScore(pledges []domain.Pledge) (float64, []string) {
+	if len(pledges) == 0 {
+		return 50, []string{"no_seller_pledges"}
+	}
+
+	total := 0.0
+	lowConfidence := 0
+	for _, pledge := range pledges {
+		scoreComponent := clamp(pledge.Score*10, 0, 100)
+		confidenceComponent := clamp(pledge.Confidence*100, 0, 100)
+		total += scoreComponent*0.7 + confidenceComponent*0.3
+		if pledge.Confidence < 0.60 {
+			lowConfidence++
+		}
+	}
+
+	reasons := make([]string, 0, 2)
+	if len(pledges) >= 3 {
+		reasons = append(reasons, "seller_has_pledge_history")
+	}
+	if lowConfidence > 0 {
+		reasons = append(reasons, "some_pledges_low_confidence")
+	}
+	return total / float64(len(pledges)), reasons
+}
+
+func calculateReviewTrustScore(rating RatingSummary, reviewCount int) (float64, []string) {
+	if reviewCount == 0 {
+		return 50, []string{"no_customer_reviews"}
+	}
+
+	score := clamp(rating.AverageRating/5*100, 0, 100)
+	reasons := []string{}
+	if reviewCount >= 5 {
+		reasons = append(reasons, "review_history_available")
+	}
+	if rating.AverageRating < 3 {
+		reasons = append(reasons, "low_customer_rating")
+	}
+	return score, reasons
+}
+
+func calculateBuyerCheckTrustScore(checks []domain.BuyerCheck) (float64, int, int, []string) {
+	if len(checks) == 0 {
+		return 50, 0, 0, []string{"no_buyer_checks"}
+	}
+
+	total := 0.0
+	trusted := 0
+	highRisk := 0
+	for _, check := range checks {
+		checkScore := 70.0
+		switch check.Verdict {
+		case "trusted":
+			checkScore = 100
+			trusted++
+		case "warning":
+			checkScore = 60
+		case "high_risk":
+			checkScore = 20
+			highRisk++
+		case "no_pledge":
+			checkScore = 50
+		}
+		if !check.CategoryMatch {
+			checkScore -= 15
+		}
+		if check.ScoreDeltaAbs > warningMaxScoreDelta {
+			checkScore -= 15
+		}
+		total += clamp(checkScore, 0, 100)
+	}
+
+	reasons := make([]string, 0, 2)
+	if trusted > 0 {
+		reasons = append(reasons, "buyer_checks_confirmed")
+	}
+	if highRisk > 0 {
+		reasons = append(reasons, "buyer_checks_high_risk")
+	}
+
+	return total / float64(len(checks)), trusted, highRisk, reasons
+}
+
+const warningMaxScoreDelta = 2.5
+
+func trustGrade(score float64) string {
+	switch {
+	case score >= 85:
+		return "excellent"
+	case score >= 70:
+		return "good"
+	case score >= 55:
+		return "watch"
+	default:
+		return "risk"
+	}
+}
+
+func clamp(value, minValue, maxValue float64) float64 {
+	return math.Max(minValue, math.Min(maxValue, value))
+}
+
+func round(value float64, precision int) float64 {
+	pow := math.Pow(10, float64(precision))
+	return math.Round(value*pow) / pow
+}
+
+func uniqueStrings(values []string) []string {
+	seen := map[string]struct{}{}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func (s *Service) ensureAdmin(ctx context.Context, userID string) error {

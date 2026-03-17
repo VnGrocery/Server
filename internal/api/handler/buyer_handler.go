@@ -79,6 +79,8 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.BuyerCheckResponse{
+		CheckID:          result.CheckID,
+		ShopID:           result.ShopID,
 		PolicyVersion:    result.PolicyVersion,
 		HasPledge:        result.HasPledge,
 		PledgeID:         result.PledgeID,

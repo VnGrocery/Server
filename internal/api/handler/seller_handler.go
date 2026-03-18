@@ -130,6 +130,7 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 
 	pledge, err := h.committer.Commit(c.Request.Context(), sellerservice.CommitInput{
 		ShopID:          request.ShopID,
+		ProductID:       request.ProductID,
 		CreatedByUserID: principal.UserID,
 		Score:           request.Score,
 		Category:        request.Category,
@@ -155,6 +156,7 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 	c.JSON(http.StatusCreated, dto.SellerCommitResponse{
 		PledgeID:        pledge.PledgeID,
 		ShopID:          pledge.ShopID,
+		ProductID:       pledge.ProductID,
 		CreatedByUserID: pledge.CreatedByUserID,
 		Status:          pledge.Status,
 		Score:           pledge.Score,

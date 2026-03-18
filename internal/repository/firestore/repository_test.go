@@ -61,6 +61,7 @@ func TestDomainStructTags(t *testing.T) {
 	pledge := domain.Pledge{
 		PledgeID:        "pledge-1",
 		ShopID:          "shop-1",
+		ProductID:       "product-1",
 		CreatedByUserID: "user-1",
 		Status:          "pending",
 		ImageHash:       "hash-1",
@@ -111,6 +112,7 @@ func TestDomainStructTags(t *testing.T) {
 	assertFirestoreTag(t, shop, "Latitude", "latitude")
 	assertFirestoreTag(t, shop, "Longitude", "longitude")
 	assertFirestoreTag(t, pledge, "CreatedByUserID", "createdByUserId")
+	assertFirestoreTag(t, pledge, "ProductID", "productId")
 	assertFirestoreTag(t, pledge, "Score", "score")
 	assertFirestoreTag(t, pledge, "Category", "category")
 	assertFirestoreTag(t, pledge, "Confidence", "confidence")

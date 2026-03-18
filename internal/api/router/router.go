@@ -53,6 +53,7 @@ func New(deps Dependencies) *gin.Engine {
 		v1.GET("/events", deps.AuthMiddleware.Handle(), deps.EventLogHandler.List)
 		v1.GET("/shops", deps.ShopHandler.List)
 		v1.GET("/shops/:shopId", deps.ShopHandler.GetByID)
+		v1.GET("/shops/:shopId/pledges", deps.ShopHandler.ListPledges)
 		v1.GET("/shops/:shopId/products", deps.ProductHandler.List)
 		v1.GET("/shops/:shopId/products/:productId", deps.ProductHandler.GetByID)
 		v1.GET("/shops/:shopId/reviews", deps.ShopHandler.ListReviews)

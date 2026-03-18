@@ -334,6 +334,34 @@ func TestListReturnsTrustSummary(t *testing.T) {
 	}
 }
 
+func TestListPledgesFiltersByProductAndCategory(t *testing.T) {
+	service := NewService(shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, Status: ShopStatusActive}, nil
+		},
+	}, pledgeRepositoryStub{
+		listByShopID: func(ctx context.Context, shopID string) ([]domain.Pledge, error) {
+			return []domain.Pledge{
+				{PledgeID: "pledge-1", ShopID: shopID, ProductID: "product-1", Category: "fresh_produce", Score: 8.5},
+				{PledgeID: "pledge-2", ShopID: shopID, ProductID: "product-2", Category: "fresh_produce", Score: 7.2},
+				{PledgeID: "pledge-3", ShopID: shopID, ProductID: "product-1", Category: "stale_fish", Score: 4.1},
+			}, nil
+		},
+	}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
+
+	pledges, err := service.ListPledges(context.Background(), PledgeHistoryInput{
+		ShopID:    "shop-1",
+		ProductID: "product-1",
+		Category:  "FRESH_PRODUCE",
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(pledges) != 1 || pledges[0].PledgeID != "pledge-1" {
+		t.Fatalf("unexpected pledges: %#v", pledges)
+	}
+}
+
 func TestModerateRequiresAdmin(t *testing.T) {
 	service := NewService(shopRepositoryStub{
 		save: func(ctx context.Context, shop domain.Shop) error { return nil },

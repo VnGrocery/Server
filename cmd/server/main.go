@@ -101,7 +101,7 @@ func main() {
 	productManager := productservice.NewService(productRepository, shopRepository, auditLogger)
 	userAdminService := useradminservice.NewService(userRepository, authUserRepository, accountKeys, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, buyerCheckRepository, shopReviewRepository, userRepository, auditLogger)
-	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, auditLogger)
+	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, productRepository, auditLogger)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, buyerCheckRepository, visionScorer)
 	authMiddleware := middleware.NewAuthRequired(jwtService)
 	healthHandler := handler.NewHealthHandler()

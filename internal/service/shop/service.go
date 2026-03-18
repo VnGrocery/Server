@@ -70,6 +70,12 @@ type DeleteInput struct {
 	ExpectedVersion int
 }
 
+type PledgeHistoryInput struct {
+	ShopID    string
+	ProductID string
+	Category  string
+}
+
 type ListInput struct {
 	Page               int
 	PageSize           int
@@ -521,6 +527,47 @@ func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error)
 		Total:    total,
 		HasNext:  end < total,
 	}, nil
+}
+
+func (s *Service) ListPledges(ctx context.Context, input PledgeHistoryInput) ([]domain.Pledge, error) {
+	shopID := strings.TrimSpace(input.ShopID)
+	if shopID == "" {
+		return nil, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
+	}
+	if s.shops == nil {
+		return nil, fmt.Errorf("shop repository is not configured")
+	}
+	if s.pledges == nil {
+		return nil, fmt.Errorf("pledge repository is not configured")
+	}
+
+	shop, err := s.shops.GetByID(ctx, shopID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
+	if shop.Status == ShopStatusDeleted {
+		return nil, ErrNotFound
+	}
+
+	pledges, err := s.pledges.ListByShopID(ctx, shopID)
+	if err != nil {
+		return nil, err
+	}
+
+	productID := strings.TrimSpace(input.ProductID)
+	category := strings.TrimSpace(input.Category)
+	filtered := make([]domain.Pledge, 0, len(pledges))
+	for _, pledge := range pledges {
+		if productID != "" && pledge.ProductID != productID {
+			continue
+		}
+		if category != "" && !strings.EqualFold(strings.TrimSpace(pledge.Category), category) {
+			continue
+		}
+		filtered = append(filtered, pledge)
+	}
+
+	return filtered, nil
 }
 
 func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView, error) {

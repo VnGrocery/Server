@@ -21,6 +21,7 @@ type ShopService interface {
 	Moderate(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error)
 	GetByID(ctx context.Context, shopID string) (shopsvc.ShopView, error)
 	List(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
+	ListPledges(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error)
 	Review(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
 	ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error)
 }
@@ -230,6 +231,25 @@ func (h *ShopHandler) GetByID(c *gin.Context) {
 	c.JSON(http.StatusOK, toShopResponse(shop))
 }
 
+func (h *ShopHandler) ListPledges(c *gin.Context) {
+	pledges, err := h.shops.ListPledges(c.Request.Context(), shopsvc.PledgeHistoryInput{
+		ShopID:    c.Param("shopId"),
+		ProductID: c.Query("productId"),
+		Category:  c.Query("category"),
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+
+	items := make([]dto.PledgeResponse, 0, len(pledges))
+	for _, pledge := range pledges {
+		items = append(items, toPledgeResponse(pledge))
+	}
+
+	c.JSON(http.StatusOK, dto.PledgeHistoryResponse{Items: items})
+}
+
 func (h *ShopHandler) CreateReview(c *gin.Context) {
 	principal, ok := middleware.GetPrincipal(c)
 	if !ok {
@@ -346,6 +366,23 @@ func toShopResponse(view shopsvc.ShopView) dto.ShopResponse {
 		},
 		CreatedAt: shop.CreatedAt,
 		UpdatedAt: shop.UpdatedAt,
+	}
+}
+
+func toPledgeResponse(pledge domain.Pledge) dto.PledgeResponse {
+	return dto.PledgeResponse{
+		PledgeID:        pledge.PledgeID,
+		ShopID:          pledge.ShopID,
+		ProductID:       pledge.ProductID,
+		CreatedByUserID: pledge.CreatedByUserID,
+		Status:          pledge.Status,
+		Version:         pledge.Version,
+		Score:           pledge.Score,
+		Category:        pledge.Category,
+		Confidence:      pledge.Confidence,
+		ImageHash:       pledge.ImageHash,
+		CreatedAt:       pledge.CreatedAt,
+		UpdatedAt:       pledge.UpdatedAt,
 	}
 }
 

@@ -359,6 +359,7 @@ func buildSchemas() gin.H {
 			"required": []string{"shopId", "score", "category", "confidence", "imageHash"},
 			"properties": gin.H{
 				"shopId":     gin.H{"type": "string"},
+				"productId":  gin.H{"type": "string"},
 				"score":      gin.H{"type": "number"},
 				"category":   gin.H{"type": "string"},
 				"confidence": gin.H{"type": "number"},
@@ -370,6 +371,7 @@ func buildSchemas() gin.H {
 			"properties": gin.H{
 				"pledgeId":        gin.H{"type": "string"},
 				"shopId":          gin.H{"type": "string"},
+				"productId":       gin.H{"type": "string"},
 				"createdByUserId": gin.H{"type": "string"},
 				"status":          gin.H{"type": "string"},
 				"score":           gin.H{"type": "number"},
@@ -378,6 +380,32 @@ func buildSchemas() gin.H {
 				"imageHash":       gin.H{"type": "string"},
 				"createdAt":       gin.H{"type": "string", "format": "date-time"},
 				"updatedAt":       gin.H{"type": "string", "format": "date-time"},
+			},
+		},
+		"PledgeResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"pledgeId":        gin.H{"type": "string"},
+				"shopId":          gin.H{"type": "string"},
+				"productId":       gin.H{"type": "string"},
+				"createdByUserId": gin.H{"type": "string"},
+				"status":          gin.H{"type": "string"},
+				"version":         gin.H{"type": "integer"},
+				"score":           gin.H{"type": "number"},
+				"category":        gin.H{"type": "string"},
+				"confidence":      gin.H{"type": "number"},
+				"imageHash":       gin.H{"type": "string"},
+				"createdAt":       gin.H{"type": "string", "format": "date-time"},
+				"updatedAt":       gin.H{"type": "string", "format": "date-time"},
+			},
+		},
+		"PledgeHistoryResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"items": gin.H{
+					"type":  "array",
+					"items": gin.H{"$ref": "#/components/schemas/PledgeResponse"},
+				},
 			},
 		},
 		"SellerScoreResponse": gin.H{
@@ -632,6 +660,17 @@ func buildPaths() gin.H {
 					requiredQueryParam("expectedVersion", "integer"),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "ShopResponse"), errorResponse),
+			},
+		},
+		"/v1/shops/{shopId}/pledges": gin.H{
+			"get": gin.H{
+				"summary": "List seller pledge history for buyer UI",
+				"parameters": []gin.H{
+					pathParam("shopId"),
+					queryParam("productId", "string"),
+					queryParam("category", "string"),
+				},
+				"responses": mergeResponses(success(http.StatusOK, "PledgeHistoryResponse"), errorResponse),
 			},
 		},
 		"/v1/shops/{shopId}/products": gin.H{

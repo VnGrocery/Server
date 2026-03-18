@@ -22,6 +22,7 @@ const PledgeStatusCommitted = "committed"
 
 type CommitInput struct {
 	ShopID          string
+	ProductID       string
 	CreatedByUserID string
 	Score           float64
 	Category        string
@@ -34,22 +35,24 @@ type CommitService interface {
 }
 
 type Service struct {
-	pledges repository.PledgeRepository
-	shops   repository.ShopRepository
-	audit   AuditLogger
-	now     func() time.Time
+	pledges  repository.PledgeRepository
+	shops    repository.ShopRepository
+	products repository.ProductRepository
+	audit    AuditLogger
+	now      func() time.Time
 }
 
 type AuditLogger interface {
 	Log(ctx context.Context, input audit.Input) error
 }
 
-func NewService(pledges repository.PledgeRepository, shops repository.ShopRepository, auditLogger AuditLogger) *Service {
+func NewService(pledges repository.PledgeRepository, shops repository.ShopRepository, products repository.ProductRepository, auditLogger AuditLogger) *Service {
 	return &Service{
-		pledges: pledges,
-		shops:   shops,
-		audit:   auditLogger,
-		now:     time.Now,
+		pledges:  pledges,
+		shops:    shops,
+		products: products,
+		audit:    auditLogger,
+		now:      time.Now,
 	}
 }
 
@@ -70,11 +73,25 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 	if shop.OwnerUserID != strings.TrimSpace(input.CreatedByUserID) {
 		return domain.Pledge{}, ErrShopOwnership
 	}
+	productID := strings.TrimSpace(input.ProductID)
+	if productID != "" {
+		if s.products == nil {
+			return domain.Pledge{}, fmt.Errorf("product repository is not configured")
+		}
+		product, err := s.products.GetByID(ctx, productID)
+		if err != nil {
+			return domain.Pledge{}, fmt.Errorf("%w: %v", ErrInvalidCommit, err)
+		}
+		if product.ShopID != strings.TrimSpace(input.ShopID) {
+			return domain.Pledge{}, fmt.Errorf("%w: productId does not belong to shop", ErrInvalidCommit)
+		}
+	}
 
 	now := s.now().UTC()
 	pledge := domain.Pledge{
 		PledgeID:        uuid.NewString(),
 		ShopID:          strings.TrimSpace(input.ShopID),
+		ProductID:       productID,
 		CreatedByUserID: strings.TrimSpace(input.CreatedByUserID),
 		Status:          PledgeStatusCommitted,
 		Version:         1,

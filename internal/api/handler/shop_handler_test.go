@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"vngrocery/internal/api/dto"
 	"vngrocery/internal/domain"
 	authservice "vngrocery/internal/service/auth"
 	shopsvc "vngrocery/internal/service/shop"
@@ -236,12 +237,43 @@ func TestListReviews(t *testing.T) {
 	}
 }
 
+func TestListPledgesFiltersForBuyerUI(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewShopHandler(shopServiceAdapter{
+		listPledges: func(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error) {
+			if input.ShopID != "shop-1" || input.ProductID != "product-1" || input.Category != "fresh_produce" {
+				t.Fatalf("unexpected pledge history input: %#v", input)
+			}
+			return []domain.Pledge{{PledgeID: "pledge-1", ShopID: input.ShopID, ProductID: input.ProductID, Category: input.Category, Score: 8.5}}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/shops/:shopId/pledges", handler.ListPledges)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/shops/shop-1/pledges?productId=product-1&category=fresh_produce", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var payload dto.PledgeHistoryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(payload.Items) != 1 || payload.Items[0].PledgeID != "pledge-1" {
+		t.Fatalf("unexpected pledge response: %#v", payload)
+	}
+}
+
 type shopServiceAdapter struct {
 	create      func(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error)
 	update      func(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error)
 	deleteFn    func(ctx context.Context, input shopsvc.DeleteInput) (domain.Shop, error)
 	getByID     func(ctx context.Context, shopID string) (shopsvc.ShopView, error)
 	list        func(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
+	listPledges func(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error)
 	moderate    func(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error)
 	review      func(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
 	listReviews func(ctx context.Context, shopID string) ([]domain.ShopReview, error)
@@ -273,6 +305,12 @@ func (s shopServiceAdapter) GetByID(ctx context.Context, shopID string) (shopsvc
 }
 func (s shopServiceAdapter) List(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error) {
 	return s.list(ctx, input)
+}
+func (s shopServiceAdapter) ListPledges(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error) {
+	if s.listPledges == nil {
+		return nil, errors.New("not implemented")
+	}
+	return s.listPledges(ctx, input)
 }
 func (s shopServiceAdapter) Review(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error) {
 	return s.review(ctx, input)

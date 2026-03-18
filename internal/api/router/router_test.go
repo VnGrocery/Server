@@ -381,6 +381,7 @@ func (sellerCommitStub) Commit(ctx context.Context, input sellerservice.CommitIn
 	return domain.Pledge{
 		PledgeID:        "pledge-1",
 		ShopID:          input.ShopID,
+		ProductID:       input.ProductID,
 		CreatedByUserID: input.CreatedByUserID,
 		Status:          sellerservice.PledgeStatusCommitted,
 		Score:           input.Score,
@@ -571,6 +572,16 @@ func (shopHandlerStub) List(ctx context.Context, input shopservice.ListInput) (s
 		PageSize: 20,
 		Total:    1,
 	}, nil
+}
+
+func (shopHandlerStub) ListPledges(ctx context.Context, input shopservice.PledgeHistoryInput) ([]domain.Pledge, error) {
+	return []domain.Pledge{{
+		PledgeID:  "pledge-1",
+		ShopID:    input.ShopID,
+		ProductID: input.ProductID,
+		Category:  input.Category,
+		Score:     8.5,
+	}}, nil
 }
 
 func (shopHandlerStub) Review(ctx context.Context, input shopservice.ReviewInput) (domain.ShopReview, error) {

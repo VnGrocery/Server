@@ -5,6 +5,7 @@ import "time"
 type Pledge struct {
 	PledgeID        string    `firestore:"pledgeId"`
 	ShopID          string    `firestore:"shopId"`
+	ProductID       string    `firestore:"productId"`
 	CreatedByUserID string    `firestore:"createdByUserId"`
 	Status          string    `firestore:"status"`
 	Version         int       `firestore:"version"`

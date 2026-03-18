@@ -200,6 +200,9 @@ func TestSellerCommitCreatesPledge(t *testing.T) {
 			if input.ShopID != "shop-1" {
 				t.Fatalf("unexpected shop id: %s", input.ShopID)
 			}
+			if input.ProductID != "product-1" {
+				t.Fatalf("unexpected product id: %s", input.ProductID)
+			}
 			if input.CreatedByUserID != "user-1" {
 				t.Fatalf("unexpected user id: %s", input.CreatedByUserID)
 			}
@@ -209,6 +212,7 @@ func TestSellerCommitCreatesPledge(t *testing.T) {
 			return domain.Pledge{
 				PledgeID:        "pledge-1",
 				ShopID:          input.ShopID,
+				ProductID:       input.ProductID,
 				CreatedByUserID: input.CreatedByUserID,
 				Status:          sellerservice.PledgeStatusCommitted,
 				Score:           input.Score,
@@ -227,7 +231,7 @@ func TestSellerCommitCreatesPledge(t *testing.T) {
 		handler.Commit(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/seller/commit", bytes.NewBufferString(`{"shopId":"shop-1","score":8.5,"category":"fresh_produce","confidence":0.91,"imageHash":"hash-1"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/seller/commit", bytes.NewBufferString(`{"shopId":"shop-1","productId":"product-1","score":8.5,"category":"fresh_produce","confidence":0.91,"imageHash":"hash-1"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
@@ -243,6 +247,9 @@ func TestSellerCommitCreatesPledge(t *testing.T) {
 	}
 	if response["imageHash"] != "hash-1" {
 		t.Fatalf("unexpected image hash: %v", response["imageHash"])
+	}
+	if response["productId"] != "product-1" {
+		t.Fatalf("unexpected product id: %v", response["productId"])
 	}
 }
 

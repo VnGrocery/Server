@@ -39,6 +39,9 @@ func TestCommitCreatesPledge(t *testing.T) {
 			if pledge.ShopID != "shop-1" {
 				t.Fatalf("unexpected shop id: %s", pledge.ShopID)
 			}
+			if pledge.ProductID != "product-1" {
+				t.Fatalf("unexpected product id: %s", pledge.ProductID)
+			}
 			if pledge.CreatedByUserID != "user-1" {
 				t.Fatalf("unexpected user id: %s", pledge.CreatedByUserID)
 			}
@@ -72,11 +75,16 @@ func TestCommitCreatesPledge(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1"}, nil
 		},
+	}, productRepositoryStub{
+		getByID: func(ctx context.Context, productID string) (domain.Product, error) {
+			return domain.Product{ProductID: productID, ShopID: "shop-1"}, nil
+		},
 	}, nil)
 	service.now = func() time.Time { return fixedTime }
 
 	pledge, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",
+		ProductID:       "product-1",
 		CreatedByUserID: "user-1",
 		Score:           8.8,
 		Category:        "fresh_produce",
@@ -101,7 +109,7 @@ func TestCommitRejectsInvalidInput(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
 		},
-	}, nil)
+	}, productRepositoryStub{}, nil)
 
 	_, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "",
@@ -126,7 +134,7 @@ func TestCommitRejectsMissingShop(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, errors.New("not found")
 		},
-	}, nil)
+	}, productRepositoryStub{}, nil)
 
 	_, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",
@@ -151,7 +159,7 @@ func TestCommitRejectsNonOwnerShop(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "owner-2"}, nil
 		},
-	}, nil)
+	}, productRepositoryStub{}, nil)
 
 	_, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",
@@ -179,6 +187,25 @@ func (s shopRepositoryStub) GetByID(ctx context.Context, shopID string) (domain.
 }
 
 func (s shopRepositoryStub) List(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
+	return nil, errors.New("not implemented")
+}
+
+type productRepositoryStub struct {
+	getByID func(ctx context.Context, productID string) (domain.Product, error)
+}
+
+func (s productRepositoryStub) Save(ctx context.Context, product domain.Product) error {
+	return nil
+}
+
+func (s productRepositoryStub) GetByID(ctx context.Context, productID string) (domain.Product, error) {
+	if s.getByID == nil {
+		return domain.Product{}, errors.New("not implemented")
+	}
+	return s.getByID(ctx, productID)
+}
+
+func (s productRepositoryStub) List(ctx context.Context, filter repository.ProductListFilter) ([]domain.Product, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -211,7 +238,7 @@ func TestCommitWritesAuditLog(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1"}, nil
 		},
-	}, auditLogger)
+	}, productRepositoryStub{}, auditLogger)
 
 	if _, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",

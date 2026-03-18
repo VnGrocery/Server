@@ -354,6 +354,44 @@ func buildSchemas() gin.H {
 				},
 			},
 		},
+		"CreateProductFreshnessReportRequest": gin.H{
+			"type":     "object",
+			"required": []string{"score", "category", "confidence", "imageHash"},
+			"properties": gin.H{
+				"score":      gin.H{"type": "number"},
+				"category":   gin.H{"type": "string"},
+				"confidence": gin.H{"type": "number"},
+				"comment":    gin.H{"type": "string"},
+				"imageHash":  gin.H{"type": "string"},
+			},
+		},
+		"ProductFreshnessReportResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"reportId":       gin.H{"type": "string"},
+				"productId":      gin.H{"type": "string"},
+				"shopId":         gin.H{"type": "string"},
+				"reporterUserId": gin.H{"type": "string"},
+				"status":         gin.H{"type": "string"},
+				"version":        gin.H{"type": "integer"},
+				"score":          gin.H{"type": "number"},
+				"category":       gin.H{"type": "string"},
+				"confidence":     gin.H{"type": "number"},
+				"comment":        gin.H{"type": "string"},
+				"imageHash":      gin.H{"type": "string"},
+				"createdAt":      gin.H{"type": "string", "format": "date-time"},
+				"updatedAt":      gin.H{"type": "string", "format": "date-time"},
+			},
+		},
+		"ProductFreshnessReportListResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"items": gin.H{
+					"type":  "array",
+					"items": gin.H{"$ref": "#/components/schemas/ProductFreshnessReportResponse"},
+				},
+			},
+		},
 		"SellerCommitRequest": gin.H{
 			"type":     "object",
 			"required": []string{"shopId", "score", "category", "confidence", "imageHash"},
@@ -715,6 +753,26 @@ func buildPaths() gin.H {
 					requiredQueryParam("expectedVersion", "integer"),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "ProductResponse"), errorResponse),
+			},
+		},
+		"/v1/shops/{shopId}/products/{productId}/freshness-reports": gin.H{
+			"get": gin.H{
+				"summary": "List product freshness reports",
+				"parameters": []gin.H{
+					pathParam("shopId"),
+					pathParam("productId"),
+				},
+				"responses": mergeResponses(success(http.StatusOK, "ProductFreshnessReportListResponse"), errorResponse),
+			},
+			"post": gin.H{
+				"summary":  "Create product freshness report",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					pathParam("shopId"),
+					pathParam("productId"),
+				},
+				"requestBody": jsonBody("CreateProductFreshnessReportRequest"),
+				"responses":   mergeResponses(success(http.StatusCreated, "ProductFreshnessReportResponse"), errorResponse),
 			},
 		},
 		"/v1/shops/{shopId}/reviews": gin.H{

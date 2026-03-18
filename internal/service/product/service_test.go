@@ -37,6 +37,25 @@ func (s productRepositoryStub) List(ctx context.Context, filter repository.Produ
 	return nil, nil
 }
 
+type productFreshnessReportRepositoryStub struct {
+	save            func(ctx context.Context, report domain.ProductFreshnessReport) error
+	listByProductID func(ctx context.Context, productID string) ([]domain.ProductFreshnessReport, error)
+}
+
+func (s productFreshnessReportRepositoryStub) Save(ctx context.Context, report domain.ProductFreshnessReport) error {
+	if s.save != nil {
+		return s.save(ctx, report)
+	}
+	return nil
+}
+
+func (s productFreshnessReportRepositoryStub) ListByProductID(ctx context.Context, productID string) ([]domain.ProductFreshnessReport, error) {
+	if s.listByProductID != nil {
+		return s.listByProductID(ctx, productID)
+	}
+	return nil, nil
+}
+
 type shopRepositoryStub struct {
 	getByID func(ctx context.Context, shopID string) (domain.Shop, error)
 }
@@ -70,7 +89,7 @@ func TestCreateProduct(t *testing.T) {
 			}
 			return nil
 		},
-	}, shopRepositoryStub{
+	}, productFreshnessReportRepositoryStub{}, shopRepositoryStub{
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1", Status: "active"}, nil
 		},
@@ -109,7 +128,7 @@ func TestUpdateProductRejectsVersionConflict(t *testing.T) {
 				Version:     4,
 			}, nil
 		},
-	}, shopRepositoryStub{
+	}, productFreshnessReportRepositoryStub{}, shopRepositoryStub{
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1", Status: "active"}, nil
 		},
@@ -146,7 +165,7 @@ func TestDeleteProductMarksDeleted(t *testing.T) {
 				Version:     2,
 			}, nil
 		},
-	}, shopRepositoryStub{
+	}, productFreshnessReportRepositoryStub{}, shopRepositoryStub{
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1", Status: "active"}, nil
 		},
@@ -169,5 +188,72 @@ func TestDeleteProductMarksDeleted(t *testing.T) {
 	}
 	if auditLogger.logHits != 1 {
 		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
+	}
+}
+
+func TestCreateFreshnessReport(t *testing.T) {
+	auditLogger := &auditLoggerStub{}
+	service := NewService(productRepositoryStub{
+		getByID: func(ctx context.Context, productID string) (domain.Product, error) {
+			return domain.Product{ProductID: productID, ShopID: "shop-1", Status: ProductStatusActive}, nil
+		},
+	}, productFreshnessReportRepositoryStub{
+		save: func(ctx context.Context, report domain.ProductFreshnessReport) error {
+			if report.ProductID != "product-1" || report.ShopID != "shop-1" || report.ReporterUserID != "buyer-1" || report.Status != FreshnessReportStatusActive || report.Version != 1 {
+				t.Fatalf("unexpected report: %#v", report)
+			}
+			return nil
+		},
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, Status: "active"}, nil
+		},
+	}, auditLogger)
+
+	report, err := service.CreateFreshnessReport(context.Background(), FreshnessReportInput{
+		ProductID:      "product-1",
+		ShopID:         "shop-1",
+		ReporterUserID: "buyer-1",
+		Score:          6.2,
+		Category:       "bruised_fruit",
+		Confidence:     0.86,
+		Comment:        "Bruised on one side",
+		ImageHash:      "hash-1",
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if report.ReportID == "" {
+		t.Fatal("expected report id")
+	}
+	if auditLogger.logHits != 1 {
+		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
+	}
+}
+
+func TestListFreshnessReportsFiltersActiveByProduct(t *testing.T) {
+	service := NewService(productRepositoryStub{
+		getByID: func(ctx context.Context, productID string) (domain.Product, error) {
+			return domain.Product{ProductID: productID, ShopID: "shop-1", Status: ProductStatusActive}, nil
+		},
+	}, productFreshnessReportRepositoryStub{
+		listByProductID: func(ctx context.Context, productID string) ([]domain.ProductFreshnessReport, error) {
+			return []domain.ProductFreshnessReport{
+				{ReportID: "report-1", ProductID: productID, ShopID: "shop-1", Status: FreshnessReportStatusActive},
+				{ReportID: "report-2", ProductID: productID, ShopID: "shop-1", Status: "deleted"},
+			}, nil
+		},
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, Status: "active"}, nil
+		},
+	}, nil)
+
+	reports, err := service.ListFreshnessReports(context.Background(), "shop-1", "product-1")
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(reports) != 1 || reports[0].ReportID != "report-1" {
+		t.Fatalf("unexpected reports: %#v", reports)
 	}
 }

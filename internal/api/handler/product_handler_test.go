@@ -17,11 +17,13 @@ import (
 )
 
 type productServiceAdapter struct {
-	create  func(ctx context.Context, input productsvc.CreateInput) (domain.Product, error)
-	update  func(ctx context.Context, input productsvc.UpdateInput) (domain.Product, error)
-	delete  func(ctx context.Context, input productsvc.DeleteInput) (domain.Product, error)
-	getByID func(ctx context.Context, shopID, productID string) (domain.Product, error)
-	list    func(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error)
+	create                func(ctx context.Context, input productsvc.CreateInput) (domain.Product, error)
+	update                func(ctx context.Context, input productsvc.UpdateInput) (domain.Product, error)
+	delete                func(ctx context.Context, input productsvc.DeleteInput) (domain.Product, error)
+	getByID               func(ctx context.Context, shopID, productID string) (domain.Product, error)
+	list                  func(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error)
+	createFreshnessReport func(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error)
+	listFreshnessReports  func(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error)
 }
 
 func (s productServiceAdapter) Create(ctx context.Context, input productsvc.CreateInput) (domain.Product, error) {
@@ -42,6 +44,14 @@ func (s productServiceAdapter) GetByID(ctx context.Context, shopID, productID st
 
 func (s productServiceAdapter) List(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error) {
 	return s.list(ctx, input)
+}
+
+func (s productServiceAdapter) CreateFreshnessReport(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error) {
+	return s.createFreshnessReport(ctx, input)
+}
+
+func (s productServiceAdapter) ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error) {
+	return s.listFreshnessReports(ctx, shopID, productID)
 }
 
 func TestCreateProduct(t *testing.T) {
@@ -146,5 +156,70 @@ func TestListProducts(t *testing.T) {
 	items, ok := payload["items"].([]any)
 	if !ok || len(items) != 1 {
 		t.Fatalf("unexpected payload: %#v", payload)
+	}
+}
+
+func TestCreateProductFreshnessReport(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	now := time.Date(2026, 4, 7, 11, 0, 0, 0, time.UTC)
+	handler := NewProductHandler(productServiceAdapter{
+		createFreshnessReport: func(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error) {
+			if input.ShopID != "shop-1" || input.ProductID != "product-1" || input.ReporterUserID != "buyer-1" {
+				t.Fatalf("unexpected report input: %+v", input)
+			}
+			return domain.ProductFreshnessReport{
+				ReportID:       "report-1",
+				ShopID:         input.ShopID,
+				ProductID:      input.ProductID,
+				ReporterUserID: input.ReporterUserID,
+				Status:         productsvc.FreshnessReportStatusActive,
+				Version:        1,
+				Score:          input.Score,
+				Category:       input.Category,
+				Confidence:     input.Confidence,
+				Comment:        input.Comment,
+				ImageHash:      input.ImageHash,
+				CreatedAt:      now,
+				UpdatedAt:      now,
+			}, nil
+		},
+	})
+
+	router := gin.New()
+	router.POST("/v1/shops/:shopId/products/:productId/freshness-reports", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "buyer-1"})
+		handler.CreateFreshnessReport(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/shops/shop-1/products/product-1/freshness-reports", bytes.NewBufferString(`{"score":6.2,"category":"bruised_fruit","confidence":0.86,"comment":"Bruised","imageHash":"hash-1"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", rec.Code)
+	}
+}
+
+func TestListProductFreshnessReports(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewProductHandler(productServiceAdapter{
+		listFreshnessReports: func(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error) {
+			if shopID != "shop-1" || productID != "product-1" {
+				t.Fatalf("unexpected list report input: shop=%s product=%s", shopID, productID)
+			}
+			return []domain.ProductFreshnessReport{{ReportID: "report-1", ShopID: shopID, ProductID: productID, Status: productsvc.FreshnessReportStatusActive}}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/shops/:shopId/products/:productId/freshness-reports", handler.ListFreshnessReports)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/shops/shop-1/products/product-1/freshness-reports", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 }

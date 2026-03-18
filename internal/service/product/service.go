@@ -24,8 +24,9 @@ var (
 )
 
 const (
-	ProductStatusActive  = "active"
-	ProductStatusDeleted = "deleted"
+	ProductStatusActive         = "active"
+	ProductStatusDeleted        = "deleted"
+	FreshnessReportStatusActive = "active"
 )
 
 type CreateInput struct {
@@ -61,20 +62,33 @@ type ListInput struct {
 	IncludeAllStatuses bool
 }
 
+type FreshnessReportInput struct {
+	ProductID      string
+	ShopID         string
+	ReporterUserID string
+	Score          float64
+	Category       string
+	Confidence     float64
+	Comment        string
+	ImageHash      string
+}
+
 type AuditLogger interface {
 	Log(ctx context.Context, input audit.Input) error
 }
 
 type Service struct {
 	products repository.ProductRepository
+	reports  repository.ProductFreshnessReportRepository
 	shops    repository.ShopRepository
 	audit    AuditLogger
 	now      func() time.Time
 }
 
-func NewService(products repository.ProductRepository, shops repository.ShopRepository, auditLogger AuditLogger) *Service {
+func NewService(products repository.ProductRepository, reports repository.ProductFreshnessReportRepository, shops repository.ShopRepository, auditLogger AuditLogger) *Service {
 	return &Service{
 		products: products,
+		reports:  reports,
 		shops:    shops,
 		audit:    auditLogger,
 		now:      time.Now,
@@ -258,6 +272,66 @@ func (s *Service) List(ctx context.Context, input ListInput) ([]domain.Product, 
 	return products, nil
 }
 
+func (s *Service) CreateFreshnessReport(ctx context.Context, input FreshnessReportInput) (domain.ProductFreshnessReport, error) {
+	if err := validateFreshnessReportInput(input); err != nil {
+		return domain.ProductFreshnessReport{}, err
+	}
+	if s.products == nil || s.shops == nil || s.reports == nil {
+		return domain.ProductFreshnessReport{}, fmt.Errorf("product freshness report dependencies are not configured")
+	}
+	product, err := s.GetByID(ctx, input.ShopID, input.ProductID)
+	if err != nil {
+		return domain.ProductFreshnessReport{}, err
+	}
+
+	now := s.now().UTC()
+	report := domain.ProductFreshnessReport{
+		ReportID:       uuid.NewString(),
+		ProductID:      product.ProductID,
+		ShopID:         product.ShopID,
+		ReporterUserID: strings.TrimSpace(input.ReporterUserID),
+		Status:         FreshnessReportStatusActive,
+		Version:        1,
+		Score:          input.Score,
+		Category:       strings.TrimSpace(input.Category),
+		Confidence:     input.Confidence,
+		Comment:        strings.TrimSpace(input.Comment),
+		ImageHash:      strings.TrimSpace(input.ImageHash),
+		CreatedAt:      now,
+		UpdatedAt:      now,
+	}
+	if err := s.reports.Save(ctx, report); err != nil {
+		return domain.ProductFreshnessReport{}, err
+	}
+	if err := s.logReportMutation(ctx, report.ReporterUserID, report.ReportID, report.Version, "product_freshness_report.created", audit.MutationPayload{After: report}, "created"); err != nil {
+		return domain.ProductFreshnessReport{}, err
+	}
+	return report, nil
+}
+
+func (s *Service) ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error) {
+	if strings.TrimSpace(shopID) == "" || strings.TrimSpace(productID) == "" {
+		return nil, fmt.Errorf("%w: shopId and productId are required", ErrInvalidProduct)
+	}
+	if s.products == nil || s.shops == nil || s.reports == nil {
+		return nil, fmt.Errorf("product freshness report dependencies are not configured")
+	}
+	if _, err := s.GetByID(ctx, shopID, productID); err != nil {
+		return nil, err
+	}
+	reports, err := s.reports.ListByProductID(ctx, strings.TrimSpace(productID))
+	if err != nil {
+		return nil, err
+	}
+	active := make([]domain.ProductFreshnessReport, 0, len(reports))
+	for _, report := range reports {
+		if report.ShopID == strings.TrimSpace(shopID) && report.Status == FreshnessReportStatusActive {
+			active = append(active, report)
+		}
+	}
+	return active, nil
+}
+
 func (s *Service) requireOwnedShop(ctx context.Context, shopID, ownerUserID string) (domain.Shop, error) {
 	shop, err := s.shops.GetByID(ctx, strings.TrimSpace(shopID))
 	if err != nil || shop.ShopID == "" || shop.Status == shopsvc.ShopStatusDeleted {
@@ -284,6 +358,21 @@ func (s *Service) logMutation(ctx context.Context, actorUserID, productID string
 	})
 }
 
+func (s *Service) logReportMutation(ctx context.Context, actorUserID, reportID string, version int, action string, payload any, status string) error {
+	if s.audit == nil {
+		return nil
+	}
+	return s.audit.Log(ctx, audit.Input{
+		ActorUserID:     strings.TrimSpace(actorUserID),
+		ResourceType:    "product_freshness_report",
+		ResourceID:      strings.TrimSpace(reportID),
+		ResourceVersion: version,
+		Action:          action,
+		Status:          status,
+		Payload:         payload,
+	})
+}
+
 func validate(shopID, ownerUserID, name string, price float64, currency string) error {
 	if strings.TrimSpace(shopID) == "" {
 		return fmt.Errorf("%w: shopId is required", ErrInvalidProduct)
@@ -299,6 +388,31 @@ func validate(shopID, ownerUserID, name string, price float64, currency string) 
 	}
 	if normalizeCurrency(currency) == "" {
 		return fmt.Errorf("%w: currency is required", ErrInvalidProduct)
+	}
+	return nil
+}
+
+func validateFreshnessReportInput(input FreshnessReportInput) error {
+	if strings.TrimSpace(input.ShopID) == "" {
+		return fmt.Errorf("%w: shopId is required", ErrInvalidProduct)
+	}
+	if strings.TrimSpace(input.ProductID) == "" {
+		return fmt.Errorf("%w: productId is required", ErrInvalidProduct)
+	}
+	if strings.TrimSpace(input.ReporterUserID) == "" {
+		return fmt.Errorf("%w: reporterUserId is required", ErrInvalidProduct)
+	}
+	if strings.TrimSpace(input.Category) == "" {
+		return fmt.Errorf("%w: category is required", ErrInvalidProduct)
+	}
+	if strings.TrimSpace(input.ImageHash) == "" {
+		return fmt.Errorf("%w: imageHash is required", ErrInvalidProduct)
+	}
+	if input.Score < 0 || input.Score > 10 {
+		return fmt.Errorf("%w: score must be between 0 and 10", ErrInvalidProduct)
+	}
+	if input.Confidence < 0 || input.Confidence > 1 {
+		return fmt.Errorf("%w: confidence must be between 0 and 1", ErrInvalidProduct)
 	}
 	return nil
 }

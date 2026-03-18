@@ -19,6 +19,8 @@ type ProductService interface {
 	Delete(ctx context.Context, input productsvc.DeleteInput) (domain.Product, error)
 	GetByID(ctx context.Context, shopID, productID string) (domain.Product, error)
 	List(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error)
+	CreateFreshnessReport(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error)
+	ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error)
 }
 
 type ProductHandler struct {
@@ -138,6 +140,50 @@ func (h *ProductHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.ProductListResponse{Items: items})
 }
 
+func (h *ProductHandler) CreateFreshnessReport(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	var request dto.CreateProductFreshnessReportRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	report, err := h.products.CreateFreshnessReport(c.Request.Context(), productsvc.FreshnessReportInput{
+		ShopID:         c.Param("shopId"),
+		ProductID:      c.Param("productId"),
+		ReporterUserID: principal.UserID,
+		Score:          request.Score,
+		Category:       request.Category,
+		Confidence:     request.Confidence,
+		Comment:        request.Comment,
+		ImageHash:      request.ImageHash,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, toProductFreshnessReportResponse(report))
+}
+
+func (h *ProductHandler) ListFreshnessReports(c *gin.Context) {
+	reports, err := h.products.ListFreshnessReports(c.Request.Context(), c.Param("shopId"), c.Param("productId"))
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+
+	items := make([]dto.ProductFreshnessReportResponse, 0, len(reports))
+	for _, report := range reports {
+		items = append(items, toProductFreshnessReportResponse(report))
+	}
+	c.JSON(http.StatusOK, dto.ProductFreshnessReportListResponse{Items: items})
+}
+
 func (h *ProductHandler) writeError(c *gin.Context, err error) {
 	status := http.StatusInternalServerError
 	switch {
@@ -151,6 +197,24 @@ func (h *ProductHandler) writeError(c *gin.Context, err error) {
 		status = http.StatusConflict
 	}
 	c.JSON(status, gin.H{"error": err.Error()})
+}
+
+func toProductFreshnessReportResponse(report domain.ProductFreshnessReport) dto.ProductFreshnessReportResponse {
+	return dto.ProductFreshnessReportResponse{
+		ReportID:       report.ReportID,
+		ProductID:      report.ProductID,
+		ShopID:         report.ShopID,
+		ReporterUserID: report.ReporterUserID,
+		Status:         report.Status,
+		Version:        report.Version,
+		Score:          report.Score,
+		Category:       report.Category,
+		Confidence:     report.Confidence,
+		Comment:        report.Comment,
+		ImageHash:      report.ImageHash,
+		CreatedAt:      report.CreatedAt,
+		UpdatedAt:      report.UpdatedAt,
+	}
 }
 
 func toProductResponse(product domain.Product) dto.ProductResponse {

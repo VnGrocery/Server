@@ -673,3 +673,29 @@ func (productHandlerStub) List(ctx context.Context, input productservice.ListInp
 		Version:     1,
 	}}, nil
 }
+
+func (productHandlerStub) CreateFreshnessReport(ctx context.Context, input productservice.FreshnessReportInput) (domain.ProductFreshnessReport, error) {
+	return domain.ProductFreshnessReport{
+		ReportID:       "report-1",
+		ProductID:      input.ProductID,
+		ShopID:         input.ShopID,
+		ReporterUserID: input.ReporterUserID,
+		Status:         productservice.FreshnessReportStatusActive,
+		Version:        1,
+		Score:          input.Score,
+		Category:       input.Category,
+		Confidence:     input.Confidence,
+		Comment:        input.Comment,
+		ImageHash:      input.ImageHash,
+	}, nil
+}
+
+func (productHandlerStub) ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error) {
+	return []domain.ProductFreshnessReport{{
+		ReportID:  "report-1",
+		ProductID: productID,
+		ShopID:    shopID,
+		Status:    productservice.FreshnessReportStatusActive,
+		Version:   1,
+	}}, nil
+}

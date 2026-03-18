@@ -50,6 +50,11 @@ type ProductRepository interface {
 	List(ctx context.Context, filter ProductListFilter) ([]domain.Product, error)
 }
 
+type ProductFreshnessReportRepository interface {
+	Save(ctx context.Context, report domain.ProductFreshnessReport) error
+	ListByProductID(ctx context.Context, productID string) ([]domain.ProductFreshnessReport, error)
+}
+
 type PledgeRepository interface {
 	Save(ctx context.Context, pledge domain.Pledge) error
 	GetByID(ctx context.Context, pledgeID string) (domain.Pledge, error)

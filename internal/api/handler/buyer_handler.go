@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"bytes"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"vngrocery/internal/api/dto"
+	"vngrocery/internal/api/middleware"
 	buyerservice "vngrocery/internal/service/buyer"
 	visionservice "vngrocery/internal/service/vision"
 )
@@ -22,6 +25,14 @@ func NewBuyerHandler(checker buyerservice.CheckService) *BuyerHandler {
 }
 
 func (h *BuyerHandler) Check(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "authenticated principal was not found in request context",
+		})
+		return
+	}
+
 	pledgeID := c.PostForm("pledgeId")
 
 	fileHeader, err := c.FormFile("image")
@@ -53,12 +64,34 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 	}
 	defer file.Close()
 
+	imageBytes, err := io.ReadAll(io.LimitReader(file, maxBuyerImageBytes+1))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "failed to read uploaded image",
+		})
+		return
+	}
+	if len(imageBytes) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "image file must not be empty",
+		})
+		return
+	}
+	if len(imageBytes) > maxBuyerImageBytes {
+		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
+			"error": "image file exceeds 10 MB limit",
+		})
+		return
+	}
+
 	result, err := h.checker.Check(c.Request.Context(), buyerservice.CheckInput{
-		PledgeID: pledgeID,
+		PledgeID:    pledgeID,
+		BuyerUserID: principal.UserID,
+		ImageHash:   sha256Hex(imageBytes),
 		Image: visionservice.ImageInput{
 			Filename: fileHeader.Filename,
-			Size:     fileHeader.Size,
-			Content:  file,
+			Size:     int64(len(imageBytes)),
+			Content:  bytes.NewReader(imageBytes),
 		},
 	})
 	if err != nil {
@@ -81,6 +114,7 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.BuyerCheckResponse{
 		CheckID:          result.CheckID,
 		ShopID:           result.ShopID,
+		ProductID:        result.ProductID,
 		PolicyVersion:    result.PolicyVersion,
 		HasPledge:        result.HasPledge,
 		PledgeID:         result.PledgeID,

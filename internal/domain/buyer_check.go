@@ -5,7 +5,9 @@ import "time"
 type BuyerCheck struct {
 	CheckID          string    `firestore:"checkId"`
 	ShopID           string    `firestore:"shopId"`
+	ProductID        string    `firestore:"productId"`
 	PledgeID         string    `firestore:"pledgeId"`
+	BuyerUserID      string    `firestore:"buyerUserId"`
 	Status           string    `firestore:"status"`
 	PolicyVersion    string    `firestore:"policyVersion"`
 	Trusted          bool      `firestore:"trusted"`
@@ -18,6 +20,7 @@ type BuyerCheck struct {
 	ActualCategory   string    `firestore:"actualCategory"`
 	ActualConfidence float64   `firestore:"actualConfidence"`
 	CategoryMatch    bool      `firestore:"categoryMatch"`
+	ImageHash        string    `firestore:"imageHash"`
 	Reasons          []string  `firestore:"reasons"`
 	CreatedAt        time.Time `firestore:"createdAt"`
 }

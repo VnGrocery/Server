@@ -12,22 +12,27 @@ import (
 
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
+	"vngrocery/internal/service/audit"
 	visionservice "vngrocery/internal/service/vision"
 )
 
 var ErrInvalidCheck = errors.New("invalid buyer check request")
 
 type CheckInput struct {
-	PledgeID string
-	Image    visionservice.ImageInput
+	PledgeID    string
+	BuyerUserID string
+	ImageHash   string
+	Image       visionservice.ImageInput
 }
 
 type CheckResult struct {
 	CheckID          string
 	ShopID           string
+	ProductID        string
 	PolicyVersion    string
 	HasPledge        bool
 	PledgeID         string
+	BuyerUserID      string
 	Trusted          bool
 	Verdict          string
 	PledgedScore     float64
@@ -38,6 +43,7 @@ type CheckResult struct {
 	ActualCategory   string
 	ActualConfidence float64
 	CategoryMatch    bool
+	ImageHash        string
 	Reasons          []string
 }
 
@@ -49,21 +55,34 @@ type Service struct {
 	pledges repository.PledgeRepository
 	checks  repository.BuyerCheckRepository
 	scorer  visionservice.ImageScorer
+	audit   AuditLogger
 	now     func() time.Time
 }
 
-func NewService(pledges repository.PledgeRepository, checks repository.BuyerCheckRepository, scorer visionservice.ImageScorer) *Service {
+type AuditLogger interface {
+	Log(ctx context.Context, input audit.Input) error
+}
+
+func NewService(pledges repository.PledgeRepository, checks repository.BuyerCheckRepository, scorer visionservice.ImageScorer, auditLogger AuditLogger) *Service {
 	return &Service{
 		pledges: pledges,
 		checks:  checks,
 		scorer:  scorer,
+		audit:   auditLogger,
 		now:     time.Now,
 	}
 }
 
 func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, error) {
+	buyerUserID := strings.TrimSpace(input.BuyerUserID)
+	if buyerUserID == "" {
+		return CheckResult{}, fmt.Errorf("%w: buyerUserId is required", ErrInvalidCheck)
+	}
 	if s.scorer == nil {
 		return CheckResult{}, visionservice.ErrProviderUnavailable
+	}
+	if s.checks == nil {
+		return CheckResult{}, fmt.Errorf("buyer check repository is not configured")
 	}
 
 	pledgeID := strings.TrimSpace(input.PledgeID)
@@ -86,19 +105,16 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	}
 
 	if pledgeID == "" {
-		return standaloneQualityResult(scored), nil
+		result := standaloneQualityResult(scored)
+		result.BuyerUserID = buyerUserID
+		result.ImageHash = strings.TrimSpace(input.ImageHash)
+		return s.persistCheck(ctx, result)
 	}
 
 	result := comparePledge(pledge, scored)
-	if s.checks != nil {
-		check := result.toBuyerCheck(uuid.NewString(), s.now().UTC())
-		if err := s.checks.Save(ctx, check); err != nil {
-			return CheckResult{}, err
-		}
-		result.CheckID = check.CheckID
-	}
-
-	return result, nil
+	result.BuyerUserID = buyerUserID
+	result.ImageHash = strings.TrimSpace(input.ImageHash)
+	return s.persistCheck(ctx, result)
 }
 
 const (
@@ -154,6 +170,7 @@ func comparePledge(pledge domain.Pledge, scored visionservice.ScoreResult) Check
 
 	return CheckResult{
 		ShopID:           pledge.ShopID,
+		ProductID:        pledge.ProductID,
 		PolicyVersion:    policyVersionV1,
 		HasPledge:        true,
 		PledgeID:         pledge.PledgeID,
@@ -171,11 +188,37 @@ func comparePledge(pledge domain.Pledge, scored visionservice.ScoreResult) Check
 	}
 }
 
+func (s *Service) persistCheck(ctx context.Context, result CheckResult) (CheckResult, error) {
+	check := result.toBuyerCheck(uuid.NewString(), s.now().UTC())
+	if err := s.checks.Save(ctx, check); err != nil {
+		return CheckResult{}, err
+	}
+	result.CheckID = check.CheckID
+
+	if s.audit != nil {
+		if err := s.audit.Log(ctx, audit.Input{
+			ActorUserID:     result.BuyerUserID,
+			ResourceType:    "buyer_check",
+			ResourceID:      result.CheckID,
+			ResourceVersion: 1,
+			Action:          "buyer_check.completed",
+			Status:          "completed",
+			Payload:         audit.MutationPayload{After: check},
+		}); err != nil {
+			return CheckResult{}, err
+		}
+	}
+
+	return result, nil
+}
+
 func (r CheckResult) toBuyerCheck(checkID string, createdAt time.Time) domain.BuyerCheck {
 	return domain.BuyerCheck{
 		CheckID:          checkID,
 		ShopID:           r.ShopID,
+		ProductID:        r.ProductID,
 		PledgeID:         r.PledgeID,
+		BuyerUserID:      r.BuyerUserID,
 		Status:           "completed",
 		PolicyVersion:    r.PolicyVersion,
 		Trusted:          r.Trusted,
@@ -188,6 +231,7 @@ func (r CheckResult) toBuyerCheck(checkID string, createdAt time.Time) domain.Bu
 		ActualCategory:   r.ActualCategory,
 		ActualConfidence: r.ActualConfidence,
 		CategoryMatch:    r.CategoryMatch,
+		ImageHash:        r.ImageHash,
 		Reasons:          r.Reasons,
 		CreatedAt:        createdAt,
 	}

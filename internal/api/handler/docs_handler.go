@@ -864,7 +864,8 @@ func buildPaths() gin.H {
 		},
 		"/v1/buyer/check": gin.H{
 			"post": gin.H{
-				"summary": "Check buyer image against optional seller pledge",
+				"summary":  "Check buyer image against optional seller pledge",
+				"security": []gin.H{{"bearerAuth": []string{}}},
 				"requestBody": gin.H{
 					"required": true,
 					"content": gin.H{

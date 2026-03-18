@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	authservice "vngrocery/internal/service/auth"
 	buyerservice "vngrocery/internal/service/buyer"
 )
 
@@ -29,6 +30,12 @@ func TestBuyerCheckAllowsMissingPledgeID(t *testing.T) {
 		check: func(ctx context.Context, input buyerservice.CheckInput) (buyerservice.CheckResult, error) {
 			if input.PledgeID != "" {
 				t.Fatalf("expected empty pledge id, got %q", input.PledgeID)
+			}
+			if input.BuyerUserID != "buyer-1" {
+				t.Fatalf("unexpected buyer user id: %s", input.BuyerUserID)
+			}
+			if input.ImageHash == "" {
+				t.Fatal("expected image hash")
 			}
 			return buyerservice.CheckResult{
 				PolicyVersion:    "trust_policy_v1",
@@ -57,7 +64,10 @@ func TestBuyerCheckAllowsMissingPledgeID(t *testing.T) {
 	}
 
 	router := gin.New()
-	router.POST("/v1/buyer/check", handler.Check)
+	router.POST("/v1/buyer/check", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "buyer-1"})
+		handler.Check(c)
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/buyer/check", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -88,7 +98,13 @@ func TestBuyerCheckReturnsComparison(t *testing.T) {
 			if input.PledgeID != "pledge-1" {
 				t.Fatalf("unexpected pledge id: %s", input.PledgeID)
 			}
+			if input.BuyerUserID != "buyer-1" {
+				t.Fatalf("unexpected buyer user id: %s", input.BuyerUserID)
+			}
 			return buyerservice.CheckResult{
+				CheckID:          "check-1",
+				ShopID:           "shop-1",
+				ProductID:        "product-1",
 				PolicyVersion:    "trust_policy_v1",
 				HasPledge:        true,
 				PledgeID:         "pledge-1",
@@ -124,7 +140,10 @@ func TestBuyerCheckReturnsComparison(t *testing.T) {
 	}
 
 	router := gin.New()
-	router.POST("/v1/buyer/check", handler.Check)
+	router.POST("/v1/buyer/check", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "buyer-1"})
+		handler.Check(c)
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/buyer/check", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -148,6 +167,9 @@ func TestBuyerCheckReturnsComparison(t *testing.T) {
 	}
 	if response["hasPledge"] != true {
 		t.Fatalf("expected hasPledge=true, got %v", response["hasPledge"])
+	}
+	if response["checkId"] != "check-1" || response["shopId"] != "shop-1" || response["productId"] != "product-1" {
+		t.Fatalf("unexpected check metadata: %#v", response)
 	}
 }
 
@@ -176,7 +198,10 @@ func TestBuyerCheckHandlesInvalidRequest(t *testing.T) {
 	}
 
 	router := gin.New()
-	router.POST("/v1/buyer/check", handler.Check)
+	router.POST("/v1/buyer/check", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "buyer-1"})
+		handler.Check(c)
+	})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/buyer/check", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())

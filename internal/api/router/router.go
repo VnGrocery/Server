@@ -76,7 +76,7 @@ func New(deps Dependencies) *gin.Engine {
 		v1.POST("/admin/users/:userId/keys/backfill", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.BackfillAccountKey)
 		v1.POST("/seller/score", deps.AuthMiddleware.Handle(), deps.SellerHandler.Score)
 		v1.POST("/seller/commit", deps.AuthMiddleware.Handle(), deps.SellerHandler.Commit)
-		v1.POST("/buyer/check", deps.BuyerHandler.Check)
+		v1.POST("/buyer/check", deps.AuthMiddleware.Handle(), deps.BuyerHandler.Check)
 	}
 
 	return engine

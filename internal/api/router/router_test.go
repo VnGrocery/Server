@@ -171,7 +171,7 @@ func TestRouterSellerCommitProtected(t *testing.T) {
 	}
 }
 
-func TestRouterBuyerCheckPublic(t *testing.T) {
+func TestRouterBuyerCheckProtected(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(newTestDependencies(testVerifier{
 		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
@@ -201,8 +201,8 @@ func TestRouterBuyerCheckPublic(t *testing.T) {
 
 	engine.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", rec.Code)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
 	}
 }
 
@@ -395,6 +395,8 @@ type buyerCheckRouteStub struct{}
 
 func (buyerCheckRouteStub) Check(ctx context.Context, input buyerservice.CheckInput) (buyerservice.CheckResult, error) {
 	return buyerservice.CheckResult{
+		CheckID:          "check-1",
+		ShopID:           "shop-1",
 		PolicyVersion:    "trust_policy_v1",
 		HasPledge:        input.PledgeID != "",
 		PledgeID:         input.PledgeID,

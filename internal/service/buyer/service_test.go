@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"vngrocery/internal/domain"
+	"vngrocery/internal/service/audit"
 	visionservice "vngrocery/internal/service/vision"
 )
 
@@ -52,7 +53,29 @@ func (s scorerStub) Score(ctx context.Context, input visionservice.ImageInput) (
 	return s.score(ctx, input)
 }
 
+type auditLoggerStub struct {
+	log     func(ctx context.Context, input audit.Input) error
+	logHits int
+}
+
+func (s *auditLoggerStub) Log(ctx context.Context, input audit.Input) error {
+	s.logHits++
+	if s.log != nil {
+		return s.log(ctx, input)
+	}
+	return nil
+}
+
 func TestCheckReturnsTrustedVerdict(t *testing.T) {
+	auditLogger := &auditLoggerStub{
+		log: func(ctx context.Context, input audit.Input) error {
+			if input.ActorUserID != "buyer-1" || input.ResourceType != "buyer_check" || input.Action != "buyer_check.completed" || input.Status != "completed" {
+				t.Fatalf("unexpected audit input: %#v", input)
+			}
+			return nil
+		},
+	}
+
 	service := NewService(
 		pledgeRepositoryStub{
 			getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
@@ -67,7 +90,7 @@ func TestCheckReturnsTrustedVerdict(t *testing.T) {
 		},
 		buyerCheckRepositoryStub{
 			save: func(ctx context.Context, check domain.BuyerCheck) error {
-				if check.ShopID != "shop-1" || check.PledgeID != "pledge-1" || !check.Trusted {
+				if check.ShopID != "shop-1" || check.PledgeID != "pledge-1" || check.BuyerUserID != "buyer-1" || check.ImageHash != "image-hash-1" || !check.Trusted {
 					t.Fatalf("unexpected persisted buyer check: %#v", check)
 				}
 				return nil
@@ -82,10 +105,13 @@ func TestCheckReturnsTrustedVerdict(t *testing.T) {
 				}, nil
 			},
 		},
+		auditLogger,
 	)
 
 	result, err := service.Check(context.Background(), CheckInput{
-		PledgeID: "pledge-1",
+		PledgeID:    "pledge-1",
+		BuyerUserID: "buyer-1",
+		ImageHash:   "image-hash-1",
 		Image: visionservice.ImageInput{
 			Filename: "shop.jpg",
 			Content:  bytes.NewBuffer([]byte("fake")),
@@ -115,6 +141,12 @@ func TestCheckReturnsTrustedVerdict(t *testing.T) {
 	if len(result.Reasons) != 0 {
 		t.Fatalf("expected no warning reasons for trusted result, got %v", result.Reasons)
 	}
+	if result.CheckID == "" {
+		t.Fatal("expected check id")
+	}
+	if auditLogger.logHits != 1 {
+		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
+	}
 }
 
 func TestCheckReturnsHighRiskOnMismatch(t *testing.T) {
@@ -139,10 +171,12 @@ func TestCheckReturnsHighRiskOnMismatch(t *testing.T) {
 				}, nil
 			},
 		},
+		nil,
 	)
 
 	result, err := service.Check(context.Background(), CheckInput{
-		PledgeID: "pledge-1",
+		PledgeID:    "pledge-1",
+		BuyerUserID: "buyer-1",
 		Image: visionservice.ImageInput{
 			Filename: "shop.jpg",
 			Content:  bytes.NewBuffer([]byte("fake")),
@@ -184,10 +218,12 @@ func TestCheckReturnsWarningForLowConfidence(t *testing.T) {
 				}, nil
 			},
 		},
+		nil,
 	)
 
 	result, err := service.Check(context.Background(), CheckInput{
-		PledgeID: "pledge-1",
+		PledgeID:    "pledge-1",
+		BuyerUserID: "buyer-1",
 		Image: visionservice.ImageInput{
 			Filename: "shop.jpg",
 			Content:  bytes.NewBuffer([]byte("fake")),
@@ -235,9 +271,12 @@ func TestCheckWithoutPledgeReturnsStandaloneQuality(t *testing.T) {
 				}, nil
 			},
 		},
+		nil,
 	)
 
 	result, err := service.Check(context.Background(), CheckInput{
+		BuyerUserID: "buyer-1",
+		ImageHash:   "image-hash-1",
 		Image: visionservice.ImageInput{
 			Filename: "buyer.jpg",
 			Content:  bytes.NewBuffer([]byte("fake")),
@@ -260,5 +299,8 @@ func TestCheckWithoutPledgeReturnsStandaloneQuality(t *testing.T) {
 	}
 	if len(result.Reasons) != 1 || result.Reasons[0] != "no_seller_pledge" {
 		t.Fatalf("unexpected reasons: %v", result.Reasons)
+	}
+	if result.CheckID == "" || result.BuyerUserID != "buyer-1" || result.ImageHash != "image-hash-1" {
+		t.Fatalf("expected persisted standalone check metadata, got %#v", result)
 	}
 }

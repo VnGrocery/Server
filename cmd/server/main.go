@@ -102,7 +102,7 @@ func main() {
 	userAdminService := useradminservice.NewService(userRepository, authUserRepository, accountKeys, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, buyerCheckRepository, shopReviewRepository, userRepository, auditLogger)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, productRepository, auditLogger)
-	buyerCheckService := buyerservice.NewService(pledgeRepository, buyerCheckRepository, visionScorer)
+	buyerCheckService := buyerservice.NewService(pledgeRepository, buyerCheckRepository, visionScorer, auditLogger)
 	authMiddleware := middleware.NewAuthRequired(jwtService)
 	healthHandler := handler.NewHealthHandler()
 	docsHandler := handler.NewDocsHandler()

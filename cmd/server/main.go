@@ -99,7 +99,7 @@ func main() {
 		auditLogger = auditQueryService
 	}
 	accountService := authservice.NewAccountService(authUserRepository, userRepository, refreshTokenRepository, passwordResetTokenRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, 30*24*time.Hour, cfg.GoogleClientID)
-	productManager := productservice.NewService(productRepository, productFreshnessReportRepository, shopRepository, auditLogger)
+	productManager := productservice.NewService(productRepository, productFreshnessReportRepository, shopRepository, userRepository, auditLogger)
 	userAdminService := useradminservice.NewService(userRepository, authUserRepository, accountKeys, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, buyerCheckRepository, shopReviewRepository, userRepository, auditLogger)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, productRepository, auditLogger)

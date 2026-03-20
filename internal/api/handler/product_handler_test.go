@@ -20,6 +20,8 @@ type productServiceAdapter struct {
 	create                func(ctx context.Context, input productsvc.CreateInput) (domain.Product, error)
 	update                func(ctx context.Context, input productsvc.UpdateInput) (domain.Product, error)
 	delete                func(ctx context.Context, input productsvc.DeleteInput) (domain.Product, error)
+	moderate              func(ctx context.Context, input productsvc.ModerateInput) (domain.Product, error)
+	bulkUpsert            func(ctx context.Context, input productsvc.BulkUpsertInput) ([]domain.Product, error)
 	getByID               func(ctx context.Context, shopID, productID string) (domain.Product, error)
 	list                  func(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error)
 	createFreshnessReport func(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error)
@@ -36,6 +38,14 @@ func (s productServiceAdapter) Update(ctx context.Context, input productsvc.Upda
 
 func (s productServiceAdapter) Delete(ctx context.Context, input productsvc.DeleteInput) (domain.Product, error) {
 	return s.delete(ctx, input)
+}
+
+func (s productServiceAdapter) Moderate(ctx context.Context, input productsvc.ModerateInput) (domain.Product, error) {
+	return s.moderate(ctx, input)
+}
+
+func (s productServiceAdapter) BulkUpsert(ctx context.Context, input productsvc.BulkUpsertInput) ([]domain.Product, error) {
+	return s.bulkUpsert(ctx, input)
 }
 
 func (s productServiceAdapter) GetByID(ctx context.Context, shopID, productID string) (domain.Product, error) {

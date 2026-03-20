@@ -648,6 +648,27 @@ func (productHandlerStub) Delete(ctx context.Context, input productservice.Delet
 	}, nil
 }
 
+func (productHandlerStub) Moderate(ctx context.Context, input productservice.ModerateInput) (domain.Product, error) {
+	return domain.Product{
+		ProductID:         input.ProductID,
+		Status:            input.Status,
+		Version:           input.ExpectedVersion + 1,
+		ModeratedByUserID: input.ModeratorUserID,
+		ModerationNote:    input.ModerationNote,
+	}, nil
+}
+
+func (productHandlerStub) BulkUpsert(ctx context.Context, input productservice.BulkUpsertInput) ([]domain.Product, error) {
+	return []domain.Product{{
+		ProductID:   "product-1",
+		ShopID:      input.ShopID,
+		OwnerUserID: input.OwnerUserID,
+		Name:        input.Items[0].Name,
+		Status:      productservice.ProductStatusActive,
+		Version:     1,
+	}}, nil
+}
+
 func (productHandlerStub) GetByID(ctx context.Context, shopID, productID string) (domain.Product, error) {
 	return domain.Product{
 		ProductID:   productID,

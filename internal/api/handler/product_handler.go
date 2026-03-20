@@ -17,6 +17,8 @@ type ProductService interface {
 	Create(ctx context.Context, input productsvc.CreateInput) (domain.Product, error)
 	Update(ctx context.Context, input productsvc.UpdateInput) (domain.Product, error)
 	Delete(ctx context.Context, input productsvc.DeleteInput) (domain.Product, error)
+	Moderate(ctx context.Context, input productsvc.ModerateInput) (domain.Product, error)
+	BulkUpsert(ctx context.Context, input productsvc.BulkUpsertInput) ([]domain.Product, error)
 	GetByID(ctx context.Context, shopID, productID string) (domain.Product, error)
 	List(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error)
 	CreateFreshnessReport(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error)
@@ -56,6 +58,7 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		FreshnessScore: request.FreshnessScore,
 		Price:          request.Price,
 		Currency:       request.Currency,
+		Status:         request.Status,
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -91,6 +94,7 @@ func (h *ProductHandler) Update(c *gin.Context) {
 		FreshnessScore:  request.FreshnessScore,
 		Price:           request.Price,
 		Currency:        request.Currency,
+		Status:          request.Status,
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -123,6 +127,79 @@ func (h *ProductHandler) Delete(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, toProductResponse(product))
+}
+
+func (h *ProductHandler) Moderate(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	var request dto.ModerateProductRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	product, err := h.products.Moderate(c.Request.Context(), productsvc.ModerateInput{
+		ProductID:       c.Param("productId"),
+		ModeratorUserID: principal.UserID,
+		ExpectedVersion: request.ExpectedVersion,
+		Status:          request.Status,
+		ModerationNote:  request.ModerationNote,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, toProductResponse(product))
+}
+
+func (h *ProductHandler) BulkUpsert(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	var request dto.BulkUpsertProductRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	items := make([]productsvc.BulkUpsertItemInput, 0, len(request.Items))
+	for _, item := range request.Items {
+		items = append(items, productsvc.BulkUpsertItemInput{
+			ProductID:       item.ProductID,
+			ExpectedVersion: item.ExpectedVersion,
+			Name:            item.Name,
+			Description:     item.Description,
+			Category:        item.Category,
+			Tags:            item.Tags,
+			ImageURLs:       item.ImageURLs,
+			FreshnessNote:   item.FreshnessNote,
+			FreshnessScore:  item.FreshnessScore,
+			Price:           item.Price,
+			Currency:        item.Currency,
+			Status:          item.Status,
+		})
+	}
+	products, err := h.products.BulkUpsert(c.Request.Context(), productsvc.BulkUpsertInput{
+		ShopID:      c.Param("shopId"),
+		OwnerUserID: principal.UserID,
+		Items:       items,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	response := dto.ProductListResponse{Items: make([]dto.ProductResponse, 0, len(products))}
+	for _, product := range products {
+		response.Items = append(response.Items, toProductResponse(product))
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *ProductHandler) GetByID(c *gin.Context) {
@@ -233,21 +310,24 @@ func toProductFreshnessReportResponse(report domain.ProductFreshnessReport) dto.
 
 func toProductResponse(product domain.Product) dto.ProductResponse {
 	return dto.ProductResponse{
-		ProductID:      product.ProductID,
-		ShopID:         product.ShopID,
-		OwnerUserID:    product.OwnerUserID,
-		Name:           product.Name,
-		Description:    product.Description,
-		Category:       product.Category,
-		Tags:           product.Tags,
-		ImageURLs:      product.ImageURLs,
-		FreshnessNote:  product.FreshnessNote,
-		FreshnessScore: product.FreshnessScore,
-		Price:          product.Price,
-		Currency:       product.Currency,
-		Status:         product.Status,
-		Version:        product.Version,
-		CreatedAt:      product.CreatedAt,
-		UpdatedAt:      product.UpdatedAt,
+		ProductID:         product.ProductID,
+		ShopID:            product.ShopID,
+		OwnerUserID:       product.OwnerUserID,
+		Name:              product.Name,
+		Description:       product.Description,
+		Category:          product.Category,
+		Tags:              product.Tags,
+		ImageURLs:         product.ImageURLs,
+		FreshnessNote:     product.FreshnessNote,
+		FreshnessScore:    product.FreshnessScore,
+		Price:             product.Price,
+		Currency:          product.Currency,
+		Status:            product.Status,
+		Version:           product.Version,
+		ModeratedByUserID: product.ModeratedByUserID,
+		ModerationNote:    product.ModerationNote,
+		ModeratedAt:       product.ModeratedAt,
+		CreatedAt:         product.CreatedAt,
+		UpdatedAt:         product.UpdatedAt,
 	}
 }

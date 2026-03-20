@@ -25,6 +25,9 @@ var (
 
 const (
 	ProductStatusActive         = "active"
+	ProductStatusDraft          = "draft"
+	ProductStatusPublished      = "published"
+	ProductStatusArchived       = "archived"
 	ProductStatusDeleted        = "deleted"
 	FreshnessReportStatusActive = "active"
 )
@@ -41,6 +44,7 @@ type CreateInput struct {
 	FreshnessScore float64
 	Price          float64
 	Currency       string
+	Status         string
 }
 
 type UpdateInput struct {
@@ -57,6 +61,7 @@ type UpdateInput struct {
 	FreshnessScore  float64
 	Price           float64
 	Currency        string
+	Status          string
 }
 
 type DeleteInput struct {
@@ -64,6 +69,35 @@ type DeleteInput struct {
 	ShopID          string
 	OwnerUserID     string
 	ExpectedVersion int
+}
+
+type ModerateInput struct {
+	ProductID       string
+	ModeratorUserID string
+	ExpectedVersion int
+	Status          string
+	ModerationNote  string
+}
+
+type BulkUpsertInput struct {
+	ShopID      string
+	OwnerUserID string
+	Items       []BulkUpsertItemInput
+}
+
+type BulkUpsertItemInput struct {
+	ProductID       string
+	ExpectedVersion int
+	Name            string
+	Description     string
+	Category        string
+	Tags            []string
+	ImageURLs       []string
+	FreshnessNote   string
+	FreshnessScore  float64
+	Price           float64
+	Currency        string
+	Status          string
 }
 
 type ListInput struct {
@@ -95,15 +129,17 @@ type Service struct {
 	products repository.ProductRepository
 	reports  repository.ProductFreshnessReportRepository
 	shops    repository.ShopRepository
+	users    repository.UserRepository
 	audit    AuditLogger
 	now      func() time.Time
 }
 
-func NewService(products repository.ProductRepository, reports repository.ProductFreshnessReportRepository, shops repository.ShopRepository, auditLogger AuditLogger) *Service {
+func NewService(products repository.ProductRepository, reports repository.ProductFreshnessReportRepository, shops repository.ShopRepository, users repository.UserRepository, auditLogger AuditLogger) *Service {
 	return &Service{
 		products: products,
 		reports:  reports,
 		shops:    shops,
+		users:    users,
 		audit:    auditLogger,
 		now:      time.Now,
 	}
@@ -111,6 +147,10 @@ func NewService(products repository.ProductRepository, reports repository.Produc
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Product, error) {
 	if err := validate(input.ShopID, input.OwnerUserID, input.Name, input.Price, input.Currency); err != nil {
+		return domain.Product{}, err
+	}
+	status, err := validateProductStatus(input.Status)
+	if err != nil {
 		return domain.Product{}, err
 	}
 	if s.products == nil || s.shops == nil {
@@ -138,7 +178,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Product
 		FreshnessScore: input.FreshnessScore,
 		Price:          input.Price,
 		Currency:       defaultCurrency(input.Currency),
-		Status:         ProductStatusActive,
+		Status:         status,
 		Version:        1,
 		CreatedAt:      now,
 		UpdatedAt:      now,
@@ -189,6 +229,13 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Product
 	existing.FreshnessScore = input.FreshnessScore
 	existing.Price = input.Price
 	existing.Currency = defaultCurrency(input.Currency)
+	if strings.TrimSpace(input.Status) != "" {
+		status, err := validateProductStatus(input.Status)
+		if err != nil {
+			return domain.Product{}, err
+		}
+		existing.Status = status
+	}
 	existing.Version++
 	existing.UpdatedAt = s.now().UTC()
 	if err := s.products.Save(ctx, existing); err != nil {
@@ -249,6 +296,102 @@ func (s *Service) Delete(ctx context.Context, input DeleteInput) (domain.Product
 	return existing, nil
 }
 
+func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.Product, error) {
+	if strings.TrimSpace(input.ProductID) == "" {
+		return domain.Product{}, fmt.Errorf("%w: productId is required", ErrInvalidProduct)
+	}
+	if input.ExpectedVersion <= 0 {
+		return domain.Product{}, ErrVersionConflict
+	}
+	status, err := validateProductStatus(input.Status)
+	if err != nil {
+		return domain.Product{}, err
+	}
+	if s.products == nil || s.users == nil {
+		return domain.Product{}, fmt.Errorf("product moderation dependencies are not configured")
+	}
+	if err := s.ensureAdmin(ctx, input.ModeratorUserID); err != nil {
+		return domain.Product{}, err
+	}
+	existing, err := s.products.GetByID(ctx, strings.TrimSpace(input.ProductID))
+	if err != nil || existing.ProductID == "" {
+		return domain.Product{}, ErrNotFound
+	}
+	if existing.Version != input.ExpectedVersion {
+		return domain.Product{}, ErrVersionConflict
+	}
+
+	before := existing
+	now := s.now().UTC()
+	existing.Status = status
+	existing.ModeratedByUserID = strings.TrimSpace(input.ModeratorUserID)
+	existing.ModerationNote = strings.TrimSpace(input.ModerationNote)
+	existing.ModeratedAt = &now
+	existing.Version++
+	existing.UpdatedAt = now
+	if err := s.products.Save(ctx, existing); err != nil {
+		return domain.Product{}, err
+	}
+	if err := s.logMutation(ctx, existing.ModeratedByUserID, existing.ProductID, existing.Version, "product.moderated", audit.MutationPayload{Before: before, After: existing}, "moderated"); err != nil {
+		return domain.Product{}, err
+	}
+	return existing, nil
+}
+
+func (s *Service) BulkUpsert(ctx context.Context, input BulkUpsertInput) ([]domain.Product, error) {
+	if strings.TrimSpace(input.ShopID) == "" || strings.TrimSpace(input.OwnerUserID) == "" {
+		return nil, fmt.Errorf("%w: shopId and ownerUserId are required", ErrInvalidProduct)
+	}
+	if len(input.Items) == 0 {
+		return nil, fmt.Errorf("%w: items are required", ErrInvalidProduct)
+	}
+	results := make([]domain.Product, 0, len(input.Items))
+	for _, item := range input.Items {
+		if strings.TrimSpace(item.ProductID) == "" {
+			product, err := s.Create(ctx, CreateInput{
+				ShopID:         input.ShopID,
+				OwnerUserID:    input.OwnerUserID,
+				Name:           item.Name,
+				Description:    item.Description,
+				Category:       item.Category,
+				Tags:           item.Tags,
+				ImageURLs:      item.ImageURLs,
+				FreshnessNote:  item.FreshnessNote,
+				FreshnessScore: item.FreshnessScore,
+				Price:          item.Price,
+				Currency:       item.Currency,
+				Status:         item.Status,
+			})
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, product)
+			continue
+		}
+		product, err := s.Update(ctx, UpdateInput{
+			ProductID:       item.ProductID,
+			ShopID:          input.ShopID,
+			OwnerUserID:     input.OwnerUserID,
+			ExpectedVersion: item.ExpectedVersion,
+			Name:            item.Name,
+			Description:     item.Description,
+			Category:        item.Category,
+			Tags:            item.Tags,
+			ImageURLs:       item.ImageURLs,
+			FreshnessNote:   item.FreshnessNote,
+			FreshnessScore:  item.FreshnessScore,
+			Price:           item.Price,
+			Currency:        item.Currency,
+			Status:          item.Status,
+		})
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, product)
+	}
+	return results, nil
+}
+
 func (s *Service) GetByID(ctx context.Context, shopID, productID string) (domain.Product, error) {
 	if strings.TrimSpace(shopID) == "" || strings.TrimSpace(productID) == "" {
 		return domain.Product{}, fmt.Errorf("%w: shopId and productId are required", ErrInvalidProduct)
@@ -261,7 +404,7 @@ func (s *Service) GetByID(ctx context.Context, shopID, productID string) (domain
 		return domain.Product{}, ErrNotFound
 	}
 	product, err := s.products.GetByID(ctx, strings.TrimSpace(productID))
-	if err != nil || product.ProductID == "" || product.Status != ProductStatusActive || product.ShopID != strings.TrimSpace(shopID) {
+	if err != nil || product.ProductID == "" || !isPublicProductStatus(product.Status) || product.ShopID != strings.TrimSpace(shopID) {
 		return domain.Product{}, ErrNotFound
 	}
 	return product, nil
@@ -293,6 +436,20 @@ func (s *Service) List(ctx context.Context, input ListInput) ([]domain.Product, 
 	products = filterProducts(products, input)
 	sortProducts(products, input.Sort)
 	return products, nil
+}
+
+func (s *Service) ensureAdmin(ctx context.Context, userID string) error {
+	if strings.TrimSpace(userID) == "" {
+		return ErrForbidden
+	}
+	user, err := s.users.GetByID(ctx, strings.TrimSpace(userID))
+	if err != nil {
+		return ErrForbidden
+	}
+	if !strings.EqualFold(strings.TrimSpace(user.Role), "admin") {
+		return ErrForbidden
+	}
+	return nil
 }
 
 func (s *Service) CreateFreshnessReport(ctx context.Context, input FreshnessReportInput) (domain.ProductFreshnessReport, error) {
@@ -413,6 +570,28 @@ func validate(shopID, ownerUserID, name string, price float64, currency string) 
 		return fmt.Errorf("%w: currency is required when price is set", ErrInvalidProduct)
 	}
 	return nil
+}
+
+func validateProductStatus(status string) (string, error) {
+	normalized := normalizeProductStatus(status)
+	switch normalized {
+	case ProductStatusActive, ProductStatusDraft, ProductStatusPublished, ProductStatusArchived, ProductStatusDeleted:
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("%w: invalid status", ErrInvalidProduct)
+	}
+}
+
+func normalizeProductStatus(status string) string {
+	normalized := strings.ToLower(strings.TrimSpace(status))
+	if normalized == "" {
+		return ProductStatusActive
+	}
+	return normalized
+}
+
+func isPublicProductStatus(status string) bool {
+	return status == ProductStatusActive || status == ProductStatusPublished
 }
 
 func validateFreshnessReportInput(input FreshnessReportInput) error {

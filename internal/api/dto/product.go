@@ -3,6 +3,7 @@ package dto
 import "time"
 
 type UpsertProductRequest struct {
+	ProductID       string   `json:"productId"`
 	ExpectedVersion int      `json:"expectedVersion"`
 	Name            string   `json:"name"`
 	Description     string   `json:"description"`
@@ -13,25 +14,39 @@ type UpsertProductRequest struct {
 	FreshnessScore  float64  `json:"freshnessScore"`
 	Price           float64  `json:"price"`
 	Currency        string   `json:"currency"`
+	Status          string   `json:"status"`
+}
+
+type BulkUpsertProductRequest struct {
+	Items []UpsertProductRequest `json:"items"`
+}
+
+type ModerateProductRequest struct {
+	ExpectedVersion int    `json:"expectedVersion"`
+	Status          string `json:"status"`
+	ModerationNote  string `json:"moderationNote"`
 }
 
 type ProductResponse struct {
-	ProductID      string    `json:"productId"`
-	ShopID         string    `json:"shopId"`
-	OwnerUserID    string    `json:"ownerUserId"`
-	Name           string    `json:"name"`
-	Description    string    `json:"description"`
-	Category       string    `json:"category"`
-	Tags           []string  `json:"tags"`
-	ImageURLs      []string  `json:"imageUrls"`
-	FreshnessNote  string    `json:"freshnessNote"`
-	FreshnessScore float64   `json:"freshnessScore"`
-	Price          float64   `json:"price"`
-	Currency       string    `json:"currency"`
-	Status         string    `json:"status"`
-	Version        int       `json:"version"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ProductID         string     `json:"productId"`
+	ShopID            string     `json:"shopId"`
+	OwnerUserID       string     `json:"ownerUserId"`
+	Name              string     `json:"name"`
+	Description       string     `json:"description"`
+	Category          string     `json:"category"`
+	Tags              []string   `json:"tags"`
+	ImageURLs         []string   `json:"imageUrls"`
+	FreshnessNote     string     `json:"freshnessNote"`
+	FreshnessScore    float64    `json:"freshnessScore"`
+	Price             float64    `json:"price"`
+	Currency          string     `json:"currency"`
+	Status            string     `json:"status"`
+	Version           int        `json:"version"`
+	ModeratedByUserID string     `json:"moderatedByUserId,omitempty"`
+	ModerationNote    string     `json:"moderationNote,omitempty"`
+	ModeratedAt       *time.Time `json:"moderatedAt,omitempty"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	UpdatedAt         time.Time  `json:"updatedAt"`
 }
 
 type ProductListResponse struct {

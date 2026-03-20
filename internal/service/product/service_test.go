@@ -71,6 +71,21 @@ func (s shopRepositoryStub) List(ctx context.Context, filter repository.ShopList
 	return nil, nil
 }
 
+type userRepositoryStub struct {
+	getByID func(ctx context.Context, userID string) (domain.User, error)
+}
+
+func (s userRepositoryStub) Save(ctx context.Context, user domain.User) error { return nil }
+func (s userRepositoryStub) GetByID(ctx context.Context, userID string) (domain.User, error) {
+	if s.getByID != nil {
+		return s.getByID(ctx, userID)
+	}
+	return domain.User{}, nil
+}
+func (s userRepositoryStub) List(ctx context.Context, filter repository.UserListFilter) ([]domain.User, error) {
+	return nil, nil
+}
+
 type auditLoggerStub struct {
 	logHits int
 }
@@ -93,7 +108,7 @@ func TestCreateProduct(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1", Status: "active"}, nil
 		},
-	}, auditLogger)
+	}, userRepositoryStub{}, auditLogger)
 
 	product, err := service.Create(context.Background(), CreateInput{
 		ShopID:      "shop-1",
@@ -132,7 +147,7 @@ func TestUpdateProductRejectsVersionConflict(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1", Status: "active"}, nil
 		},
-	}, nil)
+	}, userRepositoryStub{}, nil)
 
 	_, err := service.Update(context.Background(), UpdateInput{
 		ProductID:       "product-1",
@@ -169,7 +184,7 @@ func TestDeleteProductMarksDeleted(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1", Status: "active"}, nil
 		},
-	}, auditLogger)
+	}, userRepositoryStub{}, auditLogger)
 
 	product, err := service.Delete(context.Background(), DeleteInput{
 		ProductID:       "product-1",
@@ -208,7 +223,7 @@ func TestCreateFreshnessReport(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, Status: "active"}, nil
 		},
-	}, auditLogger)
+	}, userRepositoryStub{}, auditLogger)
 
 	report, err := service.CreateFreshnessReport(context.Background(), FreshnessReportInput{
 		ProductID:      "product-1",
@@ -247,7 +262,7 @@ func TestListFreshnessReportsFiltersActiveByProduct(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, Status: "active"}, nil
 		},
-	}, nil)
+	}, userRepositoryStub{}, nil)
 
 	reports, err := service.ListFreshnessReports(context.Background(), "shop-1", "product-1")
 	if err != nil {

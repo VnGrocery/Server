@@ -45,12 +45,17 @@ func (h *ProductHandler) Create(c *gin.Context) {
 	}
 
 	product, err := h.products.Create(c.Request.Context(), productsvc.CreateInput{
-		ShopID:      c.Param("shopId"),
-		OwnerUserID: principal.UserID,
-		Name:        request.Name,
-		Description: request.Description,
-		Price:       request.Price,
-		Currency:    request.Currency,
+		ShopID:         c.Param("shopId"),
+		OwnerUserID:    principal.UserID,
+		Name:           request.Name,
+		Description:    request.Description,
+		Category:       request.Category,
+		Tags:           request.Tags,
+		ImageURLs:      request.ImageURLs,
+		FreshnessNote:  request.FreshnessNote,
+		FreshnessScore: request.FreshnessScore,
+		Price:          request.Price,
+		Currency:       request.Currency,
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -79,6 +84,11 @@ func (h *ProductHandler) Update(c *gin.Context) {
 		ExpectedVersion: request.ExpectedVersion,
 		Name:            request.Name,
 		Description:     request.Description,
+		Category:        request.Category,
+		Tags:            request.Tags,
+		ImageURLs:       request.ImageURLs,
+		FreshnessNote:   request.FreshnessNote,
+		FreshnessScore:  request.FreshnessScore,
 		Price:           request.Price,
 		Currency:        request.Currency,
 	})
@@ -126,7 +136,11 @@ func (h *ProductHandler) GetByID(c *gin.Context) {
 
 func (h *ProductHandler) List(c *gin.Context) {
 	products, err := h.products.List(c.Request.Context(), productsvc.ListInput{
-		ShopID: c.Param("shopId"),
+		ShopID:   c.Param("shopId"),
+		Query:    c.Query("q"),
+		Category: c.Query("category"),
+		Tag:      c.Query("tag"),
+		Sort:     c.Query("sort"),
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -219,16 +233,21 @@ func toProductFreshnessReportResponse(report domain.ProductFreshnessReport) dto.
 
 func toProductResponse(product domain.Product) dto.ProductResponse {
 	return dto.ProductResponse{
-		ProductID:   product.ProductID,
-		ShopID:      product.ShopID,
-		OwnerUserID: product.OwnerUserID,
-		Name:        product.Name,
-		Description: product.Description,
-		Price:       product.Price,
-		Currency:    product.Currency,
-		Status:      product.Status,
-		Version:     product.Version,
-		CreatedAt:   product.CreatedAt,
-		UpdatedAt:   product.UpdatedAt,
+		ProductID:      product.ProductID,
+		ShopID:         product.ShopID,
+		OwnerUserID:    product.OwnerUserID,
+		Name:           product.Name,
+		Description:    product.Description,
+		Category:       product.Category,
+		Tags:           product.Tags,
+		ImageURLs:      product.ImageURLs,
+		FreshnessNote:  product.FreshnessNote,
+		FreshnessScore: product.FreshnessScore,
+		Price:          product.Price,
+		Currency:       product.Currency,
+		Status:         product.Status,
+		Version:        product.Version,
+		CreatedAt:      product.CreatedAt,
+		UpdatedAt:      product.UpdatedAt,
 	}
 }

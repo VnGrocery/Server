@@ -81,15 +81,20 @@ func TestDomainStructTags(t *testing.T) {
 		UpdatedAt:      now,
 	}
 	product := domain.Product{
-		ProductID:   "product-1",
-		ShopID:      "shop-1",
-		OwnerUserID: "user-1",
-		Name:        "Apple",
-		Price:       10,
-		Currency:    "VND",
-		Status:      "active",
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ProductID:      "product-1",
+		ShopID:         "shop-1",
+		OwnerUserID:    "user-1",
+		Name:           "Apple",
+		Category:       "fruit",
+		Tags:           []string{"fresh"},
+		ImageURLs:      []string{"https://example.com/apple.jpg"},
+		FreshnessNote:  "Fresh today",
+		FreshnessScore: 8.5,
+		Price:          10,
+		Currency:       "VND",
+		Status:         "active",
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 	productFreshnessReport := domain.ProductFreshnessReport{
 		ReportID:       "report-1",
@@ -133,6 +138,11 @@ func TestDomainStructTags(t *testing.T) {
 	assertFirestoreTag(t, review, "Rating", "rating")
 	assertFirestoreTag(t, product, "ProductID", "productId")
 	assertFirestoreTag(t, product, "OwnerUserID", "ownerUserId")
+	assertFirestoreTag(t, product, "Category", "category")
+	assertFirestoreTag(t, product, "Tags", "tags")
+	assertFirestoreTag(t, product, "ImageURLs", "imageUrls")
+	assertFirestoreTag(t, product, "FreshnessNote", "freshnessNote")
+	assertFirestoreTag(t, product, "FreshnessScore", "freshnessScore")
 	assertFirestoreTag(t, product, "Currency", "currency")
 	assertFirestoreTag(t, productFreshnessReport, "ReportID", "reportId")
 	assertFirestoreTag(t, productFreshnessReport, "ReporterUserID", "reporterUserId")

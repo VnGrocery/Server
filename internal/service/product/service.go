@@ -30,12 +30,17 @@ const (
 )
 
 type CreateInput struct {
-	ShopID      string
-	OwnerUserID string
-	Name        string
-	Description string
-	Price       float64
-	Currency    string
+	ShopID         string
+	OwnerUserID    string
+	Name           string
+	Description    string
+	Category       string
+	Tags           []string
+	ImageURLs      []string
+	FreshnessNote  string
+	FreshnessScore float64
+	Price          float64
+	Currency       string
 }
 
 type UpdateInput struct {
@@ -45,6 +50,11 @@ type UpdateInput struct {
 	ExpectedVersion int
 	Name            string
 	Description     string
+	Category        string
+	Tags            []string
+	ImageURLs       []string
+	FreshnessNote   string
+	FreshnessScore  float64
 	Price           float64
 	Currency        string
 }
@@ -59,6 +69,10 @@ type DeleteInput struct {
 type ListInput struct {
 	ShopID             string
 	OwnerUserID        string
+	Query              string
+	Category           string
+	Tag                string
+	Sort               string
 	IncludeAllStatuses bool
 }
 
@@ -112,17 +126,22 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Product
 
 	now := s.now().UTC()
 	product := domain.Product{
-		ProductID:   uuid.NewString(),
-		ShopID:      shop.ShopID,
-		OwnerUserID: strings.TrimSpace(input.OwnerUserID),
-		Name:        strings.TrimSpace(input.Name),
-		Description: strings.TrimSpace(input.Description),
-		Price:       input.Price,
-		Currency:    normalizeCurrency(input.Currency),
-		Status:      ProductStatusActive,
-		Version:     1,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ProductID:      uuid.NewString(),
+		ShopID:         shop.ShopID,
+		OwnerUserID:    strings.TrimSpace(input.OwnerUserID),
+		Name:           strings.TrimSpace(input.Name),
+		Description:    strings.TrimSpace(input.Description),
+		Category:       strings.TrimSpace(input.Category),
+		Tags:           normalizeStringSlice(input.Tags),
+		ImageURLs:      normalizeStringSlice(input.ImageURLs),
+		FreshnessNote:  strings.TrimSpace(input.FreshnessNote),
+		FreshnessScore: input.FreshnessScore,
+		Price:          input.Price,
+		Currency:       defaultCurrency(input.Currency),
+		Status:         ProductStatusActive,
+		Version:        1,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 	if err := s.products.Save(ctx, product); err != nil {
 		return domain.Product{}, err
@@ -163,8 +182,13 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Product
 	before := existing
 	existing.Name = strings.TrimSpace(input.Name)
 	existing.Description = strings.TrimSpace(input.Description)
+	existing.Category = strings.TrimSpace(input.Category)
+	existing.Tags = normalizeStringSlice(input.Tags)
+	existing.ImageURLs = normalizeStringSlice(input.ImageURLs)
+	existing.FreshnessNote = strings.TrimSpace(input.FreshnessNote)
+	existing.FreshnessScore = input.FreshnessScore
 	existing.Price = input.Price
-	existing.Currency = normalizeCurrency(input.Currency)
+	existing.Currency = defaultCurrency(input.Currency)
 	existing.Version++
 	existing.UpdatedAt = s.now().UTC()
 	if err := s.products.Save(ctx, existing); err != nil {
@@ -266,9 +290,8 @@ func (s *Service) List(ctx context.Context, input ListInput) ([]domain.Product, 
 	if err != nil {
 		return nil, err
 	}
-	sort.Slice(products, func(i, j int) bool {
-		return products[i].CreatedAt.Before(products[j].CreatedAt)
-	})
+	products = filterProducts(products, input)
+	sortProducts(products, input.Sort)
 	return products, nil
 }
 
@@ -386,8 +409,8 @@ func validate(shopID, ownerUserID, name string, price float64, currency string) 
 	if price < 0 {
 		return fmt.Errorf("%w: price must be greater than or equal to 0", ErrInvalidProduct)
 	}
-	if normalizeCurrency(currency) == "" {
-		return fmt.Errorf("%w: currency is required", ErrInvalidProduct)
+	if price > 0 && normalizeCurrency(currency) == "" {
+		return fmt.Errorf("%w: currency is required when price is set", ErrInvalidProduct)
 	}
 	return nil
 }
@@ -419,4 +442,85 @@ func validateFreshnessReportInput(input FreshnessReportInput) error {
 
 func normalizeCurrency(currency string) string {
 	return strings.ToUpper(strings.TrimSpace(currency))
+}
+
+func defaultCurrency(currency string) string {
+	normalized := normalizeCurrency(currency)
+	if normalized == "" {
+		return "VND"
+	}
+	return normalized
+}
+
+func normalizeStringSlice(values []string) []string {
+	seen := map[string]struct{}{}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		key := strings.ToLower(trimmed)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, trimmed)
+	}
+	return result
+}
+
+func filterProducts(products []domain.Product, input ListInput) []domain.Product {
+	query := strings.ToLower(strings.TrimSpace(input.Query))
+	category := strings.ToLower(strings.TrimSpace(input.Category))
+	tag := strings.ToLower(strings.TrimSpace(input.Tag))
+	if query == "" && category == "" && tag == "" {
+		return products
+	}
+	filtered := make([]domain.Product, 0, len(products))
+	for _, product := range products {
+		if category != "" && strings.ToLower(strings.TrimSpace(product.Category)) != category {
+			continue
+		}
+		if tag != "" && !hasTag(product.Tags, tag) {
+			continue
+		}
+		if query != "" && !matchesProductQuery(product, query) {
+			continue
+		}
+		filtered = append(filtered, product)
+	}
+	return filtered
+}
+
+func hasTag(tags []string, expected string) bool {
+	for _, tag := range tags {
+		if strings.ToLower(strings.TrimSpace(tag)) == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func matchesProductQuery(product domain.Product, query string) bool {
+	if strings.Contains(strings.ToLower(product.Name), query) || strings.Contains(strings.ToLower(product.Description), query) || strings.Contains(strings.ToLower(product.Category), query) {
+		return true
+	}
+	for _, tag := range product.Tags {
+		if strings.Contains(strings.ToLower(tag), query) {
+			return true
+		}
+	}
+	return false
+}
+
+func sortProducts(products []domain.Product, sortBy string) {
+	switch strings.TrimSpace(sortBy) {
+	case "name":
+		sort.Slice(products, func(i, j int) bool { return strings.ToLower(products[i].Name) < strings.ToLower(products[j].Name) })
+	case "freshnessScore":
+		sort.Slice(products, func(i, j int) bool { return products[i].FreshnessScore > products[j].FreshnessScore })
+	default:
+		sort.Slice(products, func(i, j int) bool { return products[i].CreatedAt.Before(products[j].CreatedAt) })
+	}
 }

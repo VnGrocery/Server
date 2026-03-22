@@ -268,15 +268,16 @@ func TestListPledgesFiltersForBuyerUI(t *testing.T) {
 }
 
 type shopServiceAdapter struct {
-	create      func(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error)
-	update      func(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error)
-	deleteFn    func(ctx context.Context, input shopsvc.DeleteInput) (domain.Shop, error)
-	getByID     func(ctx context.Context, shopID string) (shopsvc.ShopView, error)
-	list        func(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
-	listPledges func(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error)
-	moderate    func(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error)
-	review      func(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
-	listReviews func(ctx context.Context, shopID string) ([]domain.ShopReview, error)
+	create       func(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error)
+	update       func(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error)
+	deleteFn     func(ctx context.Context, input shopsvc.DeleteInput) (domain.Shop, error)
+	getByID      func(ctx context.Context, shopID string) (shopsvc.ShopView, error)
+	list         func(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
+	listPledges  func(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error)
+	moderate     func(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error)
+	review       func(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
+	deleteReview func(ctx context.Context, input shopsvc.DeleteReviewInput) (domain.ShopReview, error)
+	listReviews  func(ctx context.Context, shopID string) ([]domain.ShopReview, error)
 }
 
 func (s shopServiceAdapter) Create(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error) {
@@ -314,6 +315,12 @@ func (s shopServiceAdapter) ListPledges(ctx context.Context, input shopsvc.Pledg
 }
 func (s shopServiceAdapter) Review(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error) {
 	return s.review(ctx, input)
+}
+func (s shopServiceAdapter) DeleteReview(ctx context.Context, input shopsvc.DeleteReviewInput) (domain.ShopReview, error) {
+	if s.deleteReview == nil {
+		return domain.ShopReview{}, errors.New("not implemented")
+	}
+	return s.deleteReview(ctx, input)
 }
 func (s shopServiceAdapter) ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
 	return s.listReviews(ctx, shopID)

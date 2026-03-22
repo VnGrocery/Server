@@ -23,6 +23,7 @@ type ShopService interface {
 	List(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
 	ListPledges(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error)
 	Review(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
+	DeleteReview(ctx context.Context, input shopsvc.DeleteReviewInput) (domain.ShopReview, error)
 	ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error)
 }
 
@@ -264,10 +265,11 @@ func (h *ShopHandler) CreateReview(c *gin.Context) {
 	}
 
 	review, err := h.shops.Review(c.Request.Context(), shopsvc.ReviewInput{
-		ShopID:         c.Param("shopId"),
-		ReviewerUserID: principal.UserID,
-		Rating:         request.Rating,
-		Comment:        request.Comment,
+		ShopID:          c.Param("shopId"),
+		ReviewerUserID:  principal.UserID,
+		ExpectedVersion: request.ExpectedVersion,
+		Rating:          request.Rating,
+		Comment:         request.Comment,
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -281,6 +283,40 @@ func (h *ShopHandler) CreateReview(c *gin.Context) {
 		Rating:         review.Rating,
 		Comment:        review.Comment,
 		Status:         review.Status,
+		Version:        review.Version,
+		CreatedAt:      review.CreatedAt,
+		UpdatedAt:      review.UpdatedAt,
+	})
+}
+
+func (h *ShopHandler) DeleteReview(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+	expectedVersion, parseErr := parsePositiveIntQuery(c.Query("expectedVersion"), "expectedVersion")
+	if parseErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": parseErr.Error()})
+		return
+	}
+	review, err := h.shops.DeleteReview(c.Request.Context(), shopsvc.DeleteReviewInput{
+		ShopID:          c.Param("shopId"),
+		ReviewerUserID:  principal.UserID,
+		ExpectedVersion: expectedVersion,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, dto.ShopReviewResponse{
+		ReviewID:       review.ReviewID,
+		ShopID:         review.ShopID,
+		ReviewerUserID: review.ReviewerUserID,
+		Rating:         review.Rating,
+		Comment:        review.Comment,
+		Status:         review.Status,
+		Version:        review.Version,
 		CreatedAt:      review.CreatedAt,
 		UpdatedAt:      review.UpdatedAt,
 	})
@@ -302,6 +338,7 @@ func (h *ShopHandler) ListReviews(c *gin.Context) {
 			Rating:         review.Rating,
 			Comment:        review.Comment,
 			Status:         review.Status,
+			Version:        review.Version,
 			CreatedAt:      review.CreatedAt,
 			UpdatedAt:      review.UpdatedAt,
 		})

@@ -596,6 +596,16 @@ func (shopHandlerStub) Review(ctx context.Context, input shopservice.ReviewInput
 	}, nil
 }
 
+func (shopHandlerStub) DeleteReview(ctx context.Context, input shopservice.DeleteReviewInput) (domain.ShopReview, error) {
+	return domain.ShopReview{
+		ReviewID:       "review-1",
+		ShopID:         input.ShopID,
+		ReviewerUserID: input.ReviewerUserID,
+		Status:         shopservice.ShopStatusDeleted,
+		Version:        input.ExpectedVersion + 1,
+	}, nil
+}
+
 func (shopHandlerStub) ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
 	return []domain.ShopReview{
 		{

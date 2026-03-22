@@ -69,6 +69,7 @@ func New(deps Dependencies) *gin.Engine {
 		v1.DELETE("/shops/:shopId", deps.AuthMiddleware.Handle(), deps.ShopHandler.Delete)
 		v1.DELETE("/shops/:shopId/products/:productId", deps.AuthMiddleware.Handle(), deps.ProductHandler.Delete)
 		v1.POST("/shops/:shopId/reviews", deps.AuthMiddleware.Handle(), deps.ShopHandler.CreateReview)
+		v1.DELETE("/shops/:shopId/reviews/me", deps.AuthMiddleware.Handle(), deps.ShopHandler.DeleteReview)
 		v1.GET("/admin/shops", deps.AuthMiddleware.Handle(), deps.ShopHandler.AdminList)
 		v1.PATCH("/admin/shops/:shopId/moderation", deps.AuthMiddleware.Handle(), deps.ShopHandler.Moderate)
 		v1.PATCH("/admin/products/:productId/moderation", deps.AuthMiddleware.Handle(), deps.ProductHandler.Moderate)

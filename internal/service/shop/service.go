@@ -153,10 +153,17 @@ func NewService(shops repository.ShopRepository, pledges repository.PledgeReposi
 }
 
 type ReviewInput struct {
-	ShopID         string
-	ReviewerUserID string
-	Rating         int
-	Comment        string
+	ShopID          string
+	ReviewerUserID  string
+	ExpectedVersion int
+	Rating          int
+	Comment         string
+}
+
+type DeleteReviewInput struct {
+	ShopID          string
+	ReviewerUserID  string
+	ExpectedVersion int
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Shop, error) {
@@ -379,6 +386,9 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 		return domain.ShopReview{}, err
 	}
 	if existing.ReviewID != "" {
+		if existing.Version != input.ExpectedVersion {
+			return domain.ShopReview{}, ErrVersionConflict
+		}
 		before := existing
 		existing.Rating = input.Rating
 		existing.Comment = strings.TrimSpace(input.Comment)
@@ -419,6 +429,43 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 	return review, nil
 }
 
+func (s *Service) DeleteReview(ctx context.Context, input DeleteReviewInput) (domain.ShopReview, error) {
+	if strings.TrimSpace(input.ShopID) == "" {
+		return domain.ShopReview{}, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
+	}
+	if strings.TrimSpace(input.ReviewerUserID) == "" {
+		return domain.ShopReview{}, fmt.Errorf("%w: reviewerUserId is required", ErrInvalidShop)
+	}
+	if input.ExpectedVersion <= 0 {
+		return domain.ShopReview{}, ErrVersionConflict
+	}
+	if s.reviews == nil {
+		return domain.ShopReview{}, fmt.Errorf("shop review repository is not configured")
+	}
+	existing, err := s.reviews.GetByShopAndUser(ctx, strings.TrimSpace(input.ShopID), strings.TrimSpace(input.ReviewerUserID))
+	if err != nil || existing.ReviewID == "" || existing.Status != ReviewStatusActive {
+		return domain.ShopReview{}, ErrNotFound
+	}
+	if existing.Version != input.ExpectedVersion {
+		return domain.ShopReview{}, ErrVersionConflict
+	}
+
+	before := existing
+	existing.Status = ShopStatusDeleted
+	existing.Version++
+	existing.UpdatedAt = s.now().UTC()
+	if err := s.reviews.Save(ctx, existing); err != nil {
+		return domain.ShopReview{}, err
+	}
+	if err := s.logMutation(ctx, input.ReviewerUserID, "shop_review", existing.ReviewID, existing.Version, "shop_review.deleted", audit.MutationPayload{
+		Before: before,
+		After:  existing,
+	}, "deleted"); err != nil {
+		return domain.ShopReview{}, err
+	}
+	return existing, nil
+}
+
 func (s *Service) logMutation(ctx context.Context, actorUserID, resourceType, resourceID string, resourceVersion int, action string, payload any, status string) error {
 	if s.audit == nil {
 		return nil
@@ -441,7 +488,17 @@ func (s *Service) ListReviews(ctx context.Context, shopID string) ([]domain.Shop
 	if s.reviews == nil {
 		return nil, fmt.Errorf("shop review repository is not configured")
 	}
-	return s.reviews.ListByShopID(ctx, strings.TrimSpace(shopID))
+	reviews, err := s.reviews.ListByShopID(ctx, strings.TrimSpace(shopID))
+	if err != nil {
+		return nil, err
+	}
+	active := make([]domain.ShopReview, 0, len(reviews))
+	for _, review := range reviews {
+		if review.Status == ReviewStatusActive {
+			active = append(active, review)
+		}
+	}
+	return active, nil
 }
 
 func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error) {

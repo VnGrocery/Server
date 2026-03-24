@@ -1,6 +1,8 @@
 package router
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 
 	"vngrocery/internal/api/handler"
@@ -22,7 +24,8 @@ type Dependencies struct {
 
 func New(deps Dependencies) *gin.Engine {
 	engine := gin.New()
-	engine.Use(gin.Logger(), gin.Recovery())
+	metrics := middleware.NewMetrics()
+	engine.Use(gin.Recovery(), middleware.StructuredLogger(metrics), middleware.RateLimit(120, time.Minute))
 	engine.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, Origin, X-Requested-With")
@@ -36,6 +39,7 @@ func New(deps Dependencies) *gin.Engine {
 	})
 
 	engine.GET("/health", deps.HealthHandler.Health)
+	engine.GET("/metrics", metrics.Handler())
 	engine.GET("/docs", deps.DocsHandler.SwaggerUI)
 	engine.GET("/openapi.json", deps.DocsHandler.OpenAPI)
 

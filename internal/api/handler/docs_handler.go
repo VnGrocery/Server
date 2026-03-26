@@ -527,6 +527,25 @@ func buildSchemas() gin.H {
 				"createdAt":       gin.H{"type": "string", "format": "date-time"},
 			},
 		},
+		"PaginationResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"page":       gin.H{"type": "integer"},
+				"pageSize":   gin.H{"type": "integer"},
+				"totalItems": gin.H{"type": "integer"},
+				"totalPages": gin.H{"type": "integer"},
+			},
+		},
+		"EventLogListResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"items": gin.H{
+					"type":  "array",
+					"items": gin.H{"$ref": "#/components/schemas/EventLogResponse"},
+				},
+				"pagination": gin.H{"$ref": "#/components/schemas/PaginationResponse"},
+			},
+		},
 		"ErrorResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
@@ -663,21 +682,16 @@ func buildPaths() gin.H {
 					queryParam("resourceType", "string"),
 					queryParam("resourceId", "string"),
 					queryParam("actorUserId", "string"),
+					queryParam("action", "string"),
+					queryParam("status", "string"),
+					queryParam("minSequence", "integer"),
+					queryParam("maxSequence", "integer"),
+					queryParam("createdAfter", "string"),
+					queryParam("createdBefore", "string"),
+					queryParam("page", "integer"),
+					queryParam("pageSize", "integer"),
 				},
-				"responses": gin.H{
-					"200": gin.H{
-						"description": "OK",
-						"content": gin.H{
-							"application/json": gin.H{
-								"schema": gin.H{
-									"type":  "array",
-									"items": gin.H{"$ref": "#/components/schemas/EventLogResponse"},
-								},
-							},
-						},
-					},
-					"default": errorResponse["default"],
-				},
+				"responses": mergeResponses(success(http.StatusOK, "EventLogListResponse"), errorResponse),
 			},
 		},
 		"/v1/shops": gin.H{

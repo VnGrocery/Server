@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"vngrocery/internal/domain"
 )
@@ -90,4 +91,10 @@ type EventLogListFilter struct {
 	ResourceType string
 	ResourceID   string
 	ActorUserID  string
+	Action       string
+	Status       string
+	MinSequence  int
+	MaxSequence  int
+	CreatedAfter time.Time
+	CreatedBefore time.Time
 }

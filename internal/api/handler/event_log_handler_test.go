@@ -15,10 +15,10 @@ import (
 )
 
 type eventLogAdapter struct {
-	list func(ctx context.Context, input auditsvc.ListInput) ([]domain.EventLog, error)
+	list func(ctx context.Context, input auditsvc.ListInput) (auditsvc.ListResult, error)
 }
 
-func (e eventLogAdapter) List(ctx context.Context, input auditsvc.ListInput) ([]domain.EventLog, error) {
+func (e eventLogAdapter) List(ctx context.Context, input auditsvc.ListInput) (auditsvc.ListResult, error) {
 	return e.list(ctx, input)
 }
 
@@ -26,34 +26,47 @@ func TestEventLogList(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	now := time.Date(2026, 4, 7, 2, 0, 0, 0, time.UTC)
 	handler := NewEventLogHandler(eventLogAdapter{
-		list: func(ctx context.Context, input auditsvc.ListInput) ([]domain.EventLog, error) {
+		list: func(ctx context.Context, input auditsvc.ListInput) (auditsvc.ListResult, error) {
 			if input.ResourceType != "shop" || input.ResourceID != "shop-1" || input.ActorUserID != "user-1" {
 				t.Fatalf("unexpected list input: %+v", input)
 			}
-			return []domain.EventLog{{
-				EventID:         "event-1",
-				ActorUserID:     "user-1",
-				ResourceType:    "shop",
-				ResourceID:      "shop-1",
-				ResourceVersion: 3,
-				Action:          "shop.updated",
-				Status:          "updated",
-				Sequence:        3,
-				PreviousEventID: "event-0",
-				PayloadJSON:     `{"after":{"name":"Green Shop"}}`,
-				PublicKey:       "pub-key",
-				KeyAlgorithm:    "Ed25519",
-				Signature:       "sig",
-				ContentSHA256:   "hash",
-				CreatedAt:       now,
-			}}, nil
+			if input.Action != "shop.updated" || input.Status != "updated" || input.MinSequence != 2 || input.MaxSequence != 4 {
+				t.Fatalf("unexpected extended filters: %+v", input)
+			}
+			if !input.CreatedAfter.Equal(time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)) ||
+				!input.CreatedBefore.Equal(time.Date(2026, 4, 8, 0, 0, 0, 0, time.UTC)) ||
+				input.Page != 2 || input.PageSize != 1 {
+				t.Fatalf("unexpected pagination/time filters: %+v", input)
+			}
+			return auditsvc.ListResult{
+				Items: []domain.EventLog{{
+					EventID:         "event-1",
+					ActorUserID:     "user-1",
+					ResourceType:    "shop",
+					ResourceID:      "shop-1",
+					ResourceVersion: 3,
+					Action:          "shop.updated",
+					Status:          "updated",
+					Sequence:        3,
+					PreviousEventID: "event-0",
+					PayloadJSON:     `{"after":{"name":"Green Shop"}}`,
+					PublicKey:       "pub-key",
+					KeyAlgorithm:    "Ed25519",
+					Signature:       "sig",
+					ContentSHA256:   "hash",
+					CreatedAt:       now,
+				}},
+				Total:    3,
+				Page:     2,
+				PageSize: 1,
+			}, nil
 		},
 	})
 
 	router := gin.New()
 	router.GET("/v1/events", handler.List)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/events?resourceType=shop&resourceId=shop-1&actorUserId=user-1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/events?resourceType=shop&resourceId=shop-1&actorUserId=user-1&action=shop.updated&status=updated&minSequence=2&maxSequence=4&createdAfter=2026-04-01T00:00:00Z&createdBefore=2026-04-08T00:00:00Z&page=2&pageSize=1", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 
@@ -61,11 +74,41 @@ func TestEventLogList(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 
-	var payload []map[string]any
+	var payload map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
-	if len(payload) != 1 || payload[0]["eventId"] != "event-1" {
+	items, ok := payload["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("unexpected response items: %#v", payload)
+	}
+	first, ok := items[0].(map[string]any)
+	if !ok || first["eventId"] != "event-1" {
 		t.Fatalf("unexpected response payload: %#v", payload)
+	}
+	pagination, ok := payload["pagination"].(map[string]any)
+	if !ok || pagination["page"] != float64(2) || pagination["pageSize"] != float64(1) || pagination["totalItems"] != float64(3) || pagination["totalPages"] != float64(3) {
+		t.Fatalf("unexpected response payload: %#v", payload)
+	}
+}
+
+func TestEventLogListRejectsInvalidTime(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewEventLogHandler(eventLogAdapter{
+		list: func(ctx context.Context, input auditsvc.ListInput) (auditsvc.ListResult, error) {
+			t.Fatalf("list should not be called on invalid query")
+			return auditsvc.ListResult{}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/events", handler.List)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/events?createdAfter=bad-time", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
 	}
 }

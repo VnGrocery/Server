@@ -19,3 +19,15 @@ type EventLogResponse struct {
 	ContentSHA256   string    `json:"contentSha256"`
 	CreatedAt       time.Time `json:"createdAt"`
 }
+
+type EventLogListResponse struct {
+	Items      []EventLogResponse  `json:"items"`
+	Pagination PaginationResponse `json:"pagination"`
+}
+
+type PaginationResponse struct {
+	Page       int `json:"page"`
+	PageSize   int `json:"pageSize"`
+	TotalItems int `json:"totalItems"`
+	TotalPages int `json:"totalPages"`
+}

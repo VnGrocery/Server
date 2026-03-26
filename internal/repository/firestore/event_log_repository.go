@@ -64,6 +64,12 @@ func (r *EventLogRepository) List(ctx context.Context, filter repository.EventLo
 	if filter.ActorUserID != "" {
 		query = query.Where("actorUserId", "==", filter.ActorUserID)
 	}
+	if filter.Action != "" {
+		query = query.Where("action", "==", filter.Action)
+	}
+	if filter.Status != "" {
+		query = query.Where("status", "==", filter.Status)
+	}
 
 	docs, err := query.Documents(ctx).GetAll()
 	if err != nil {
@@ -75,6 +81,18 @@ func (r *EventLogRepository) List(ctx context.Context, filter repository.EventLo
 		var event domain.EventLog
 		if err := doc.DataTo(&event); err != nil {
 			return nil, fmt.Errorf("failed to decode event log: %w", err)
+		}
+		if filter.MinSequence > 0 && event.Sequence < filter.MinSequence {
+			continue
+		}
+		if filter.MaxSequence > 0 && event.Sequence > filter.MaxSequence {
+			continue
+		}
+		if !filter.CreatedAfter.IsZero() && event.CreatedAt.Before(filter.CreatedAfter) {
+			continue
+		}
+		if !filter.CreatedBefore.IsZero() && event.CreatedAt.After(filter.CreatedBefore) {
+			continue
 		}
 		events = append(events, event)
 	}

@@ -454,8 +454,8 @@ func (authAccountsStub) Delete(ctx context.Context, userID string, expectedVersi
 
 type eventLogUsecaseStub struct{}
 
-func (eventLogUsecaseStub) List(ctx context.Context, input auditservice.ListInput) ([]domain.EventLog, error) {
-	return []domain.EventLog{}, nil
+func (eventLogUsecaseStub) List(ctx context.Context, input auditservice.ListInput) (auditservice.ListResult, error) {
+	return auditservice.ListResult{Items: []domain.EventLog{}, Page: 1, PageSize: 50}, nil
 }
 
 type adminUserHandlerStub struct{}

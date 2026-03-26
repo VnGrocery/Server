@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
@@ -137,5 +138,75 @@ func TestLogSignsAndSavesEvent(t *testing.T) {
 	}
 	if saved.PayloadJSON == "" || saved.ContentSHA256 == "" {
 		t.Fatalf("expected payload and hash to be persisted: %#v", saved)
+	}
+}
+
+func TestListAppliesFiltersAndPagination(t *testing.T) {
+	now := time.Date(2026, 4, 9, 10, 0, 0, 0, time.UTC)
+	service := NewService(
+		eventLogRepoStub{
+			list: func(ctx context.Context, filter repository.EventLogListFilter) ([]domain.EventLog, error) {
+				if filter.ResourceType != "shop" || filter.ResourceID != "shop-1" || filter.ActorUserID != "user-1" {
+					t.Fatalf("unexpected base filters: %+v", filter)
+				}
+				if filter.Action != "shop.updated" || filter.Status != "updated" || filter.MinSequence != 2 || filter.MaxSequence != 5 {
+					t.Fatalf("unexpected extended filters: %+v", filter)
+				}
+				if !filter.CreatedAfter.Equal(time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)) ||
+					!filter.CreatedBefore.Equal(time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC)) {
+					t.Fatalf("unexpected time filters: %+v", filter)
+				}
+				return []domain.EventLog{
+					{EventID: "event-1", CreatedAt: now},
+					{EventID: "event-2", CreatedAt: now.Add(-time.Minute)},
+					{EventID: "event-3", CreatedAt: now.Add(-2 * time.Minute)},
+				}, nil
+			},
+		},
+		nil,
+		nil,
+	)
+
+	result, err := service.List(context.Background(), ListInput{
+		ResourceType:  "shop",
+		ResourceID:    "shop-1",
+		ActorUserID:   "user-1",
+		Action:        "shop.updated",
+		Status:        "updated",
+		MinSequence:   2,
+		MaxSequence:   5,
+		CreatedAfter:  time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+		CreatedBefore: time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC),
+		Page:          2,
+		PageSize:      1,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.Total != 3 || result.Page != 2 || result.PageSize != 1 {
+		t.Fatalf("unexpected pagination result: %+v", result)
+	}
+	if len(result.Items) != 1 || result.Items[0].EventID != "event-2" {
+		t.Fatalf("unexpected paginated items: %#v", result.Items)
+	}
+}
+
+func TestListRejectsInvalidRanges(t *testing.T) {
+	service := NewService(eventLogRepoStub{}, nil, nil)
+
+	_, err := service.List(context.Background(), ListInput{
+		MinSequence: 5,
+		MaxSequence: 2,
+	})
+	if err == nil || err.Error() != "minSequence must be less than or equal to maxSequence" {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	_, err = service.List(context.Background(), ListInput{
+		CreatedAfter:  time.Date(2026, 4, 10, 0, 0, 0, 0, time.UTC),
+		CreatedBefore: time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC),
+	})
+	if err == nil || err.Error() != "createdAfter must be before or equal to createdBefore" {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

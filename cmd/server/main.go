@@ -3,20 +3,24 @@ package main
 import (
 	"context"
 	"log"
+	"strconv"
 	"time"
 
 	"vngrocery/internal/api/handler"
 	"vngrocery/internal/api/middleware"
 	"vngrocery/internal/api/router"
+	"vngrocery/internal/domain"
 	firestorerepo "vngrocery/internal/repository/firestore"
 	auditservice "vngrocery/internal/service/audit"
 	authservice "vngrocery/internal/service/auth"
 	buyerservice "vngrocery/internal/service/buyer"
+	integrityservice "vngrocery/internal/service/integrity"
 	productservice "vngrocery/internal/service/product"
 	sellerservice "vngrocery/internal/service/seller"
 	shopservice "vngrocery/internal/service/shop"
 	useradminservice "vngrocery/internal/service/useradmin"
 	visionservice "vngrocery/internal/service/vision"
+	besupkg "vngrocery/pkg/besu"
 	"vngrocery/pkg/config"
 	firebasepkg "vngrocery/pkg/firebase"
 	vaultpkg "vngrocery/pkg/vault"
@@ -83,6 +87,7 @@ func main() {
 	eventLogRepository := firestorerepo.NewEventLogRepository(app.Firestore)
 	var accountKeys authservice.AccountKeyStore
 	var auditSigner auditservice.Signer
+	var integrityManager *integrityservice.Service
 	if cfg.VaultEnabled {
 		vaultClient := vaultpkg.NewClient(vaultpkg.Config{
 			Address:        cfg.VaultAddr,
@@ -98,11 +103,30 @@ func main() {
 	if auditSigner != nil {
 		auditLogger = auditQueryService
 	}
+	integrityManager = integrityservice.NewService(pledgeRepository, nil, auditLogger)
+	if cfg.BesuEnabled {
+		besuClient := besupkg.NewClient(besupkg.Config{
+			RPCURL:          cfg.BesuRPCURL,
+			ContractAddress: cfg.BesuContractAddress,
+			FromAddress:     cfg.BesuFromAddress,
+			GasLimit:        mustParseUint(cfg.BesuGasLimit, 250000),
+			ReceiptTimeout:  time.Duration(mustParseInt(cfg.BesuReceiptTimeoutSec, 15)) * time.Second,
+		})
+		integrityManager = integrityservice.NewService(pledgeRepository, besuClientAdapter{client: besuClient}, auditLogger)
+		integrityManager.StartBackground(context.Background(), integrityservice.WorkerConfig{
+			PendingInterval: time.Duration(mustParseInt(cfg.BesuPendingIntervalSec, 10)) * time.Second,
+			VerifyInterval:  time.Duration(mustParseInt(cfg.BesuVerifyIntervalSec, 60)) * time.Second,
+			PendingBatch:    mustParseInt(cfg.BesuPendingBatchSize, 25),
+			VerifyBatch:     mustParseInt(cfg.BesuVerifyBatchSize, 50),
+		})
+	}
 	accountService := authservice.NewAccountService(authUserRepository, userRepository, refreshTokenRepository, passwordResetTokenRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, 30*24*time.Hour, cfg.GoogleClientID)
 	productManager := productservice.NewService(productRepository, productFreshnessReportRepository, shopRepository, userRepository, auditLogger)
 	userAdminService := useradminservice.NewService(userRepository, authUserRepository, accountKeys, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, buyerCheckRepository, shopReviewRepository, userRepository, auditLogger)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, productRepository, auditLogger)
+	shopManager.SetPledgeIntegrityReader(integrityAdapter{service: integrityManager})
+	sellerCommitService.SetIntegrityManager(integrityManager)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, buyerCheckRepository, visionScorer, auditLogger)
 	authMiddleware := middleware.NewAuthRequired(jwtService)
 	healthHandler := handler.NewHealthHandler()
@@ -131,4 +155,93 @@ func main() {
 	if err := engine.Run(":" + cfg.Port); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}
+}
+
+type besuClientAdapter struct {
+	client *besupkg.Client
+}
+
+func (a besuClientAdapter) CommitHash(ctx context.Context, recordID, dataHash string, timestamp time.Time, version int) (integrityservice.CommitResult, error) {
+	result, err := a.client.CommitHash(ctx, recordID, dataHash, timestamp, version)
+	if err != nil {
+		return integrityservice.CommitResult{}, err
+	}
+	return integrityservice.CommitResult{
+		TxHash:      result.TxHash,
+		BlockNumber: result.BlockNumber,
+		BlockTime:   result.BlockTime,
+		Mined:       result.Mined,
+	}, nil
+}
+
+func (a besuClientAdapter) Verify(ctx context.Context, recordID, dataHash string) (bool, error) {
+	return a.client.Verify(ctx, recordID, dataHash)
+}
+
+func (a besuClientAdapter) GetLatest(ctx context.Context, recordID string) (integrityservice.LatestRecord, error) {
+	result, err := a.client.GetLatest(ctx, recordID)
+	if err != nil {
+		return integrityservice.LatestRecord{}, err
+	}
+	return integrityservice.LatestRecord{
+		DataHash:  result.DataHash,
+		Timestamp: result.Timestamp,
+		Version:   result.Version,
+		IsRevoked: result.IsRevoked,
+		IsPresent: result.IsPresent,
+	}, nil
+}
+
+func (a besuClientAdapter) Receipt(ctx context.Context, txHash string) (integrityservice.CommitResult, error) {
+	result, err := a.client.Receipt(ctx, txHash)
+	if err != nil {
+		return integrityservice.CommitResult{}, err
+	}
+	return integrityservice.CommitResult{
+		TxHash:      result.TxHash,
+		BlockNumber: result.BlockNumber,
+		BlockTime:   result.BlockTime,
+		Mined:       result.Mined,
+	}, nil
+}
+
+type integrityAdapter struct {
+	service *integrityservice.Service
+}
+
+func (a integrityAdapter) GetPledgeIntegrity(ctx context.Context, pledge domain.Pledge) (shopservice.PledgeIntegrityView, error) {
+	result, err := a.service.GetPledgeIntegrity(ctx, pledge)
+	if err != nil {
+		return shopservice.PledgeIntegrityView{}, err
+	}
+	return shopservice.PledgeIntegrityView{
+		PledgeID:          result.PledgeID,
+		ShopID:            result.ShopID,
+		DataHash:          result.DataHash,
+		ChainTxHash:       result.ChainTxHash,
+		ChainBlockNumber:  result.ChainBlockNumber,
+		ChainAnchorStatus: result.ChainAnchorStatus,
+		ChainAnchorTime:   result.ChainAnchorTime,
+		IntegrityStatus:   result.IntegrityStatus,
+		OnChainMatch:      result.OnChainMatch,
+		OnChainDataHash:   result.OnChainDataHash,
+		OnChainVersion:    result.OnChainVersion,
+		OnChainTimestamp:  result.OnChainTimestamp,
+	}, nil
+}
+
+func mustParseInt(raw string, fallback int) int {
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
+}
+
+func mustParseUint(raw string, fallback uint64) uint64 {
+	value, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil || value == 0 {
+		return fallback
+	}
+	return value
 }

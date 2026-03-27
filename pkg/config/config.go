@@ -21,6 +21,17 @@ type Config struct {
 	VaultToken              string
 	VaultKVMount            string
 	VaultKeysPathPrefix     string
+	BesuEnabled             bool
+	BesuRPCURL              string
+	BesuChainID             string
+	BesuContractAddress     string
+	BesuFromAddress         string
+	BesuGasLimit            string
+	BesuReceiptTimeoutSec   string
+	BesuPendingIntervalSec  string
+	BesuVerifyIntervalSec   string
+	BesuPendingBatchSize    string
+	BesuVerifyBatchSize     string
 	AIProvider              string
 	OpenAIAPIKey            string
 	OpenAIBaseURL           string
@@ -42,6 +53,17 @@ func Load() (Config, error) {
 		VaultToken:              os.Getenv("VAULT_TOKEN"),
 		VaultKVMount:            getEnvOrDefault("VAULT_KV_MOUNT", "secret"),
 		VaultKeysPathPrefix:     getEnvOrDefault("VAULT_KEYS_PATH_PREFIX", "account-keys"),
+		BesuEnabled:             os.Getenv("BESU_ENABLED") == "true",
+		BesuRPCURL:              os.Getenv("BESU_RPC_URL"),
+		BesuChainID:             os.Getenv("BESU_CHAIN_ID"),
+		BesuContractAddress:     os.Getenv("BESU_CONTRACT_ADDRESS"),
+		BesuFromAddress:         os.Getenv("BESU_FROM_ADDRESS"),
+		BesuGasLimit:            getEnvOrDefault("BESU_GAS_LIMIT", "250000"),
+		BesuReceiptTimeoutSec:   getEnvOrDefault("BESU_RECEIPT_TIMEOUT_SEC", "15"),
+		BesuPendingIntervalSec:  getEnvOrDefault("BESU_PENDING_INTERVAL_SEC", "10"),
+		BesuVerifyIntervalSec:   getEnvOrDefault("BESU_VERIFY_INTERVAL_SEC", "60"),
+		BesuPendingBatchSize:    getEnvOrDefault("BESU_PENDING_BATCH_SIZE", "25"),
+		BesuVerifyBatchSize:     getEnvOrDefault("BESU_VERIFY_BATCH_SIZE", "50"),
 		AIProvider:              getEnvOrDefault("AI_PROVIDER", "openai"),
 		OpenAIAPIKey:            os.Getenv("OPENAI_API_KEY"),
 		OpenAIBaseURL:           getEnvOrDefault("OPENAI_BASE_URL", "https://api.openai.com/v1"),
@@ -87,6 +109,17 @@ func (c Config) Validate() error {
 		}
 		if c.VaultKeysPathPrefix == "" {
 			return errors.New("VAULT_KEYS_PATH_PREFIX is required when VAULT_ENABLED=true")
+		}
+	}
+	if c.BesuEnabled {
+		if c.BesuRPCURL == "" {
+			return errors.New("BESU_RPC_URL is required when BESU_ENABLED=true")
+		}
+		if c.BesuContractAddress == "" {
+			return errors.New("BESU_CONTRACT_ADDRESS is required when BESU_ENABLED=true")
+		}
+		if c.BesuFromAddress == "" {
+			return errors.New("BESU_FROM_ADDRESS is required when BESU_ENABLED=true")
 		}
 	}
 

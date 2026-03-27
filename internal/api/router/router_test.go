@@ -586,6 +586,16 @@ func (shopHandlerStub) ListPledges(ctx context.Context, input shopservice.Pledge
 	}}, nil
 }
 
+func (shopHandlerStub) GetPledgeIntegrity(ctx context.Context, input shopservice.PledgeIntegrityInput) (shopservice.PledgeIntegrityView, error) {
+	return shopservice.PledgeIntegrityView{
+		PledgeID:          input.PledgeID,
+		ShopID:            input.ShopID,
+		DataHash:          "data-hash",
+		ChainAnchorStatus: "pending_anchor",
+		IntegrityStatus:   "pending_anchor",
+	}, nil
+}
+
 func (shopHandlerStub) Review(ctx context.Context, input shopservice.ReviewInput) (domain.ShopReview, error) {
 	return domain.ShopReview{
 		ReviewID:       "review-1",

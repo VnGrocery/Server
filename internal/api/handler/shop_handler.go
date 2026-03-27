@@ -22,6 +22,7 @@ type ShopService interface {
 	GetByID(ctx context.Context, shopID string) (shopsvc.ShopView, error)
 	List(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
 	ListPledges(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error)
+	GetPledgeIntegrity(ctx context.Context, input shopsvc.PledgeIntegrityInput) (shopsvc.PledgeIntegrityView, error)
 	Review(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
 	DeleteReview(ctx context.Context, input shopsvc.DeleteReviewInput) (domain.ShopReview, error)
 	ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error)
@@ -251,6 +252,32 @@ func (h *ShopHandler) ListPledges(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.PledgeHistoryResponse{Items: items})
 }
 
+func (h *ShopHandler) GetPledgeIntegrity(c *gin.Context) {
+	integrityView, err := h.shops.GetPledgeIntegrity(c.Request.Context(), shopsvc.PledgeIntegrityInput{
+		ShopID:   c.Param("shopId"),
+		PledgeID: c.Param("pledgeId"),
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.PledgeIntegrityResponse{
+		PledgeID:          integrityView.PledgeID,
+		ShopID:            integrityView.ShopID,
+		DataHash:          integrityView.DataHash,
+		ChainTxHash:       integrityView.ChainTxHash,
+		ChainBlockNumber:  integrityView.ChainBlockNumber,
+		ChainAnchorStatus: integrityView.ChainAnchorStatus,
+		ChainAnchorTime:   integrityView.ChainAnchorTime,
+		IntegrityStatus:   integrityView.IntegrityStatus,
+		OnChainMatch:      integrityView.OnChainMatch,
+		OnChainDataHash:   integrityView.OnChainDataHash,
+		OnChainVersion:    integrityView.OnChainVersion,
+		OnChainTimestamp:  integrityView.OnChainTimestamp,
+	})
+}
+
 func (h *ShopHandler) CreateReview(c *gin.Context) {
 	principal, ok := middleware.GetPrincipal(c)
 	if !ok {
@@ -408,18 +435,24 @@ func toShopResponse(view shopsvc.ShopView) dto.ShopResponse {
 
 func toPledgeResponse(pledge domain.Pledge) dto.PledgeResponse {
 	return dto.PledgeResponse{
-		PledgeID:        pledge.PledgeID,
-		ShopID:          pledge.ShopID,
-		ProductID:       pledge.ProductID,
-		CreatedByUserID: pledge.CreatedByUserID,
-		Status:          pledge.Status,
-		Version:         pledge.Version,
-		Score:           pledge.Score,
-		Category:        pledge.Category,
-		Confidence:      pledge.Confidence,
-		ImageHash:       pledge.ImageHash,
-		CreatedAt:       pledge.CreatedAt,
-		UpdatedAt:       pledge.UpdatedAt,
+		PledgeID:          pledge.PledgeID,
+		ShopID:            pledge.ShopID,
+		ProductID:         pledge.ProductID,
+		CreatedByUserID:   pledge.CreatedByUserID,
+		Status:            pledge.Status,
+		Version:           pledge.Version,
+		Score:             pledge.Score,
+		Category:          pledge.Category,
+		Confidence:        pledge.Confidence,
+		ImageHash:         pledge.ImageHash,
+		DataHash:          pledge.DataHash,
+		ChainTxHash:       pledge.ChainTxHash,
+		ChainBlockNumber:  pledge.ChainBlockNumber,
+		ChainAnchorStatus: pledge.ChainAnchorStatus,
+		ChainAnchorTime:   pledge.ChainAnchorTime,
+		IntegrityStatus:   pledge.IntegrityStatus,
+		CreatedAt:         pledge.CreatedAt,
+		UpdatedAt:         pledge.UpdatedAt,
 	}
 }
 

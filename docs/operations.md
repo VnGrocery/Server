@@ -40,3 +40,17 @@ Keep `firestore.indexes.json` in sync with query patterns before production impo
 ## CI/CD
 
 The baseline CI runs `go test ./...` on push and pull request. Add deploy jobs only after secrets and target environments are finalized.
+
+## Besu QBFT integrity anchoring
+
+When `BESU_ENABLED=true`, the backend computes a canonical `dataHash` for each new pledge, submits `commitHash(...)` to the configured `IntegrityRegistry`, and stores chain metadata back into Firestore.
+
+Required env vars:
+
+```bash
+BESU_RPC_URL=http://127.0.0.1:8545
+BESU_CONTRACT_ADDRESS=0x...
+BESU_FROM_ADDRESS=0x...
+```
+
+`BESU_FROM_ADDRESS` must be an account the Besu node accepts for `eth_sendTransaction` on the private network. The background worker retries `pending_anchor` pledges and periodically verifies `anchored` pledges against on-chain state.

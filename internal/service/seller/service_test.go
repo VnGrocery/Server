@@ -31,6 +31,10 @@ func (s pledgeRepositoryStub) ListByShopID(ctx context.Context, shopID string) (
 	return nil, nil
 }
 
+func (s pledgeRepositoryStub) ListByChainAnchorStatus(ctx context.Context, status string, limit int) ([]domain.Pledge, error) {
+	return nil, nil
+}
+
 func TestCommitCreatesPledge(t *testing.T) {
 	fixedTime := time.Date(2026, 3, 27, 10, 0, 0, 0, time.UTC)
 

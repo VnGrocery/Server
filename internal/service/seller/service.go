@@ -35,15 +35,21 @@ type CommitService interface {
 }
 
 type Service struct {
-	pledges  repository.PledgeRepository
-	shops    repository.ShopRepository
-	products repository.ProductRepository
-	audit    AuditLogger
-	now      func() time.Time
+	pledges   repository.PledgeRepository
+	shops     repository.ShopRepository
+	products  repository.ProductRepository
+	audit     AuditLogger
+	integrity IntegrityManager
+	now       func() time.Time
 }
 
 type AuditLogger interface {
 	Log(ctx context.Context, input audit.Input) error
+}
+
+type IntegrityManager interface {
+	PreparePledge(pledge domain.Pledge) (domain.Pledge, error)
+	SyncPledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error)
 }
 
 func NewService(pledges repository.PledgeRepository, shops repository.ShopRepository, products repository.ProductRepository, auditLogger AuditLogger) *Service {
@@ -54,6 +60,10 @@ func NewService(pledges repository.PledgeRepository, shops repository.ShopReposi
 		audit:    auditLogger,
 		now:      time.Now,
 	}
+}
+
+func (s *Service) SetIntegrityManager(manager IntegrityManager) {
+	s.integrity = manager
 }
 
 func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge, error) {
@@ -102,9 +112,25 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
+	if s.integrity != nil {
+		prepared, err := s.integrity.PreparePledge(pledge)
+		if err != nil {
+			return domain.Pledge{}, err
+		}
+		pledge = prepared
+	}
 
 	if err := s.pledges.Save(ctx, pledge); err != nil {
 		return domain.Pledge{}, err
+	}
+	if s.integrity != nil {
+		anchored, err := s.integrity.SyncPledge(ctx, pledge)
+		if err == nil {
+			pledge = anchored
+			if saveErr := s.pledges.Save(ctx, pledge); saveErr != nil {
+				return domain.Pledge{}, saveErr
+			}
+		}
 	}
 	if s.audit != nil {
 		if err := s.audit.Log(ctx, audit.Input{

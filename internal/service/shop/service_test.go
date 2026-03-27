@@ -34,17 +34,24 @@ func (s shopRepositoryStub) List(ctx context.Context, filter repository.ShopList
 
 type pledgeRepositoryStub struct {
 	listByShopID func(ctx context.Context, shopID string) ([]domain.Pledge, error)
+	getByID      func(ctx context.Context, pledgeID string) (domain.Pledge, error)
 }
 
 func (p pledgeRepositoryStub) Save(ctx context.Context, pledge domain.Pledge) error { return nil }
 func (p pledgeRepositoryStub) GetByID(ctx context.Context, pledgeID string) (domain.Pledge, error) {
-	return domain.Pledge{}, nil
+	if p.getByID == nil {
+		return domain.Pledge{}, nil
+	}
+	return p.getByID(ctx, pledgeID)
 }
 func (p pledgeRepositoryStub) ListByShopID(ctx context.Context, shopID string) ([]domain.Pledge, error) {
 	if p.listByShopID == nil {
 		return nil, nil
 	}
 	return p.listByShopID(ctx, shopID)
+}
+func (p pledgeRepositoryStub) ListByChainAnchorStatus(ctx context.Context, status string, limit int) ([]domain.Pledge, error) {
+	return nil, nil
 }
 
 type buyerCheckRepositoryStub struct {
@@ -79,6 +86,14 @@ func (u userRepositoryStub) GetByID(ctx context.Context, userID string) (domain.
 }
 func (u userRepositoryStub) List(ctx context.Context, filter repository.UserListFilter) ([]domain.User, error) {
 	return nil, errors.New("not implemented")
+}
+
+type integrityReaderStub struct {
+	get func(ctx context.Context, pledge domain.Pledge) (PledgeIntegrityView, error)
+}
+
+func (s integrityReaderStub) GetPledgeIntegrity(ctx context.Context, pledge domain.Pledge) (PledgeIntegrityView, error) {
+	return s.get(ctx, pledge)
 }
 
 type reviewRepositoryStub struct {
@@ -359,6 +374,43 @@ func TestListPledgesFiltersByProductAndCategory(t *testing.T) {
 	}
 	if len(pledges) != 1 || pledges[0].PledgeID != "pledge-1" {
 		t.Fatalf("unexpected pledges: %#v", pledges)
+	}
+}
+
+func TestGetPledgeIntegrityUsesReader(t *testing.T) {
+	service := NewService(shopRepositoryStub{}, pledgeRepositoryStub{
+		getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+			return domain.Pledge{
+				PledgeID:          pledgeID,
+				ShopID:            "shop-1",
+				DataHash:          "data-hash",
+				ChainAnchorStatus: "anchored",
+				IntegrityStatus:   "anchored",
+			}, nil
+		},
+	}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
+	service.SetPledgeIntegrityReader(integrityReaderStub{
+		get: func(ctx context.Context, pledge domain.Pledge) (PledgeIntegrityView, error) {
+			return PledgeIntegrityView{
+				PledgeID:          pledge.PledgeID,
+				ShopID:            pledge.ShopID,
+				DataHash:          pledge.DataHash,
+				ChainAnchorStatus: pledge.ChainAnchorStatus,
+				IntegrityStatus:   pledge.IntegrityStatus,
+				OnChainMatch:      true,
+			}, nil
+		},
+	})
+
+	result, err := service.GetPledgeIntegrity(context.Background(), PledgeIntegrityInput{
+		ShopID:   "shop-1",
+		PledgeID: "pledge-1",
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.PledgeID != "pledge-1" || !result.OnChainMatch || result.DataHash != "data-hash" {
+		t.Fatalf("unexpected integrity result: %#v", result)
 	}
 }
 

@@ -60,6 +60,7 @@ type PledgeRepository interface {
 	Save(ctx context.Context, pledge domain.Pledge) error
 	GetByID(ctx context.Context, pledgeID string) (domain.Pledge, error)
 	ListByShopID(ctx context.Context, shopID string) ([]domain.Pledge, error)
+	ListByChainAnchorStatus(ctx context.Context, status string, limit int) ([]domain.Pledge, error)
 }
 
 type BuyerCheckRepository interface {
@@ -88,13 +89,13 @@ type EventLogRepository interface {
 }
 
 type EventLogListFilter struct {
-	ResourceType string
-	ResourceID   string
-	ActorUserID  string
-	Action       string
-	Status       string
-	MinSequence  int
-	MaxSequence  int
-	CreatedAfter time.Time
+	ResourceType  string
+	ResourceID    string
+	ActorUserID   string
+	Action        string
+	Status        string
+	MinSequence   int
+	MaxSequence   int
+	CreatedAfter  time.Time
 	CreatedBefore time.Time
 }

@@ -30,6 +30,10 @@ func (s pledgeRepositoryStub) ListByShopID(ctx context.Context, shopID string) (
 	return nil, nil
 }
 
+func (s pledgeRepositoryStub) ListByChainAnchorStatus(ctx context.Context, status string, limit int) ([]domain.Pledge, error) {
+	return nil, nil
+}
+
 type buyerCheckRepositoryStub struct {
 	save func(ctx context.Context, check domain.BuyerCheck) error
 }

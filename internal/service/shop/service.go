@@ -76,6 +76,11 @@ type PledgeHistoryInput struct {
 	Category  string
 }
 
+type PledgeIntegrityInput struct {
+	ShopID   string
+	PledgeID string
+}
+
 type ListInput struct {
 	Page               int
 	PageSize           int
@@ -127,17 +132,37 @@ type ListResult struct {
 }
 
 type Service struct {
-	shops   repository.ShopRepository
-	pledges repository.PledgeRepository
-	checks  repository.BuyerCheckRepository
-	reviews repository.ShopReviewRepository
-	users   repository.UserRepository
-	audit   AuditLogger
-	now     func() time.Time
+	shops     repository.ShopRepository
+	pledges   repository.PledgeRepository
+	checks    repository.BuyerCheckRepository
+	reviews   repository.ShopReviewRepository
+	users     repository.UserRepository
+	audit     AuditLogger
+	integrity PledgeIntegrityReader
+	now       func() time.Time
 }
 
 type AuditLogger interface {
 	Log(ctx context.Context, input audit.Input) error
+}
+
+type PledgeIntegrityReader interface {
+	GetPledgeIntegrity(ctx context.Context, pledge domain.Pledge) (PledgeIntegrityView, error)
+}
+
+type PledgeIntegrityView struct {
+	PledgeID          string
+	ShopID            string
+	DataHash          string
+	ChainTxHash       string
+	ChainBlockNumber  int64
+	ChainAnchorStatus string
+	ChainAnchorTime   *time.Time
+	IntegrityStatus   string
+	OnChainMatch      bool
+	OnChainDataHash   string
+	OnChainVersion    int
+	OnChainTimestamp  *time.Time
 }
 
 func NewService(shops repository.ShopRepository, pledges repository.PledgeRepository, checks repository.BuyerCheckRepository, reviews repository.ShopReviewRepository, users repository.UserRepository, auditLogger AuditLogger) *Service {
@@ -150,6 +175,10 @@ func NewService(shops repository.ShopRepository, pledges repository.PledgeReposi
 		audit:   auditLogger,
 		now:     time.Now,
 	}
+}
+
+func (s *Service) SetPledgeIntegrityReader(reader PledgeIntegrityReader) {
+	s.integrity = reader
 }
 
 type ReviewInput struct {
@@ -625,6 +654,42 @@ func (s *Service) ListPledges(ctx context.Context, input PledgeHistoryInput) ([]
 	}
 
 	return filtered, nil
+}
+
+func (s *Service) GetPledgeIntegrity(ctx context.Context, input PledgeIntegrityInput) (PledgeIntegrityView, error) {
+	if strings.TrimSpace(input.ShopID) == "" {
+		return PledgeIntegrityView{}, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
+	}
+	if strings.TrimSpace(input.PledgeID) == "" {
+		return PledgeIntegrityView{}, fmt.Errorf("%w: pledgeId is required", ErrInvalidShop)
+	}
+	if s.pledges == nil {
+		return PledgeIntegrityView{}, fmt.Errorf("pledge repository is not configured")
+	}
+
+	pledge, err := s.pledges.GetByID(ctx, strings.TrimSpace(input.PledgeID))
+	if err != nil {
+		return PledgeIntegrityView{}, fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
+	if pledge.PledgeID == "" || pledge.ShopID != strings.TrimSpace(input.ShopID) {
+		return PledgeIntegrityView{}, ErrNotFound
+	}
+
+	view := PledgeIntegrityView{
+		PledgeID:          pledge.PledgeID,
+		ShopID:            pledge.ShopID,
+		DataHash:          pledge.DataHash,
+		ChainTxHash:       pledge.ChainTxHash,
+		ChainBlockNumber:  pledge.ChainBlockNumber,
+		ChainAnchorStatus: pledge.ChainAnchorStatus,
+		ChainAnchorTime:   pledge.ChainAnchorTime,
+		IntegrityStatus:   pledge.IntegrityStatus,
+	}
+	if s.integrity == nil {
+		return view, nil
+	}
+
+	return s.integrity.GetPledgeIntegrity(ctx, pledge)
 }
 
 func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView, error) {

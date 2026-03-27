@@ -62,3 +62,30 @@ func (r *PledgeRepository) ListByShopID(ctx context.Context, shopID string) ([]d
 
 	return pledges, nil
 }
+
+func (r *PledgeRepository) ListByChainAnchorStatus(ctx context.Context, status string, limit int) ([]domain.Pledge, error) {
+	query := r.client.Collection(PledgesCollection).Where("chainAnchorStatus", "==", status)
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+
+	docs, err := query.Documents(ctx).GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pledges by chain anchor status: %w", err)
+	}
+
+	pledges := make([]domain.Pledge, 0, len(docs))
+	for _, doc := range docs {
+		var pledge domain.Pledge
+		if err := doc.DataTo(&pledge); err != nil {
+			return nil, fmt.Errorf("failed to decode pledge document: %w", err)
+		}
+		pledges = append(pledges, pledge)
+	}
+
+	sort.Slice(pledges, func(i, j int) bool {
+		return pledges[i].CreatedAt.Before(pledges[j].CreatedAt)
+	})
+
+	return pledges, nil
+}

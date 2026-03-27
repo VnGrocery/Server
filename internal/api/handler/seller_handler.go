@@ -154,17 +154,23 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, dto.SellerCommitResponse{
-		PledgeID:        pledge.PledgeID,
-		ShopID:          pledge.ShopID,
-		ProductID:       pledge.ProductID,
-		CreatedByUserID: pledge.CreatedByUserID,
-		Status:          pledge.Status,
-		Score:           pledge.Score,
-		Category:        pledge.Category,
-		Confidence:      pledge.Confidence,
-		ImageHash:       pledge.ImageHash,
-		CreatedAt:       pledge.CreatedAt,
-		UpdatedAt:       pledge.UpdatedAt,
+		PledgeID:          pledge.PledgeID,
+		ShopID:            pledge.ShopID,
+		ProductID:         pledge.ProductID,
+		CreatedByUserID:   pledge.CreatedByUserID,
+		Status:            pledge.Status,
+		Score:             pledge.Score,
+		Category:          pledge.Category,
+		Confidence:        pledge.Confidence,
+		ImageHash:         pledge.ImageHash,
+		DataHash:          pledge.DataHash,
+		ChainTxHash:       pledge.ChainTxHash,
+		ChainBlockNumber:  pledge.ChainBlockNumber,
+		ChainAnchorStatus: pledge.ChainAnchorStatus,
+		ChainAnchorTime:   pledge.ChainAnchorTime,
+		IntegrityStatus:   pledge.IntegrityStatus,
+		CreatedAt:         pledge.CreatedAt,
+		UpdatedAt:         pledge.UpdatedAt,
 	})
 }
 

@@ -30,3 +30,18 @@ credentials.json
 .DS_Store
 .idea/
 .vscode/
+
+# Besu local chain data
+besu/qbft/data/validator1/*
+!besu/qbft/data/validator1/.gitkeep
+besu/qbft/data/validator2/*
+!besu/qbft/data/validator2/.gitkeep
+besu/qbft/data/validator3/*
+!besu/qbft/data/validator3/.gitkeep
+besu/qbft/data/validator4/*
+!besu/qbft/data/validator4/.gitkeep
+
+# Foundry artifacts
+broadcast/
+cache/
+out/

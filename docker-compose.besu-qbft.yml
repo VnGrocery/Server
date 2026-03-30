@@ -1,0 +1,102 @@
+services:
+  besu-validator1:
+    image: hyperledger/besu:24.3.3
+    container_name: vngrocery-besu-validator1
+    command:
+      - --config-file=/opt/besu/common-config.toml
+      - --identity=validator1
+      - --p2p-host=10.42.0.2
+      - --p2p-port=30303
+    volumes:
+      - ./besu/qbft/common-config.toml:/opt/besu/common-config.toml:ro
+      - ./besu/qbft/genesis.json:/opt/besu/genesis.json:ro
+      - ./besu/qbft/keys/validator1/key:/opt/besu/key:ro
+      - ./besu/qbft/data/validator1:/opt/besu/data
+    ports:
+      - "8545:8545"
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+    networks:
+      besu_qbft:
+        ipv4_address: 10.42.0.2
+    restart: unless-stopped
+
+  besu-validator2:
+    image: hyperledger/besu:24.3.3
+    container_name: vngrocery-besu-validator2
+    command:
+      - --config-file=/opt/besu/common-config.toml
+      - --identity=validator2
+      - --bootnodes=enode://ad83ac93fcc30a30f3e1bb6467623e45719167be50d13dccd8361cbca478cb540069869d1bae16de0f8b17a28f26f1c6c4dc12e71f240b366c6ff6f02f3fb93e@10.42.0.2:30303
+      - --p2p-host=10.42.0.3
+      - --p2p-port=30304
+    volumes:
+      - ./besu/qbft/common-config.toml:/opt/besu/common-config.toml:ro
+      - ./besu/qbft/genesis.json:/opt/besu/genesis.json:ro
+      - ./besu/qbft/keys/validator2/key:/opt/besu/key:ro
+      - ./besu/qbft/data/validator2:/opt/besu/data
+    ports:
+      - "8546:8545"
+      - "30304:30304/tcp"
+      - "30304:30304/udp"
+    networks:
+      besu_qbft:
+        ipv4_address: 10.42.0.3
+    restart: unless-stopped
+
+  besu-validator3:
+    image: hyperledger/besu:24.3.3
+    container_name: vngrocery-besu-validator3
+    command:
+      - --config-file=/opt/besu/common-config.toml
+      - --identity=validator3
+      - --bootnodes=enode://ad83ac93fcc30a30f3e1bb6467623e45719167be50d13dccd8361cbca478cb540069869d1bae16de0f8b17a28f26f1c6c4dc12e71f240b366c6ff6f02f3fb93e@10.42.0.2:30303
+      - --p2p-host=10.42.0.4
+      - --p2p-port=30305
+    volumes:
+      - ./besu/qbft/common-config.toml:/opt/besu/common-config.toml:ro
+      - ./besu/qbft/genesis.json:/opt/besu/genesis.json:ro
+      - ./besu/qbft/keys/validator3/key:/opt/besu/key:ro
+      - ./besu/qbft/data/validator3:/opt/besu/data
+    ports:
+      - "8547:8545"
+      - "30305:30305/tcp"
+      - "30305:30305/udp"
+    networks:
+      besu_qbft:
+        ipv4_address: 10.42.0.4
+    restart: unless-stopped
+
+  besu-validator4:
+    image: hyperledger/besu:24.3.3
+    container_name: vngrocery-besu-validator4
+    command:
+      - --config-file=/opt/besu/common-config.toml
+      - --identity=validator4
+      - --bootnodes=enode://ad83ac93fcc30a30f3e1bb6467623e45719167be50d13dccd8361cbca478cb540069869d1bae16de0f8b17a28f26f1c6c4dc12e71f240b366c6ff6f02f3fb93e@10.42.0.2:30303
+      - --p2p-host=10.42.0.5
+      - --p2p-port=30306
+    volumes:
+      - ./besu/qbft/common-config.toml:/opt/besu/common-config.toml:ro
+      - ./besu/qbft/genesis.json:/opt/besu/genesis.json:ro
+      - ./besu/qbft/keys/validator4/key:/opt/besu/key:ro
+      - ./besu/qbft/data/validator4:/opt/besu/data
+    ports:
+      - "8548:8545"
+      - "30306:30306/tcp"
+      - "30306:30306/udp"
+    networks:
+      besu_qbft:
+        ipv4_address: 10.42.0.5
+    restart: unless-stopped
+
+networks:
+  besu_qbft:
+    driver: bridge
+    driver_opts:
+      com.docker.network.enable_ipv6: "false"
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.42.0.0/16
+          gateway: 10.42.0.1

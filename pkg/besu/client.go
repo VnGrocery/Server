@@ -3,15 +3,21 @@ package besu
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -19,6 +25,8 @@ type Config struct {
 	RPCURL          string
 	ContractAddress string
 	FromAddress     string
+	PrivateKey      string
+	ChainID         string
 	GasLimit        uint64
 	ReceiptTimeout  time.Duration
 }
@@ -27,6 +35,8 @@ type Client struct {
 	rpcURL          string
 	contractAddress string
 	fromAddress     string
+	privateKey      *ecdsa.PrivateKey
+	chainID         *big.Int
 	gasLimit        uint64
 	receiptTimeout  time.Duration
 	httpClient      *http.Client
@@ -83,10 +93,18 @@ func NewClient(cfg Config) *Client {
 		gasLimit = 250000
 	}
 
+	privateKey := mustParsePrivateKey(cfg.PrivateKey)
+	fromAddress := strings.TrimSpace(cfg.FromAddress)
+	if fromAddress == "" && privateKey != nil {
+		fromAddress = crypto.PubkeyToAddress(privateKey.PublicKey).Hex()
+	}
+
 	return &Client{
 		rpcURL:          strings.TrimSpace(cfg.RPCURL),
 		contractAddress: strings.TrimSpace(cfg.ContractAddress),
-		fromAddress:     strings.TrimSpace(cfg.FromAddress),
+		fromAddress:     fromAddress,
+		privateKey:      privateKey,
+		chainID:         parseChainID(cfg.ChainID),
 		gasLimit:        gasLimit,
 		receiptTimeout:  receiptTimeout,
 		httpClient:      &http.Client{Timeout: 20 * time.Second},
@@ -101,13 +119,18 @@ func (c *Client) CommitHash(ctx context.Context, recordID, dataHash string, time
 	}
 
 	var txHash string
-	if err := c.rpc(ctx, "eth_sendTransaction", []map[string]string{{
-		"from":     c.fromAddress,
-		"to":       c.contractAddress,
-		"data":     input,
-		"gas":      hexUint64(c.gasLimit),
-		"gasPrice": "0x0",
-	}}, &txHash); err != nil {
+	if c.privateKey != nil {
+		txHash, err = c.sendRawTransaction(ctx, input)
+	} else {
+		err = c.rpc(ctx, "eth_sendTransaction", []map[string]string{{
+			"from":     c.fromAddress,
+			"to":       c.contractAddress,
+			"data":     input,
+			"gas":      hexUint64(c.gasLimit),
+			"gasPrice": "0x0",
+		}}, &txHash)
+	}
+	if err != nil {
 		return CommitResult{}, err
 	}
 
@@ -231,7 +254,7 @@ func (c *Client) rpc(ctx context.Context, method string, params any, out any) er
 	if c.contractAddress == "" && method != "eth_getTransactionReceipt" && method != "eth_getBlockByNumber" {
 		return fmt.Errorf("BESU_CONTRACT_ADDRESS is required")
 	}
-	if c.fromAddress == "" && method == "eth_sendTransaction" {
+	if c.fromAddress == "" && (method == "eth_sendTransaction" || method == "eth_getTransactionCount") {
 		return fmt.Errorf("BESU_FROM_ADDRESS is required")
 	}
 
@@ -280,6 +303,59 @@ func (c *Client) rpc(ctx context.Context, method string, params any, out any) er
 	}
 
 	return nil
+}
+
+func (c *Client) sendRawTransaction(ctx context.Context, input string) (string, error) {
+	nonce, err := c.pendingNonce(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	to := common.HexToAddress(c.contractAddress)
+	tx := types.NewTx(&types.LegacyTx{
+		Nonce:    nonce,
+		To:       &to,
+		Gas:      c.gasLimit,
+		GasPrice: big.NewInt(0),
+		Value:    big.NewInt(0),
+		Data:     common.FromHex(input),
+	})
+
+	chainID := c.chainID
+	if chainID == nil || chainID.Sign() <= 0 {
+		chainID = big.NewInt(1337)
+	}
+
+	signed, err := types.SignTx(tx, types.NewEIP155Signer(chainID), c.privateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign transaction: %w", err)
+	}
+	raw, err := signed.MarshalBinary()
+	if err != nil {
+		return "", fmt.Errorf("failed to encode signed transaction: %w", err)
+	}
+
+	var txHash string
+	if err := c.rpc(ctx, "eth_sendRawTransaction", []string{hexutil.Encode(raw)}, &txHash); err != nil {
+		return "", err
+	}
+	return txHash, nil
+}
+
+func (c *Client) pendingNonce(ctx context.Context) (uint64, error) {
+	var raw string
+	if err := c.rpc(ctx, "eth_getTransactionCount", []string{c.fromAddress, "pending"}, &raw); err != nil {
+		return 0, err
+	}
+	value := strings.TrimSpace(strings.TrimPrefix(raw, "0x"))
+	if value == "" {
+		return 0, nil
+	}
+	nonce, err := strconv.ParseUint(value, 16, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse nonce: %w", err)
+	}
+	return nonce, nil
 }
 
 func encodeCommitHash(recordID, dataHash string, timestamp time.Time, version int) (string, error) {
@@ -467,4 +543,28 @@ func isZeroWord(word []byte) bool {
 		}
 	}
 	return true
+}
+
+func mustParsePrivateKey(raw string) *ecdsa.PrivateKey {
+	value := strings.TrimSpace(strings.TrimPrefix(raw, "0x"))
+	if value == "" {
+		return nil
+	}
+	key, err := crypto.HexToECDSA(value)
+	if err != nil {
+		return nil
+	}
+	return key
+}
+
+func parseChainID(raw string) *big.Int {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return nil
+	}
+	parsed, ok := new(big.Int).SetString(value, 10)
+	if !ok {
+		return nil
+	}
+	return parsed
 }

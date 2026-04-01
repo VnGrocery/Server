@@ -26,12 +26,15 @@ type Config struct {
 	BesuChainID             string
 	BesuContractAddress     string
 	BesuFromAddress         string
+	BesuPrivateKey          string
 	BesuGasLimit            string
 	BesuReceiptTimeoutSec   string
 	BesuPendingIntervalSec  string
 	BesuVerifyIntervalSec   string
 	BesuPendingBatchSize    string
 	BesuVerifyBatchSize     string
+	AlertWebhookURL         string
+	AlertTimeoutSec         string
 	AIProvider              string
 	OpenAIAPIKey            string
 	OpenAIBaseURL           string
@@ -58,12 +61,15 @@ func Load() (Config, error) {
 		BesuChainID:             os.Getenv("BESU_CHAIN_ID"),
 		BesuContractAddress:     os.Getenv("BESU_CONTRACT_ADDRESS"),
 		BesuFromAddress:         os.Getenv("BESU_FROM_ADDRESS"),
+		BesuPrivateKey:          os.Getenv("BESU_PRIVATE_KEY"),
 		BesuGasLimit:            getEnvOrDefault("BESU_GAS_LIMIT", "250000"),
 		BesuReceiptTimeoutSec:   getEnvOrDefault("BESU_RECEIPT_TIMEOUT_SEC", "15"),
 		BesuPendingIntervalSec:  getEnvOrDefault("BESU_PENDING_INTERVAL_SEC", "10"),
 		BesuVerifyIntervalSec:   getEnvOrDefault("BESU_VERIFY_INTERVAL_SEC", "60"),
 		BesuPendingBatchSize:    getEnvOrDefault("BESU_PENDING_BATCH_SIZE", "25"),
 		BesuVerifyBatchSize:     getEnvOrDefault("BESU_VERIFY_BATCH_SIZE", "50"),
+		AlertWebhookURL:         os.Getenv("ALERT_WEBHOOK_URL"),
+		AlertTimeoutSec:         getEnvOrDefault("ALERT_TIMEOUT_SEC", "5"),
 		AIProvider:              getEnvOrDefault("AI_PROVIDER", "openai"),
 		OpenAIAPIKey:            os.Getenv("OPENAI_API_KEY"),
 		OpenAIBaseURL:           getEnvOrDefault("OPENAI_BASE_URL", "https://api.openai.com/v1"),
@@ -118,8 +124,8 @@ func (c Config) Validate() error {
 		if c.BesuContractAddress == "" {
 			return errors.New("BESU_CONTRACT_ADDRESS is required when BESU_ENABLED=true")
 		}
-		if c.BesuFromAddress == "" {
-			return errors.New("BESU_FROM_ADDRESS is required when BESU_ENABLED=true")
+		if c.BesuFromAddress == "" && c.BesuPrivateKey == "" {
+			return errors.New("BESU_FROM_ADDRESS or BESU_PRIVATE_KEY is required when BESU_ENABLED=true")
 		}
 	}
 

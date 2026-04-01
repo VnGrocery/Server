@@ -51,11 +51,16 @@ type AuditLogger interface {
 	Log(ctx context.Context, input audit.Input) error
 }
 
+type Notifier interface {
+	NotifyIntegrityMismatch(ctx context.Context, payload IntegrityAlertPayload) error
+}
+
 type Service struct {
-	pledges repository.PledgeRepository
-	chain   ChainClient
-	audit   AuditLogger
-	now     func() time.Time
+	pledges  repository.PledgeRepository
+	chain    ChainClient
+	audit    AuditLogger
+	notifier Notifier
+	now      func() time.Time
 }
 
 type IntegrityView struct {
@@ -71,6 +76,19 @@ type IntegrityView struct {
 	OnChainDataHash   string
 	OnChainVersion    int
 	OnChainTimestamp  *time.Time
+}
+
+type IntegrityAlertPayload struct {
+	PledgeID         string
+	ShopID           string
+	CreatedByUserID  string
+	DataHash         string
+	ChainTxHash      string
+	IntegrityStatus  string
+	DetectedAt       time.Time
+	OnChainDataHash  string
+	OnChainVersion   int
+	OnChainTimestamp *time.Time
 }
 
 type pledgeHashPayload struct {
@@ -95,6 +113,10 @@ func NewService(pledges repository.PledgeRepository, chain ChainClient, auditLog
 		audit:   auditLogger,
 		now:     time.Now,
 	}
+}
+
+func (s *Service) SetNotifier(notifier Notifier) {
+	s.notifier = notifier
 }
 
 func (s *Service) PreparePledge(pledge domain.Pledge) (domain.Pledge, error) {
@@ -214,6 +236,20 @@ func (s *Service) VerifyAnchoredPledges(ctx context.Context, limit int) error {
 					Before: before,
 					After:  pledge,
 				},
+			})
+		}
+		if s.notifier != nil {
+			_ = s.notifier.NotifyIntegrityMismatch(ctx, IntegrityAlertPayload{
+				PledgeID:         pledge.PledgeID,
+				ShopID:           pledge.ShopID,
+				CreatedByUserID:  pledge.CreatedByUserID,
+				DataHash:         pledge.DataHash,
+				ChainTxHash:      pledge.ChainTxHash,
+				IntegrityStatus:  pledge.IntegrityStatus,
+				DetectedAt:       pledge.UpdatedAt,
+				OnChainDataHash:  latest.DataHash,
+				OnChainVersion:   latest.Version,
+				OnChainTimestamp: latest.Timestamp,
 			})
 		}
 	}

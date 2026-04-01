@@ -77,6 +77,19 @@ func (s auditStub) Log(ctx context.Context, input audit.Input) error {
 	return nil
 }
 
+type notifierStub struct {
+	notify func(ctx context.Context, payload IntegrityAlertPayload) error
+	hits   int
+}
+
+func (s *notifierStub) NotifyIntegrityMismatch(ctx context.Context, payload IntegrityAlertPayload) error {
+	s.hits++
+	if s.notify != nil {
+		return s.notify(ctx, payload)
+	}
+	return nil
+}
+
 func TestPreparePledgeSetsHashAndStatuses(t *testing.T) {
 	now := time.Date(2026, 4, 9, 10, 0, 0, 0, time.UTC)
 	service := NewService(nil, nil, nil)
@@ -142,6 +155,14 @@ func TestSyncPledgeAnchorsMinedCommit(t *testing.T) {
 func TestVerifyAnchoredPledgesMarksMismatch(t *testing.T) {
 	now := time.Date(2026, 4, 9, 10, 0, 0, 0, time.UTC)
 	saved := domain.Pledge{}
+	notifier := &notifierStub{
+		notify: func(ctx context.Context, payload IntegrityAlertPayload) error {
+			if payload.PledgeID != "pledge-1" || payload.OnChainDataHash == "" || payload.IntegrityStatus != IntegrityStatusMismatchDetected {
+				t.Fatalf("unexpected alert payload: %#v", payload)
+			}
+			return nil
+		},
+	}
 	service := NewService(pledgeRepositoryStub{
 		listByChainAnchorStatus: func(ctx context.Context, status string, limit int) ([]domain.Pledge, error) {
 			return []domain.Pledge{{
@@ -173,6 +194,7 @@ func TestVerifyAnchoredPledgesMarksMismatch(t *testing.T) {
 			}, nil
 		},
 	}, auditStub{})
+	service.SetNotifier(notifier)
 	service.now = func() time.Time { return now.Add(time.Minute) }
 
 	if err := service.VerifyAnchoredPledges(context.Background(), 10); err != nil {
@@ -180,5 +202,8 @@ func TestVerifyAnchoredPledgesMarksMismatch(t *testing.T) {
 	}
 	if saved.IntegrityStatus != IntegrityStatusMismatchDetected {
 		t.Fatalf("expected mismatch status, got %#v", saved)
+	}
+	if notifier.hits != 1 {
+		t.Fatalf("expected one notifier hit, got %d", notifier.hits)
 	}
 }

@@ -33,6 +33,16 @@ For existing data, run backfills in this order:
 
 Backfills should be idempotent and should emit signed event logs when they change user-visible state.
 
+For pledge integrity metadata, use:
+
+```bash
+go run ./cmd/backfill-integrity
+```
+
+With `BESU_ENABLED=false`, this fills `dataHash`, `chainAnchorStatus=pending_anchor`, and `integrityStatus=pending_anchor` for legacy pledges.
+
+With `BESU_ENABLED=true`, it also attempts to anchor pending legacy pledges onto Besu.
+
 ## Firestore indexes
 
 Keep `firestore.indexes.json` in sync with query patterns before production import. Deploy indexes with Firebase tooling for the target project.
@@ -53,4 +63,18 @@ BESU_CONTRACT_ADDRESS=0x...
 BESU_FROM_ADDRESS=0x...
 ```
 
-`BESU_FROM_ADDRESS` must be an account the Besu node accepts for `eth_sendTransaction` on the private network. The background worker retries `pending_anchor` pledges and periodically verifies `anchored` pledges against on-chain state.
+For production, prefer local signing with:
+
+```bash
+BESU_PRIVATE_KEY=...
+```
+
+When `BESU_PRIVATE_KEY` is set, the backend signs raw transactions locally and submits them with `eth_sendRawTransaction`, so the Besu RPC node does not need unlocked accounts.
+
+Optional alerting:
+
+```bash
+ALERT_WEBHOOK_URL=https://your-alert-endpoint
+```
+
+The background worker retries `pending_anchor` pledges, periodically verifies `anchored` pledges against on-chain state, and emits webhook alerts on `mismatch_detected`.

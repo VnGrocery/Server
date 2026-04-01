@@ -143,3 +143,35 @@ func TestValidateRequiresVaultSettingsWhenEnabled(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+func TestValidateRequiresBesuSignerWhenEnabled(t *testing.T) {
+	cfg := Config{
+		Port:                    "8080",
+		FirebaseCredentialsFile: "/tmp/firebase.json",
+		JWTSecret:               "test-secret",
+		BesuEnabled:             true,
+		BesuRPCURL:              "http://127.0.0.1:8545",
+		BesuContractAddress:     "0x123",
+	}
+
+	err := cfg.Validate()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestValidateAllowsBesuPrivateKeyWithoutFromAddress(t *testing.T) {
+	cfg := Config{
+		Port:                    "8080",
+		FirebaseCredentialsFile: "/tmp/firebase.json",
+		JWTSecret:               "test-secret",
+		BesuEnabled:             true,
+		BesuRPCURL:              "http://127.0.0.1:8545",
+		BesuContractAddress:     "0x123",
+		BesuPrivateKey:          "abcd",
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+}

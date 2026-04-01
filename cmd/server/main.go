@@ -20,6 +20,7 @@ import (
 	shopservice "vngrocery/internal/service/shop"
 	useradminservice "vngrocery/internal/service/useradmin"
 	visionservice "vngrocery/internal/service/vision"
+	alertpkg "vngrocery/pkg/alert"
 	besupkg "vngrocery/pkg/besu"
 	"vngrocery/pkg/config"
 	firebasepkg "vngrocery/pkg/firebase"
@@ -109,6 +110,8 @@ func main() {
 			RPCURL:          cfg.BesuRPCURL,
 			ContractAddress: cfg.BesuContractAddress,
 			FromAddress:     cfg.BesuFromAddress,
+			PrivateKey:      cfg.BesuPrivateKey,
+			ChainID:         cfg.BesuChainID,
 			GasLimit:        mustParseUint(cfg.BesuGasLimit, 250000),
 			ReceiptTimeout:  time.Duration(mustParseInt(cfg.BesuReceiptTimeoutSec, 15)) * time.Second,
 		})
@@ -118,6 +121,11 @@ func main() {
 			VerifyInterval:  time.Duration(mustParseInt(cfg.BesuVerifyIntervalSec, 60)) * time.Second,
 			PendingBatch:    mustParseInt(cfg.BesuPendingBatchSize, 25),
 			VerifyBatch:     mustParseInt(cfg.BesuVerifyBatchSize, 50),
+		})
+	}
+	if cfg.AlertWebhookURL != "" {
+		integrityManager.SetNotifier(alertAdapter{
+			client: alertpkg.NewWebhookClient(cfg.AlertWebhookURL, time.Duration(mustParseInt(cfg.AlertTimeoutSec, 5))*time.Second),
 		})
 	}
 	accountService := authservice.NewAccountService(authUserRepository, userRepository, refreshTokenRepository, passwordResetTokenRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, 30*24*time.Hour, cfg.GoogleClientID)
@@ -244,4 +252,24 @@ func mustParseUint(raw string, fallback uint64) uint64 {
 		return fallback
 	}
 	return value
+}
+
+type alertAdapter struct {
+	client *alertpkg.WebhookClient
+}
+
+func (a alertAdapter) NotifyIntegrityMismatch(ctx context.Context, payload integrityservice.IntegrityAlertPayload) error {
+	return a.client.NotifyIntegrityMismatch(ctx, alertpkg.IntegrityMismatchPayload{
+		Event:            "pledge.integrity_mismatch_detected",
+		PledgeID:         payload.PledgeID,
+		ShopID:           payload.ShopID,
+		CreatedByUserID:  payload.CreatedByUserID,
+		DataHash:         payload.DataHash,
+		ChainTxHash:      payload.ChainTxHash,
+		IntegrityStatus:  payload.IntegrityStatus,
+		DetectedAt:       payload.DetectedAt,
+		OnChainDataHash:  payload.OnChainDataHash,
+		OnChainVersion:   payload.OnChainVersion,
+		OnChainTimestamp: payload.OnChainTimestamp,
+	})
 }

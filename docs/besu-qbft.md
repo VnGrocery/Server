@@ -61,6 +61,14 @@ The script uses a Dockerized Foundry image to:
 - deploy the contract
 - print the `BESU_CONTRACT_ADDRESS` you should copy into `.env`
 
+For production-like backend setup on the private chain, also set:
+
+```dotenv
+BESU_PRIVATE_KEY=8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63
+```
+
+This lets the backend sign raw transactions locally instead of depending on unlocked RPC accounts.
+
 Override values if needed:
 
 ```bash

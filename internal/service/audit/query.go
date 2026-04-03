@@ -2,7 +2,12 @@ package audit
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -29,6 +34,36 @@ type ListResult struct {
 	Total    int
 	Page     int
 	PageSize int
+}
+
+type VerifyEventInput struct {
+	EventID string
+}
+
+type VerifyResourceInput struct {
+	ResourceType string
+	ResourceID   string
+}
+
+type EventVerificationResult struct {
+	EventID              string
+	ResourceType         string
+	ResourceID           string
+	Sequence             int
+	PreviousEventID      string
+	ContentHashValid     bool
+	SignatureValid       bool
+	ChainLinkValid       bool
+	PreviousEventPresent bool
+	Verified             bool
+}
+
+type VerifyResourceResult struct {
+	ResourceType string
+	ResourceID   string
+	EventCount   int
+	Verified     bool
+	Events       []EventVerificationResult
 }
 
 func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error) {
@@ -88,4 +123,148 @@ func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error)
 		Page:     page,
 		PageSize: pageSize,
 	}, nil
+}
+
+func (s *Service) VerifyEvent(ctx context.Context, input VerifyEventInput) (EventVerificationResult, error) {
+	if s.events == nil {
+		return EventVerificationResult{}, fmt.Errorf("event log repository is not configured")
+	}
+	eventID := strings.TrimSpace(input.EventID)
+	if eventID == "" {
+		return EventVerificationResult{}, fmt.Errorf("eventId is required")
+	}
+
+	event, err := s.events.GetByID(ctx, eventID)
+	if err != nil {
+		return EventVerificationResult{}, err
+	}
+
+	var previous *domain.EventLog
+	if strings.TrimSpace(event.PreviousEventID) != "" {
+		prev, err := s.events.GetByID(ctx, event.PreviousEventID)
+		if err == nil {
+			previous = &prev
+		}
+	}
+
+	return verifyEvent(event, previous)
+}
+
+func (s *Service) VerifyResource(ctx context.Context, input VerifyResourceInput) (VerifyResourceResult, error) {
+	if s.events == nil {
+		return VerifyResourceResult{}, fmt.Errorf("event log repository is not configured")
+	}
+
+	resourceType := strings.TrimSpace(input.ResourceType)
+	resourceID := strings.TrimSpace(input.ResourceID)
+	if resourceType == "" {
+		return VerifyResourceResult{}, fmt.Errorf("resourceType is required")
+	}
+	if resourceID == "" {
+		return VerifyResourceResult{}, fmt.Errorf("resourceId is required")
+	}
+
+	events, err := s.events.List(ctx, repository.EventLogListFilter{
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+	})
+	if err != nil {
+		return VerifyResourceResult{}, err
+	}
+
+	sort.Slice(events, func(i, j int) bool {
+		if events[i].Sequence == events[j].Sequence {
+			return events[i].CreatedAt.Before(events[j].CreatedAt)
+		}
+		return events[i].Sequence < events[j].Sequence
+	})
+
+	results := make([]EventVerificationResult, 0, len(events))
+	allValid := true
+	for i := range events {
+		var previous *domain.EventLog
+		if i > 0 {
+			previous = &events[i-1]
+		}
+		result, err := verifyEvent(events[i], previous)
+		if err != nil {
+			return VerifyResourceResult{}, err
+		}
+		if !result.Verified {
+			allValid = false
+		}
+		results = append(results, result)
+	}
+
+	return VerifyResourceResult{
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+		EventCount:   len(events),
+		Verified:     allValid,
+		Events:       results,
+	}, nil
+}
+
+func verifyEvent(event domain.EventLog, previous *domain.EventLog) (EventVerificationResult, error) {
+	envelopeBytes, err := signedEnvelopeBytes(event)
+	if err != nil {
+		return EventVerificationResult{}, err
+	}
+
+	contentHash := sha256.Sum256(envelopeBytes)
+	contentHashValid := base64.StdEncoding.EncodeToString(contentHash[:]) == strings.TrimSpace(event.ContentSHA256)
+
+	signatureValid := false
+	if strings.EqualFold(strings.TrimSpace(event.KeyAlgorithm), "Ed25519") {
+		publicKey, err := base64.StdEncoding.DecodeString(strings.TrimSpace(event.PublicKey))
+		if err == nil {
+			signature, err := base64.StdEncoding.DecodeString(strings.TrimSpace(event.Signature))
+			if err == nil {
+				signatureValid = ed25519.Verify(ed25519.PublicKey(publicKey), envelopeBytes, signature)
+			}
+		}
+	}
+
+	previousPresent := previous != nil
+	chainLinkValid := false
+	switch {
+	case event.Sequence == 1 && strings.TrimSpace(event.PreviousEventID) == "":
+		chainLinkValid = true
+	case previous != nil:
+		chainLinkValid = previous.EventID == strings.TrimSpace(event.PreviousEventID) &&
+			previous.ResourceType == event.ResourceType &&
+			previous.ResourceID == event.ResourceID &&
+			previous.Sequence+1 == event.Sequence
+	}
+
+	return EventVerificationResult{
+		EventID:              event.EventID,
+		ResourceType:         event.ResourceType,
+		ResourceID:           event.ResourceID,
+		Sequence:             event.Sequence,
+		PreviousEventID:      event.PreviousEventID,
+		ContentHashValid:     contentHashValid,
+		SignatureValid:       signatureValid,
+		ChainLinkValid:       chainLinkValid,
+		PreviousEventPresent: previousPresent,
+		Verified:             contentHashValid && signatureValid && chainLinkValid,
+	}, nil
+}
+
+func signedEnvelopeBytes(event domain.EventLog) ([]byte, error) {
+	payload := json.RawMessage(strings.TrimSpace(event.PayloadJSON))
+	if len(payload) == 0 {
+		payload = json.RawMessage([]byte("null"))
+	}
+	return json.Marshal(signedEnvelope{
+		Action:          strings.TrimSpace(event.Action),
+		ActorUserID:     strings.TrimSpace(event.ActorUserID),
+		OccurredAt:      event.CreatedAt.UTC().Format(time.RFC3339Nano),
+		Payload:         payload,
+		ResourceID:      strings.TrimSpace(event.ResourceID),
+		ResourceType:    strings.TrimSpace(event.ResourceType),
+		ResourceVersion: event.ResourceVersion,
+		Sequence:        event.Sequence,
+		PreviousEventID: strings.TrimSpace(event.PreviousEventID),
+	})
 }

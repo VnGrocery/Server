@@ -575,6 +575,34 @@ func buildSchemas() gin.H {
 				"pagination": gin.H{"$ref": "#/components/schemas/PaginationResponse"},
 			},
 		},
+		"EventVerificationResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"eventId":              gin.H{"type": "string"},
+				"resourceType":         gin.H{"type": "string"},
+				"resourceId":           gin.H{"type": "string"},
+				"sequence":             gin.H{"type": "integer"},
+				"previousEventId":      gin.H{"type": "string"},
+				"contentHashValid":     gin.H{"type": "boolean"},
+				"signatureValid":       gin.H{"type": "boolean"},
+				"chainLinkValid":       gin.H{"type": "boolean"},
+				"previousEventPresent": gin.H{"type": "boolean"},
+				"verified":             gin.H{"type": "boolean"},
+			},
+		},
+		"ResourceEventVerificationResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"resourceType": gin.H{"type": "string"},
+				"resourceId":   gin.H{"type": "string"},
+				"eventCount":   gin.H{"type": "integer"},
+				"verified":     gin.H{"type": "boolean"},
+				"events": gin.H{
+					"type":  "array",
+					"items": gin.H{"$ref": "#/components/schemas/EventVerificationResponse"},
+				},
+			},
+		},
 		"ErrorResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
@@ -721,6 +749,27 @@ func buildPaths() gin.H {
 					queryParam("pageSize", "integer"),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "EventLogListResponse"), errorResponse),
+			},
+		},
+		"/v1/events/verify": gin.H{
+			"get": gin.H{
+				"summary":  "Verify event chain for a resource",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					queryParam("resourceType", "string"),
+					queryParam("resourceId", "string"),
+				},
+				"responses": mergeResponses(success(http.StatusOK, "ResourceEventVerificationResponse"), errorResponse),
+			},
+		},
+		"/v1/events/{eventId}/verify": gin.H{
+			"get": gin.H{
+				"summary":  "Verify event signature and chain link",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					pathParam("eventId"),
+				},
+				"responses": mergeResponses(success(http.StatusOK, "EventVerificationResponse"), errorResponse),
 			},
 		},
 		"/v1/shops": gin.H{

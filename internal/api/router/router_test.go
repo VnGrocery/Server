@@ -458,6 +458,14 @@ func (eventLogUsecaseStub) List(ctx context.Context, input auditservice.ListInpu
 	return auditservice.ListResult{Items: []domain.EventLog{}, Page: 1, PageSize: 50}, nil
 }
 
+func (eventLogUsecaseStub) VerifyEvent(ctx context.Context, input auditservice.VerifyEventInput) (auditservice.EventVerificationResult, error) {
+	return auditservice.EventVerificationResult{EventID: input.EventID, Verified: true, ContentHashValid: true, SignatureValid: true, ChainLinkValid: true}, nil
+}
+
+func (eventLogUsecaseStub) VerifyResource(ctx context.Context, input auditservice.VerifyResourceInput) (auditservice.VerifyResourceResult, error) {
+	return auditservice.VerifyResourceResult{ResourceType: input.ResourceType, ResourceID: input.ResourceID, Verified: true}, nil
+}
+
 type adminUserHandlerStub struct{}
 
 func (adminUserHandlerStub) List(ctx context.Context, input useradminservice.ListInput) ([]domain.User, error) {

@@ -21,8 +21,29 @@ type EventLogResponse struct {
 }
 
 type EventLogListResponse struct {
-	Items      []EventLogResponse  `json:"items"`
+	Items      []EventLogResponse `json:"items"`
 	Pagination PaginationResponse `json:"pagination"`
+}
+
+type EventVerificationResponse struct {
+	EventID              string `json:"eventId"`
+	ResourceType         string `json:"resourceType"`
+	ResourceID           string `json:"resourceId"`
+	Sequence             int    `json:"sequence"`
+	PreviousEventID      string `json:"previousEventId,omitempty"`
+	ContentHashValid     bool   `json:"contentHashValid"`
+	SignatureValid       bool   `json:"signatureValid"`
+	ChainLinkValid       bool   `json:"chainLinkValid"`
+	PreviousEventPresent bool   `json:"previousEventPresent"`
+	Verified             bool   `json:"verified"`
+}
+
+type ResourceEventVerificationResponse struct {
+	ResourceType string                      `json:"resourceType"`
+	ResourceID   string                      `json:"resourceId"`
+	EventCount   int                         `json:"eventCount"`
+	Verified     bool                        `json:"verified"`
+	Events       []EventVerificationResponse `json:"events"`
 }
 
 type PaginationResponse struct {

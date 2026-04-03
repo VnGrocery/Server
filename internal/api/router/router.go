@@ -55,6 +55,8 @@ func New(deps Dependencies) *gin.Engine {
 		v1.POST("/auth/password/reset", deps.AuthHandler.ResetPassword)
 		v1.DELETE("/me", deps.AuthMiddleware.Handle(), deps.AuthHandler.DeleteMe)
 		v1.GET("/events", deps.AuthMiddleware.Handle(), deps.EventLogHandler.List)
+		v1.GET("/events/verify", deps.AuthMiddleware.Handle(), deps.EventLogHandler.VerifyResource)
+		v1.GET("/events/:eventId/verify", deps.AuthMiddleware.Handle(), deps.EventLogHandler.VerifyEvent)
 		v1.GET("/shops", deps.ShopHandler.List)
 		v1.GET("/shops/:shopId", deps.ShopHandler.GetByID)
 		v1.GET("/shops/:shopId/pledges", deps.ShopHandler.ListPledges)

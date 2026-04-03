@@ -15,11 +15,27 @@ import (
 )
 
 type eventLogAdapter struct {
-	list func(ctx context.Context, input auditsvc.ListInput) (auditsvc.ListResult, error)
+	list           func(ctx context.Context, input auditsvc.ListInput) (auditsvc.ListResult, error)
+	verifyEvent    func(ctx context.Context, input auditsvc.VerifyEventInput) (auditsvc.EventVerificationResult, error)
+	verifyResource func(ctx context.Context, input auditsvc.VerifyResourceInput) (auditsvc.VerifyResourceResult, error)
 }
 
 func (e eventLogAdapter) List(ctx context.Context, input auditsvc.ListInput) (auditsvc.ListResult, error) {
 	return e.list(ctx, input)
+}
+
+func (e eventLogAdapter) VerifyEvent(ctx context.Context, input auditsvc.VerifyEventInput) (auditsvc.EventVerificationResult, error) {
+	if e.verifyEvent == nil {
+		return auditsvc.EventVerificationResult{}, nil
+	}
+	return e.verifyEvent(ctx, input)
+}
+
+func (e eventLogAdapter) VerifyResource(ctx context.Context, input auditsvc.VerifyResourceInput) (auditsvc.VerifyResourceResult, error) {
+	if e.verifyResource == nil {
+		return auditsvc.VerifyResourceResult{}, nil
+	}
+	return e.verifyResource(ctx, input)
 }
 
 func TestEventLogList(t *testing.T) {
@@ -110,5 +126,77 @@ func TestEventLogListRejectsInvalidTime(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestEventLogVerifyEvent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewEventLogHandler(eventLogAdapter{
+		verifyEvent: func(ctx context.Context, input auditsvc.VerifyEventInput) (auditsvc.EventVerificationResult, error) {
+			if input.EventID != "event-1" {
+				t.Fatalf("unexpected verify input: %+v", input)
+			}
+			return auditsvc.EventVerificationResult{
+				EventID:              "event-1",
+				ResourceType:         "shop",
+				ResourceID:           "shop-1",
+				Sequence:             2,
+				PreviousEventID:      "event-0",
+				ContentHashValid:     true,
+				SignatureValid:       true,
+				ChainLinkValid:       true,
+				PreviousEventPresent: true,
+				Verified:             true,
+			}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/events/:eventId/verify", handler.VerifyEvent)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/events/event-1/verify", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestEventLogVerifyResource(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewEventLogHandler(eventLogAdapter{
+		verifyResource: func(ctx context.Context, input auditsvc.VerifyResourceInput) (auditsvc.VerifyResourceResult, error) {
+			if input.ResourceType != "shop" || input.ResourceID != "shop-1" {
+				t.Fatalf("unexpected verify input: %+v", input)
+			}
+			return auditsvc.VerifyResourceResult{
+				ResourceType: "shop",
+				ResourceID:   "shop-1",
+				EventCount:   2,
+				Verified:     true,
+				Events: []auditsvc.EventVerificationResult{{
+					EventID:          "event-1",
+					ResourceType:     "shop",
+					ResourceID:       "shop-1",
+					Sequence:         1,
+					ContentHashValid: true,
+					SignatureValid:   true,
+					ChainLinkValid:   true,
+					Verified:         true,
+				}},
+			}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/events/verify", handler.VerifyResource)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/events/verify?resourceType=shop&resourceId=shop-1", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 }

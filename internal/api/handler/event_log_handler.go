@@ -16,6 +16,8 @@ import (
 
 type EventLogUsecase interface {
 	List(ctx context.Context, input auditsvc.ListInput) (auditsvc.ListResult, error)
+	VerifyEvent(ctx context.Context, input auditsvc.VerifyEventInput) (auditsvc.EventVerificationResult, error)
+	VerifyResource(ctx context.Context, input auditsvc.VerifyResourceInput) (auditsvc.VerifyResourceResult, error)
 }
 
 type EventLogHandler struct {
@@ -106,6 +108,64 @@ func (h *EventLogHandler) List(c *gin.Context) {
 			TotalItems: result.Total,
 			TotalPages: totalPages,
 		},
+	})
+}
+
+func (h *EventLogHandler) VerifyEvent(c *gin.Context) {
+	result, err := h.events.VerifyEvent(c.Request.Context(), auditsvc.VerifyEventInput{
+		EventID: c.Param("eventId"),
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.EventVerificationResponse{
+		EventID:              result.EventID,
+		ResourceType:         result.ResourceType,
+		ResourceID:           result.ResourceID,
+		Sequence:             result.Sequence,
+		PreviousEventID:      result.PreviousEventID,
+		ContentHashValid:     result.ContentHashValid,
+		SignatureValid:       result.SignatureValid,
+		ChainLinkValid:       result.ChainLinkValid,
+		PreviousEventPresent: result.PreviousEventPresent,
+		Verified:             result.Verified,
+	})
+}
+
+func (h *EventLogHandler) VerifyResource(c *gin.Context) {
+	result, err := h.events.VerifyResource(c.Request.Context(), auditsvc.VerifyResourceInput{
+		ResourceType: c.Query("resourceType"),
+		ResourceID:   c.Query("resourceId"),
+	})
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	events := make([]dto.EventVerificationResponse, 0, len(result.Events))
+	for _, event := range result.Events {
+		events = append(events, dto.EventVerificationResponse{
+			EventID:              event.EventID,
+			ResourceType:         event.ResourceType,
+			ResourceID:           event.ResourceID,
+			Sequence:             event.Sequence,
+			PreviousEventID:      event.PreviousEventID,
+			ContentHashValid:     event.ContentHashValid,
+			SignatureValid:       event.SignatureValid,
+			ChainLinkValid:       event.ChainLinkValid,
+			PreviousEventPresent: event.PreviousEventPresent,
+			Verified:             event.Verified,
+		})
+	}
+
+	c.JSON(http.StatusOK, dto.ResourceEventVerificationResponse{
+		ResourceType: result.ResourceType,
+		ResourceID:   result.ResourceID,
+		EventCount:   result.EventCount,
+		Verified:     result.Verified,
+		Events:       events,
 	})
 }
 

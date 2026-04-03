@@ -27,6 +27,19 @@ func (r *EventLogRepository) Save(ctx context.Context, event domain.EventLog) er
 	return nil
 }
 
+func (r *EventLogRepository) GetByID(ctx context.Context, eventID string) (domain.EventLog, error) {
+	doc, err := r.client.Collection(EventLogsCollection).Doc(eventID).Get(ctx)
+	if err != nil {
+		return domain.EventLog{}, fmt.Errorf("failed to get event log: %w", err)
+	}
+
+	var event domain.EventLog
+	if err := doc.DataTo(&event); err != nil {
+		return domain.EventLog{}, fmt.Errorf("failed to decode event log: %w", err)
+	}
+	return event, nil
+}
+
 func (r *EventLogRepository) GetLatestByResource(ctx context.Context, resourceType, resourceID string) (domain.EventLog, error) {
 	docs, err := r.client.Collection(EventLogsCollection).
 		Where("resourceType", "==", resourceType).

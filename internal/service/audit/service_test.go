@@ -2,6 +2,10 @@ package audit
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -13,6 +17,7 @@ import (
 
 type eventLogRepoStub struct {
 	save      func(ctx context.Context, event domain.EventLog) error
+	getByID   func(ctx context.Context, eventID string) (domain.EventLog, error)
 	getLatest func(ctx context.Context, resourceType, resourceID string) (domain.EventLog, error)
 	list      func(ctx context.Context, filter repository.EventLogListFilter) ([]domain.EventLog, error)
 }
@@ -22,6 +27,13 @@ func (s eventLogRepoStub) Save(ctx context.Context, event domain.EventLog) error
 		return s.save(ctx, event)
 	}
 	return nil
+}
+
+func (s eventLogRepoStub) GetByID(ctx context.Context, eventID string) (domain.EventLog, error) {
+	if s.getByID != nil {
+		return s.getByID(ctx, eventID)
+	}
+	return domain.EventLog{}, errors.New("not found")
 }
 
 func (s eventLogRepoStub) GetLatestByResource(ctx context.Context, resourceType, resourceID string) (domain.EventLog, error) {
@@ -208,5 +220,80 @@ func TestListRejectsInvalidRanges(t *testing.T) {
 	})
 	if err == nil || err.Error() != "createdAfter must be before or equal to createdBefore" {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestVerifyEventAndResourceChain(t *testing.T) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate keypair: %v", err)
+	}
+	now := time.Date(2026, 4, 10, 1, 2, 3, 0, time.UTC)
+	makeEvent := func(id string, sequence int, previousID string) domain.EventLog {
+		event := domain.EventLog{
+			EventID:         id,
+			ActorUserID:     "user-1",
+			ResourceType:    "shop",
+			ResourceID:      "shop-1",
+			ResourceVersion: sequence,
+			Action:          "shop.updated",
+			Status:          "updated",
+			Sequence:        sequence,
+			PreviousEventID: previousID,
+			PayloadJSON:     `{"after":{"name":"Green Shop"}}`,
+			PublicKey:       base64.StdEncoding.EncodeToString(publicKey),
+			KeyAlgorithm:    "Ed25519",
+			CreatedAt:       now.Add(time.Duration(sequence) * time.Minute),
+		}
+		envelopeBytes, err := signedEnvelopeBytes(event)
+		if err != nil {
+			t.Fatalf("failed to build envelope: %v", err)
+		}
+		signature := ed25519.Sign(privateKey, envelopeBytes)
+		hash := sha256.Sum256(envelopeBytes)
+		event.Signature = base64.StdEncoding.EncodeToString(signature)
+		event.ContentSHA256 = base64.StdEncoding.EncodeToString(hash[:])
+		return event
+	}
+
+	event1 := makeEvent("event-1", 1, "")
+	event2 := makeEvent("event-2", 2, "event-1")
+	service := NewService(
+		eventLogRepoStub{
+			getByID: func(ctx context.Context, eventID string) (domain.EventLog, error) {
+				switch eventID {
+				case "event-1":
+					return event1, nil
+				case "event-2":
+					return event2, nil
+				default:
+					return domain.EventLog{}, errors.New("not found")
+				}
+			},
+			list: func(ctx context.Context, filter repository.EventLogListFilter) ([]domain.EventLog, error) {
+				return []domain.EventLog{event2, event1}, nil
+			},
+		},
+		nil,
+		nil,
+	)
+
+	verifiedEvent, err := service.VerifyEvent(context.Background(), VerifyEventInput{EventID: "event-2"})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if !verifiedEvent.Verified || !verifiedEvent.SignatureValid || !verifiedEvent.ContentHashValid || !verifiedEvent.ChainLinkValid {
+		t.Fatalf("unexpected event verification result: %+v", verifiedEvent)
+	}
+
+	verifiedResource, err := service.VerifyResource(context.Background(), VerifyResourceInput{
+		ResourceType: "shop",
+		ResourceID:   "shop-1",
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if !verifiedResource.Verified || verifiedResource.EventCount != 2 || len(verifiedResource.Events) != 2 {
+		t.Fatalf("unexpected resource verification result: %+v", verifiedResource)
 	}
 }

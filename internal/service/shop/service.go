@@ -79,6 +79,14 @@ type PledgeHistoryInput struct {
 type PledgeIntegrityInput struct {
 	ShopID   string
 	PledgeID string
+	DataHash string
+}
+
+type ModeratePledgeIntegrityInput struct {
+	ShopID          string
+	PledgeID        string
+	ActorUserID     string
+	ExpectedVersion int
 }
 
 type ListInput struct {
@@ -148,21 +156,31 @@ type AuditLogger interface {
 
 type PledgeIntegrityReader interface {
 	GetPledgeIntegrity(ctx context.Context, pledge domain.Pledge) (PledgeIntegrityView, error)
+	VerifyPledgeHash(ctx context.Context, pledge domain.Pledge, dataHash string) (PledgeIntegrityView, error)
+	ReanchorPledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error)
+	RevokePledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error)
 }
 
 type PledgeIntegrityView struct {
 	PledgeID          string
 	ShopID            string
 	DataHash          string
+	ProvidedDataHash  string
 	ChainTxHash       string
 	ChainBlockNumber  int64
 	ChainAnchorStatus string
 	ChainAnchorTime   *time.Time
 	IntegrityStatus   string
 	OnChainMatch      bool
+	ProvidedHashMatch bool
 	OnChainDataHash   string
 	OnChainVersion    int
 	OnChainTimestamp  *time.Time
+	OnChainPresent    bool
+	MismatchReason    string
+	LastCheckedAt     *time.Time
+	CanReanchor       bool
+	CanRevoke         bool
 }
 
 func NewService(shops repository.ShopRepository, pledges repository.PledgeRepository, checks repository.BuyerCheckRepository, reviews repository.ShopReviewRepository, users repository.UserRepository, auditLogger AuditLogger) *Service {
@@ -688,8 +706,88 @@ func (s *Service) GetPledgeIntegrity(ctx context.Context, input PledgeIntegrityI
 	if s.integrity == nil {
 		return view, nil
 	}
-
+	if strings.TrimSpace(input.DataHash) != "" {
+		return s.integrity.VerifyPledgeHash(ctx, pledge, input.DataHash)
+	}
 	return s.integrity.GetPledgeIntegrity(ctx, pledge)
+}
+
+func (s *Service) ReanchorPledgeIntegrity(ctx context.Context, input ModeratePledgeIntegrityInput) (domain.Pledge, error) {
+	if err := s.ensureAdmin(ctx, input.ActorUserID); err != nil {
+		return domain.Pledge{}, err
+	}
+	if input.ExpectedVersion <= 0 {
+		return domain.Pledge{}, ErrVersionConflict
+	}
+	if s.pledges == nil || s.integrity == nil {
+		return domain.Pledge{}, fmt.Errorf("pledge integrity dependencies are not configured")
+	}
+	pledge, err := s.pledges.GetByID(ctx, strings.TrimSpace(input.PledgeID))
+	if err != nil || pledge.PledgeID == "" || pledge.ShopID != strings.TrimSpace(input.ShopID) {
+		return domain.Pledge{}, ErrNotFound
+	}
+	if pledge.Version != input.ExpectedVersion {
+		return domain.Pledge{}, ErrVersionConflict
+	}
+	before := pledge
+	updated, err := s.integrity.ReanchorPledge(ctx, pledge)
+	if err != nil {
+		return domain.Pledge{}, err
+	}
+	if err := s.pledges.Save(ctx, updated); err != nil {
+		return domain.Pledge{}, err
+	}
+	if s.audit != nil {
+		_ = s.audit.Log(ctx, audit.Input{
+			ActorUserID:     input.ActorUserID,
+			ResourceType:    "pledge",
+			ResourceID:      updated.PledgeID,
+			ResourceVersion: updated.Version,
+			Action:          "pledge.reanchored",
+			Status:          updated.IntegrityStatus,
+			Payload:         audit.MutationPayload{Before: before, After: updated},
+		})
+	}
+	return updated, nil
+}
+
+func (s *Service) RevokePledgeIntegrity(ctx context.Context, input ModeratePledgeIntegrityInput) (domain.Pledge, error) {
+	if err := s.ensureAdmin(ctx, input.ActorUserID); err != nil {
+		return domain.Pledge{}, err
+	}
+	if input.ExpectedVersion <= 0 {
+		return domain.Pledge{}, ErrVersionConflict
+	}
+	if s.pledges == nil || s.integrity == nil {
+		return domain.Pledge{}, fmt.Errorf("pledge integrity dependencies are not configured")
+	}
+	pledge, err := s.pledges.GetByID(ctx, strings.TrimSpace(input.PledgeID))
+	if err != nil || pledge.PledgeID == "" || pledge.ShopID != strings.TrimSpace(input.ShopID) {
+		return domain.Pledge{}, ErrNotFound
+	}
+	if pledge.Version != input.ExpectedVersion {
+		return domain.Pledge{}, ErrVersionConflict
+	}
+	before := pledge
+	updated, err := s.integrity.RevokePledge(ctx, pledge)
+	if err != nil {
+		return domain.Pledge{}, err
+	}
+	if err := s.pledges.Save(ctx, updated); err != nil {
+		return domain.Pledge{}, err
+	}
+	if s.audit != nil {
+		_ = s.audit.Log(ctx, audit.Input{
+			ActorUserID:     input.ActorUserID,
+			ResourceType:    "pledge",
+			ResourceID:      updated.PledgeID,
+			ResourceVersion: updated.Version,
+			Action:          "pledge.revoked",
+			Status:          updated.IntegrityStatus,
+			Payload:         audit.MutationPayload{Before: before, After: updated},
+		})
+	}
+	return updated, nil
 }
 
 func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView, error) {
@@ -849,9 +947,15 @@ func calculateBuyerCheckTrustScore(checks []domain.BuyerCheck) (float64, int, in
 	}
 
 	total := 0.0
+	totalWeight := 0.0
 	trusted := 0
 	highRisk := 0
+	duplicateDiscounts := 0
+	seenActors := map[string]int{}
 	for _, check := range checks {
+		if check.Status == "rejected" {
+			continue
+		}
 		checkScore := 70.0
 		switch check.Verdict {
 		case "trusted":
@@ -871,7 +975,20 @@ func calculateBuyerCheckTrustScore(checks []domain.BuyerCheck) (float64, int, in
 		if check.ScoreDeltaAbs > warningMaxScoreDelta {
 			checkScore -= 15
 		}
-		total += clamp(checkScore, 0, 100)
+		weight := 1.0
+		actorKey := strings.TrimSpace(check.BuyerUserID)
+		if actorKey != "" {
+			seenActors[actorKey]++
+			if seenActors[actorKey] > 1 {
+				weight = 0.35
+				duplicateDiscounts++
+			}
+		}
+		if check.Status == "flagged" {
+			weight *= 0.25
+		}
+		total += clamp(checkScore, 0, 100) * weight
+		totalWeight += weight
 	}
 
 	reasons := make([]string, 0, 2)
@@ -881,8 +998,13 @@ func calculateBuyerCheckTrustScore(checks []domain.BuyerCheck) (float64, int, in
 	if highRisk > 0 {
 		reasons = append(reasons, "buyer_checks_high_risk")
 	}
-
-	return total / float64(len(checks)), trusted, highRisk, reasons
+	if duplicateDiscounts > 0 {
+		reasons = append(reasons, "duplicate_buyer_checks_discounted")
+	}
+	if totalWeight == 0 {
+		return 50, trusted, highRisk, append(reasons, "no_eligible_buyer_checks")
+	}
+	return total / totalWeight, trusted, highRisk, reasons
 }
 
 const warningMaxScoreDelta = 2.5

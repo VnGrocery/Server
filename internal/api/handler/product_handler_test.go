@@ -17,15 +17,16 @@ import (
 )
 
 type productServiceAdapter struct {
-	create                func(ctx context.Context, input productsvc.CreateInput) (domain.Product, error)
-	update                func(ctx context.Context, input productsvc.UpdateInput) (domain.Product, error)
-	delete                func(ctx context.Context, input productsvc.DeleteInput) (domain.Product, error)
-	moderate              func(ctx context.Context, input productsvc.ModerateInput) (domain.Product, error)
-	bulkUpsert            func(ctx context.Context, input productsvc.BulkUpsertInput) ([]domain.Product, error)
-	getByID               func(ctx context.Context, shopID, productID string) (domain.Product, error)
-	list                  func(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error)
-	createFreshnessReport func(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error)
-	listFreshnessReports  func(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error)
+	create                  func(ctx context.Context, input productsvc.CreateInput) (domain.Product, error)
+	update                  func(ctx context.Context, input productsvc.UpdateInput) (domain.Product, error)
+	delete                  func(ctx context.Context, input productsvc.DeleteInput) (domain.Product, error)
+	moderate                func(ctx context.Context, input productsvc.ModerateInput) (domain.Product, error)
+	bulkUpsert              func(ctx context.Context, input productsvc.BulkUpsertInput) ([]domain.Product, error)
+	getByID                 func(ctx context.Context, shopID, productID string) (domain.Product, error)
+	list                    func(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error)
+	createFreshnessReport   func(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error)
+	moderateFreshnessReport func(ctx context.Context, input productsvc.ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error)
+	listFreshnessReports    func(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error)
 }
 
 func (s productServiceAdapter) Create(ctx context.Context, input productsvc.CreateInput) (domain.Product, error) {
@@ -58,6 +59,10 @@ func (s productServiceAdapter) List(ctx context.Context, input productsvc.ListIn
 
 func (s productServiceAdapter) CreateFreshnessReport(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error) {
 	return s.createFreshnessReport(ctx, input)
+}
+
+func (s productServiceAdapter) ModerateFreshnessReport(ctx context.Context, input productsvc.ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error) {
+	return s.moderateFreshnessReport(ctx, input)
 }
 
 func (s productServiceAdapter) ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error) {

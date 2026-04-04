@@ -27,6 +27,7 @@ const (
 
 type ChainClient interface {
 	CommitHash(ctx context.Context, recordID, dataHash string, timestamp time.Time, version int) (CommitResult, error)
+	RevokeHash(ctx context.Context, recordID string, version int) (CommitResult, error)
 	Verify(ctx context.Context, recordID, dataHash string) (bool, error)
 	GetLatest(ctx context.Context, recordID string) (LatestRecord, error)
 	Receipt(ctx context.Context, txHash string) (CommitResult, error)
@@ -60,6 +61,7 @@ type Service struct {
 	chain    ChainClient
 	audit    AuditLogger
 	notifier Notifier
+	observer Observer
 	now      func() time.Time
 }
 
@@ -67,15 +69,22 @@ type IntegrityView struct {
 	PledgeID          string
 	ShopID            string
 	DataHash          string
+	ProvidedDataHash  string
 	ChainTxHash       string
 	ChainBlockNumber  int64
 	ChainAnchorStatus string
 	ChainAnchorTime   *time.Time
 	IntegrityStatus   string
 	OnChainMatch      bool
+	ProvidedHashMatch bool
 	OnChainDataHash   string
 	OnChainVersion    int
 	OnChainTimestamp  *time.Time
+	OnChainPresent    bool
+	MismatchReason    string
+	LastCheckedAt     *time.Time
+	CanReanchor       bool
+	CanRevoke         bool
 }
 
 type IntegrityAlertPayload struct {
@@ -89,6 +98,15 @@ type IntegrityAlertPayload struct {
 	OnChainDataHash  string
 	OnChainVersion   int
 	OnChainTimestamp *time.Time
+}
+
+type Observer interface {
+	IncIntegrityAnchorAttempt()
+	IncIntegrityAnchorSuccess()
+	IncIntegrityAnchorFailure()
+	IncIntegrityVerifyMismatch()
+	IncIntegrityReanchor()
+	IncIntegrityRevoke()
 }
 
 type pledgeHashPayload struct {
@@ -117,6 +135,10 @@ func NewService(pledges repository.PledgeRepository, chain ChainClient, auditLog
 
 func (s *Service) SetNotifier(notifier Notifier) {
 	s.notifier = notifier
+}
+
+func (s *Service) SetObserver(observer Observer) {
+	s.observer = observer
 }
 
 func (s *Service) PreparePledge(pledge domain.Pledge) (domain.Pledge, error) {
@@ -160,13 +182,22 @@ func (s *Service) SyncPledge(ctx context.Context, pledge domain.Pledge) (domain.
 		}
 	}
 
+	if s.observer != nil {
+		s.observer.IncIntegrityAnchorAttempt()
+	}
 	commit, err := s.chain.CommitHash(ctx, pledge.PledgeID, pledge.DataHash, pledge.CreatedAt, pledge.Version)
 	if err != nil {
+		if s.observer != nil {
+			s.observer.IncIntegrityAnchorFailure()
+		}
 		return pledge, err
 	}
 
 	pledge.ChainTxHash = commit.TxHash
 	if commit.Mined {
+		if s.observer != nil {
+			s.observer.IncIntegrityAnchorSuccess()
+		}
 		return s.applyAnchored(pledge, commit), nil
 	}
 
@@ -213,6 +244,9 @@ func (s *Service) VerifyAnchoredPledges(ctx context.Context, limit int) error {
 		}
 		if ok {
 			continue
+		}
+		if s.observer != nil {
+			s.observer.IncIntegrityVerifyMismatch()
 		}
 
 		before := pledge
@@ -267,6 +301,9 @@ func (s *Service) GetPledgeIntegrity(ctx context.Context, pledge domain.Pledge) 
 		ChainAnchorStatus: pledge.ChainAnchorStatus,
 		ChainAnchorTime:   pledge.ChainAnchorTime,
 		IntegrityStatus:   pledge.IntegrityStatus,
+		LastCheckedAt:     pointerTime(pledge.UpdatedAt),
+		CanReanchor:       pledge.IntegrityStatus == IntegrityStatusMismatchDetected || pledge.IntegrityStatus == IntegrityStatusRevoked,
+		CanRevoke:         pledge.ChainAnchorStatus == ChainAnchorStatusAnchored && pledge.IntegrityStatus != IntegrityStatusRevoked,
 	}
 
 	if s.chain == nil || pledge.DataHash == "" {
@@ -281,6 +318,23 @@ func (s *Service) GetPledgeIntegrity(ctx context.Context, pledge domain.Pledge) 
 	view.OnChainDataHash = latest.DataHash
 	view.OnChainVersion = latest.Version
 	view.OnChainTimestamp = latest.Timestamp
+	view.OnChainPresent = latest.IsPresent
+	view.MismatchReason = mismatchReason(pledge, latest, ok)
+	return view, nil
+}
+
+func (s *Service) VerifyPledgeHash(ctx context.Context, pledge domain.Pledge, dataHash string) (IntegrityView, error) {
+	view, err := s.GetPledgeIntegrity(ctx, pledge)
+	if err != nil {
+		return IntegrityView{}, err
+	}
+	view.ProvidedDataHash = strings.TrimSpace(strings.TrimPrefix(dataHash, "0x"))
+	if view.ProvidedDataHash != "" {
+		view.ProvidedHashMatch = strings.EqualFold(view.ProvidedDataHash, view.OnChainDataHash)
+		if view.OnChainPresent && !view.ProvidedHashMatch && view.MismatchReason == "" {
+			view.MismatchReason = "provided_hash_mismatch"
+		}
+	}
 	return view, nil
 }
 
@@ -323,11 +377,59 @@ func (s *Service) verifyPledge(ctx context.Context, pledge domain.Pledge) (bool,
 	return ok, latest, nil
 }
 
+func (s *Service) RevokePledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error) {
+	if s.chain == nil {
+		return domain.Pledge{}, fmt.Errorf("integrity chain client is not configured")
+	}
+	nextVersion := pledge.Version + 1
+	if s.observer != nil {
+		s.observer.IncIntegrityRevoke()
+	}
+	commit, err := s.chain.RevokeHash(ctx, pledge.PledgeID, nextVersion)
+	if err != nil {
+		return domain.Pledge{}, err
+	}
+	pledge.Version = nextVersion
+	pledge.IntegrityStatus = IntegrityStatusRevoked
+	pledge.ChainTxHash = commit.TxHash
+	pledge.UpdatedAt = s.now().UTC()
+	if commit.Mined {
+		pledge.ChainAnchorStatus = ChainAnchorStatusAnchored
+		pledge.ChainBlockNumber = commit.BlockNumber
+		pledge.ChainAnchorTime = commit.BlockTime
+	}
+	return pledge, nil
+}
+
+func (s *Service) ReanchorPledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error) {
+	if s.chain == nil {
+		return domain.Pledge{}, fmt.Errorf("integrity chain client is not configured")
+	}
+	if s.observer != nil {
+		s.observer.IncIntegrityReanchor()
+	}
+	rehashed, err := HashPledge(pledge)
+	if err != nil {
+		return domain.Pledge{}, err
+	}
+	pledge.DataHash = rehashed
+	pledge.Version++
+	pledge.ChainAnchorStatus = ChainAnchorStatusPending
+	pledge.IntegrityStatus = IntegrityStatusReanchored
+	pledge.ChainTxHash = ""
+	pledge.ChainBlockNumber = 0
+	pledge.ChainAnchorTime = nil
+	pledge.UpdatedAt = s.now().UTC()
+	return s.SyncPledge(ctx, pledge)
+}
+
 func (s *Service) applyAnchored(pledge domain.Pledge, commit CommitResult) domain.Pledge {
 	pledge.ChainTxHash = commit.TxHash
 	pledge.ChainBlockNumber = commit.BlockNumber
 	pledge.ChainAnchorStatus = ChainAnchorStatusAnchored
-	pledge.IntegrityStatus = IntegrityStatusAnchored
+	if pledge.IntegrityStatus != IntegrityStatusReanchored {
+		pledge.IntegrityStatus = IntegrityStatusAnchored
+	}
 	if commit.BlockTime != nil {
 		pledge.ChainAnchorTime = commit.BlockTime
 	} else {
@@ -335,4 +437,31 @@ func (s *Service) applyAnchored(pledge domain.Pledge, commit CommitResult) domai
 		pledge.ChainAnchorTime = &now
 	}
 	return pledge
+}
+
+func mismatchReason(pledge domain.Pledge, latest LatestRecord, matched bool) string {
+	if matched {
+		return ""
+	}
+	if !latest.IsPresent {
+		return "missing_on_chain_record"
+	}
+	if latest.IsRevoked {
+		return "revoked_on_chain"
+	}
+	if !strings.EqualFold(strings.TrimSpace(pledge.DataHash), strings.TrimSpace(latest.DataHash)) {
+		return "data_hash_mismatch"
+	}
+	if latest.Version != pledge.Version {
+		return "version_mismatch"
+	}
+	return "integrity_check_failed"
+}
+
+func pointerTime(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+	v := value.UTC()
+	return &v
 }

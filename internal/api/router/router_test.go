@@ -604,6 +604,14 @@ func (shopHandlerStub) GetPledgeIntegrity(ctx context.Context, input shopservice
 	}, nil
 }
 
+func (shopHandlerStub) ReanchorPledgeIntegrity(ctx context.Context, input shopservice.ModeratePledgeIntegrityInput) (domain.Pledge, error) {
+	return domain.Pledge{PledgeID: input.PledgeID, ShopID: input.ShopID, IntegrityStatus: "reanchored", Version: input.ExpectedVersion + 1}, nil
+}
+
+func (shopHandlerStub) RevokePledgeIntegrity(ctx context.Context, input shopservice.ModeratePledgeIntegrityInput) (domain.Pledge, error) {
+	return domain.Pledge{PledgeID: input.PledgeID, ShopID: input.ShopID, IntegrityStatus: "revoked", Version: input.ExpectedVersion + 1}, nil
+}
+
 func (shopHandlerStub) Review(ctx context.Context, input shopservice.ReviewInput) (domain.ShopReview, error) {
 	return domain.ShopReview{
 		ReviewID:       "review-1",
@@ -736,6 +744,16 @@ func (productHandlerStub) CreateFreshnessReport(ctx context.Context, input produ
 		Confidence:     input.Confidence,
 		Comment:        input.Comment,
 		ImageHash:      input.ImageHash,
+	}, nil
+}
+
+func (productHandlerStub) ModerateFreshnessReport(ctx context.Context, input productservice.ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error) {
+	return domain.ProductFreshnessReport{
+		ReportID:          input.ReportID,
+		Status:            input.Status,
+		ModeratedByUserID: input.ModeratorUserID,
+		ModerationNote:    input.ModerationNote,
+		Version:           input.ExpectedVersion + 1,
 	}, nil
 }
 

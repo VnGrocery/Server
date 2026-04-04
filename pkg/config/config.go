@@ -35,6 +35,10 @@ type Config struct {
 	BesuVerifyBatchSize     string
 	AlertWebhookURL         string
 	AlertTimeoutSec         string
+	RateLimitBackend        string
+	RateLimitCollection     string
+	RateLimitMaxRequests    string
+	RateLimitWindowSec      string
 	AIProvider              string
 	OpenAIAPIKey            string
 	OpenAIBaseURL           string
@@ -70,6 +74,10 @@ func Load() (Config, error) {
 		BesuVerifyBatchSize:     getEnvOrDefault("BESU_VERIFY_BATCH_SIZE", "50"),
 		AlertWebhookURL:         os.Getenv("ALERT_WEBHOOK_URL"),
 		AlertTimeoutSec:         getEnvOrDefault("ALERT_TIMEOUT_SEC", "5"),
+		RateLimitBackend:        getEnvOrDefault("RATE_LIMIT_BACKEND", "memory"),
+		RateLimitCollection:     getEnvOrDefault("RATE_LIMIT_COLLECTION", "rate_limits"),
+		RateLimitMaxRequests:    getEnvOrDefault("RATE_LIMIT_MAX_REQUESTS", "120"),
+		RateLimitWindowSec:      getEnvOrDefault("RATE_LIMIT_WINDOW_SEC", "60"),
 		AIProvider:              getEnvOrDefault("AI_PROVIDER", "openai"),
 		OpenAIAPIKey:            os.Getenv("OPENAI_API_KEY"),
 		OpenAIBaseURL:           getEnvOrDefault("OPENAI_BASE_URL", "https://api.openai.com/v1"),
@@ -127,6 +135,9 @@ func (c Config) Validate() error {
 		if c.BesuFromAddress == "" && c.BesuPrivateKey == "" {
 			return errors.New("BESU_FROM_ADDRESS or BESU_PRIVATE_KEY is required when BESU_ENABLED=true")
 		}
+	}
+	if c.RateLimitBackend != "" && c.RateLimitBackend != "memory" && c.RateLimitBackend != "firestore" {
+		return fmt.Errorf("unsupported RATE_LIMIT_BACKEND: %s", c.RateLimitBackend)
 	}
 
 	return nil

@@ -17,12 +17,27 @@ import (
 )
 
 var ErrInvalidCheck = errors.New("invalid buyer check request")
+var ErrRateLimited = errors.New("buyer check rate limit exceeded")
+
+const (
+	BuyerCheckStatusCompleted = "completed"
+	BuyerCheckStatusFlagged   = "flagged"
+	BuyerCheckStatusRejected  = "rejected"
+)
 
 type CheckInput struct {
 	PledgeID    string
 	BuyerUserID string
 	ImageHash   string
 	Image       visionservice.ImageInput
+}
+
+type ModerateInput struct {
+	CheckID         string
+	ModeratorUserID string
+	ExpectedVersion int
+	Status          string
+	ModerationNote  string
 }
 
 type CheckResult struct {
@@ -54,6 +69,7 @@ type CheckService interface {
 type Service struct {
 	pledges repository.PledgeRepository
 	checks  repository.BuyerCheckRepository
+	users   repository.UserRepository
 	scorer  visionservice.ImageScorer
 	audit   AuditLogger
 	now     func() time.Time
@@ -63,10 +79,11 @@ type AuditLogger interface {
 	Log(ctx context.Context, input audit.Input) error
 }
 
-func NewService(pledges repository.PledgeRepository, checks repository.BuyerCheckRepository, scorer visionservice.ImageScorer, auditLogger AuditLogger) *Service {
+func NewService(pledges repository.PledgeRepository, checks repository.BuyerCheckRepository, users repository.UserRepository, scorer visionservice.ImageScorer, auditLogger AuditLogger) *Service {
 	return &Service{
 		pledges: pledges,
 		checks:  checks,
+		users:   users,
 		scorer:  scorer,
 		audit:   auditLogger,
 		now:     time.Now,
@@ -83,6 +100,9 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	}
 	if s.checks == nil {
 		return CheckResult{}, fmt.Errorf("buyer check repository is not configured")
+	}
+	if err := s.ensureQuota(ctx, buyerUserID); err != nil {
+		return CheckResult{}, err
 	}
 
 	pledgeID := strings.TrimSpace(input.PledgeID)
@@ -115,6 +135,66 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	result.BuyerUserID = buyerUserID
 	result.ImageHash = strings.TrimSpace(input.ImageHash)
 	return s.persistCheck(ctx, result)
+}
+
+func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.BuyerCheck, error) {
+	if strings.TrimSpace(input.CheckID) == "" {
+		return domain.BuyerCheck{}, fmt.Errorf("%w: checkId is required", ErrInvalidCheck)
+	}
+	if strings.TrimSpace(input.ModeratorUserID) == "" {
+		return domain.BuyerCheck{}, fmt.Errorf("%w: moderatorUserId is required", ErrInvalidCheck)
+	}
+	if input.ExpectedVersion <= 0 {
+		return domain.BuyerCheck{}, fmt.Errorf("%w: expectedVersion must be positive", ErrInvalidCheck)
+	}
+	if s.checks == nil || s.users == nil {
+		return domain.BuyerCheck{}, fmt.Errorf("buyer check moderation dependencies are not configured")
+	}
+	if err := s.ensureAdmin(ctx, input.ModeratorUserID); err != nil {
+		return domain.BuyerCheck{}, err
+	}
+
+	check, err := s.checks.GetByID(ctx, strings.TrimSpace(input.CheckID))
+	if err != nil || check.CheckID == "" {
+		return domain.BuyerCheck{}, err
+	}
+	if check.Version != input.ExpectedVersion {
+		return domain.BuyerCheck{}, fmt.Errorf("%w: version conflict", ErrInvalidCheck)
+	}
+	status, err := validateModerationStatus(input.Status)
+	if err != nil {
+		return domain.BuyerCheck{}, err
+	}
+
+	before := check
+	check.Status = status
+	check.Version++
+	check.ModeratedByUserID = strings.TrimSpace(input.ModeratorUserID)
+	check.ModerationNote = strings.TrimSpace(input.ModerationNote)
+	now := s.now().UTC()
+	check.ModeratedAt = &now
+	check.UpdatedAt = now
+	if err := s.checks.Save(ctx, check); err != nil {
+		return domain.BuyerCheck{}, err
+	}
+	if s.audit != nil {
+		if err := s.audit.Log(ctx, audit.Input{
+			ActorUserID:     input.ModeratorUserID,
+			ResourceType:    "buyer_check",
+			ResourceID:      check.CheckID,
+			ResourceVersion: check.Version,
+			Action:          "buyer_check.moderated",
+			Status:          check.Status,
+			Payload: audit.MutationPayload{
+				Before: before,
+				After:  check,
+			},
+		}); err != nil {
+			return domain.BuyerCheck{}, err
+		}
+	}
+
+	return check, nil
 }
 
 const (
@@ -219,7 +299,8 @@ func (r CheckResult) toBuyerCheck(checkID string, createdAt time.Time) domain.Bu
 		ProductID:        r.ProductID,
 		PledgeID:         r.PledgeID,
 		BuyerUserID:      r.BuyerUserID,
-		Status:           "completed",
+		Status:           BuyerCheckStatusCompleted,
+		Version:          1,
 		PolicyVersion:    r.PolicyVersion,
 		Trusted:          r.Trusted,
 		Verdict:          r.Verdict,
@@ -234,5 +315,45 @@ func (r CheckResult) toBuyerCheck(checkID string, createdAt time.Time) domain.Bu
 		ImageHash:        r.ImageHash,
 		Reasons:          r.Reasons,
 		CreatedAt:        createdAt,
+		UpdatedAt:        createdAt,
+	}
+}
+
+func (s *Service) ensureQuota(ctx context.Context, buyerUserID string) error {
+	checks, err := s.checks.ListByBuyerUserID(ctx, buyerUserID)
+	if err != nil {
+		return err
+	}
+	since := s.now().UTC().Add(-1 * time.Hour)
+	count := 0
+	for _, check := range checks {
+		if check.CreatedAt.After(since) {
+			count++
+		}
+	}
+	if count >= 10 {
+		return ErrRateLimited
+	}
+	return nil
+}
+
+func (s *Service) ensureAdmin(ctx context.Context, userID string) error {
+	user, err := s.users.GetByID(ctx, strings.TrimSpace(userID))
+	if err != nil {
+		return err
+	}
+	if !strings.EqualFold(strings.TrimSpace(user.Role), "admin") {
+		return fmt.Errorf("forbidden")
+	}
+	return nil
+}
+
+func validateModerationStatus(status string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(status))
+	switch normalized {
+	case BuyerCheckStatusCompleted, BuyerCheckStatusFlagged, BuyerCheckStatusRejected:
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("%w: invalid status", ErrInvalidCheck)
 	}
 }

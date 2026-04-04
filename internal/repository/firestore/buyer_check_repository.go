@@ -27,12 +27,38 @@ func (r *BuyerCheckRepository) Save(ctx context.Context, check domain.BuyerCheck
 	return nil
 }
 
+func (r *BuyerCheckRepository) GetByID(ctx context.Context, checkID string) (domain.BuyerCheck, error) {
+	doc, err := r.client.Collection(BuyerChecksCollection).Doc(checkID).Get(ctx)
+	if err != nil {
+		return domain.BuyerCheck{}, fmt.Errorf("failed to get buyer check: %w", err)
+	}
+
+	var check domain.BuyerCheck
+	if err := doc.DataTo(&check); err != nil {
+		return domain.BuyerCheck{}, fmt.Errorf("failed to decode buyer check document: %w", err)
+	}
+	return check, nil
+}
+
 func (r *BuyerCheckRepository) ListByShopID(ctx context.Context, shopID string) ([]domain.BuyerCheck, error) {
 	docs, err := r.client.Collection(BuyerChecksCollection).Where("shopId", "==", shopID).Documents(ctx).GetAll()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list buyer checks by shop: %w", err)
 	}
 
+	return decodeBuyerChecks(docs)
+}
+
+func (r *BuyerCheckRepository) ListByBuyerUserID(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error) {
+	docs, err := r.client.Collection(BuyerChecksCollection).Where("buyerUserId", "==", buyerUserID).Documents(ctx).GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list buyer checks by user: %w", err)
+	}
+
+	return decodeBuyerChecks(docs)
+}
+
+func decodeBuyerChecks(docs []*gofirestore.DocumentSnapshot) ([]domain.BuyerCheck, error) {
 	checks := make([]domain.BuyerCheck, 0, len(docs))
 	for _, doc := range docs {
 		var check domain.BuyerCheck

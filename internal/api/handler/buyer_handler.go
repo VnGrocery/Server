@@ -2,14 +2,17 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"vngrocery/internal/api/dto"
 	"vngrocery/internal/api/middleware"
+	"vngrocery/internal/domain"
 	buyerservice "vngrocery/internal/service/buyer"
 	visionservice "vngrocery/internal/service/vision"
 )
@@ -99,6 +102,8 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		switch {
 		case errors.Is(err, buyerservice.ErrInvalidCheck):
 			status = http.StatusBadRequest
+		case errors.Is(err, buyerservice.ErrRateLimited):
+			status = http.StatusTooManyRequests
 		case errors.Is(err, visionservice.ErrInvalidImage):
 			status = http.StatusBadRequest
 		case errors.Is(err, visionservice.ErrProviderUnavailable):
@@ -115,6 +120,8 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		CheckID:          result.CheckID,
 		ShopID:           result.ShopID,
 		ProductID:        result.ProductID,
+		Status:           buyerservice.BuyerCheckStatusCompleted,
+		Version:          1,
 		PolicyVersion:    result.PolicyVersion,
 		HasPledge:        result.HasPledge,
 		PledgeID:         result.PledgeID,
@@ -129,5 +136,68 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		ActualConfidence: result.ActualConfidence,
 		CategoryMatch:    result.CategoryMatch,
 		Reasons:          result.Reasons,
+	})
+}
+
+func (h *BuyerHandler) Moderate(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	var request dto.ModerateBuyerCheckRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	moderator, ok := h.checker.(interface {
+		Moderate(ctx context.Context, input buyerservice.ModerateInput) (domain.BuyerCheck, error)
+	})
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "buyer moderation is not configured"})
+		return
+	}
+
+	check, err := moderator.Moderate(c.Request.Context(), buyerservice.ModerateInput{
+		CheckID:         c.Param("checkId"),
+		ModeratorUserID: principal.UserID,
+		ExpectedVersion: request.ExpectedVersion,
+		Status:          request.Status,
+		ModerationNote:  request.ModerationNote,
+	})
+	if err != nil {
+		status := http.StatusInternalServerError
+		switch {
+		case errors.Is(err, buyerservice.ErrInvalidCheck):
+			status = http.StatusBadRequest
+		case errors.Is(err, buyerservice.ErrRateLimited):
+			status = http.StatusTooManyRequests
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.BuyerCheckResponse{
+		CheckID:          check.CheckID,
+		ShopID:           check.ShopID,
+		ProductID:        check.ProductID,
+		Status:           check.Status,
+		Version:          check.Version,
+		PolicyVersion:    check.PolicyVersion,
+		HasPledge:        strings.TrimSpace(check.PledgeID) != "",
+		PledgeID:         check.PledgeID,
+		Trusted:          check.Trusted,
+		Verdict:          check.Verdict,
+		PledgedScore:     check.PledgedScore,
+		ActualScore:      check.ActualScore,
+		ScoreDelta:       check.ScoreDelta,
+		ScoreDeltaAbs:    check.ScoreDeltaAbs,
+		PledgedCategory:  check.PledgedCategory,
+		ActualCategory:   check.ActualCategory,
+		ActualConfidence: check.ActualConfidence,
+		CategoryMatch:    check.CategoryMatch,
+		Reasons:          check.Reasons,
 	})
 }

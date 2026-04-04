@@ -42,6 +42,7 @@ func (s pledgeRepositoryStub) ListByChainAnchorStatus(ctx context.Context, statu
 
 type chainStub struct {
 	commit  func(ctx context.Context, recordID, dataHash string, timestamp time.Time, version int) (CommitResult, error)
+	revoke  func(ctx context.Context, recordID string, version int) (CommitResult, error)
 	verify  func(ctx context.Context, recordID, dataHash string) (bool, error)
 	latest  func(ctx context.Context, recordID string) (LatestRecord, error)
 	receipt func(ctx context.Context, txHash string) (CommitResult, error)
@@ -49,6 +50,13 @@ type chainStub struct {
 
 func (s chainStub) CommitHash(ctx context.Context, recordID, dataHash string, timestamp time.Time, version int) (CommitResult, error) {
 	return s.commit(ctx, recordID, dataHash, timestamp, version)
+}
+
+func (s chainStub) RevokeHash(ctx context.Context, recordID string, version int) (CommitResult, error) {
+	if s.revoke != nil {
+		return s.revoke(ctx, recordID, version)
+	}
+	return CommitResult{}, nil
 }
 
 func (s chainStub) Verify(ctx context.Context, recordID, dataHash string) (bool, error) {
@@ -205,5 +213,29 @@ func TestVerifyAnchoredPledgesMarksMismatch(t *testing.T) {
 	}
 	if notifier.hits != 1 {
 		t.Fatalf("expected one notifier hit, got %d", notifier.hits)
+	}
+}
+
+func TestRevokePledgeUpdatesIntegrityStatus(t *testing.T) {
+	now := time.Date(2026, 4, 9, 10, 0, 0, 0, time.UTC)
+	service := NewService(nil, chainStub{
+		revoke: func(ctx context.Context, recordID string, version int) (CommitResult, error) {
+			if recordID != "pledge-1" || version != 2 {
+				t.Fatalf("unexpected revoke input: %s %d", recordID, version)
+			}
+			return CommitResult{TxHash: "0xrevoke", BlockNumber: 22, BlockTime: &now, Mined: true}, nil
+		},
+	}, nil)
+
+	pledge, err := service.RevokePledge(context.Background(), domain.Pledge{
+		PledgeID:          "pledge-1",
+		Version:           1,
+		ChainAnchorStatus: ChainAnchorStatusAnchored,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if pledge.Version != 2 || pledge.IntegrityStatus != IntegrityStatusRevoked || pledge.ChainTxHash != "0xrevoke" {
+		t.Fatalf("unexpected revoked pledge: %#v", pledge)
 	}
 }

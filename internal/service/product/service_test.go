@@ -38,8 +38,10 @@ func (s productRepositoryStub) List(ctx context.Context, filter repository.Produ
 }
 
 type productFreshnessReportRepositoryStub struct {
-	save            func(ctx context.Context, report domain.ProductFreshnessReport) error
-	listByProductID func(ctx context.Context, productID string) ([]domain.ProductFreshnessReport, error)
+	save             func(ctx context.Context, report domain.ProductFreshnessReport) error
+	getByID          func(ctx context.Context, reportID string) (domain.ProductFreshnessReport, error)
+	listByProductID  func(ctx context.Context, productID string) ([]domain.ProductFreshnessReport, error)
+	listByReporterID func(ctx context.Context, reporterUserID string) ([]domain.ProductFreshnessReport, error)
 }
 
 func (s productFreshnessReportRepositoryStub) Save(ctx context.Context, report domain.ProductFreshnessReport) error {
@@ -49,9 +51,23 @@ func (s productFreshnessReportRepositoryStub) Save(ctx context.Context, report d
 	return nil
 }
 
+func (s productFreshnessReportRepositoryStub) GetByID(ctx context.Context, reportID string) (domain.ProductFreshnessReport, error) {
+	if s.getByID != nil {
+		return s.getByID(ctx, reportID)
+	}
+	return domain.ProductFreshnessReport{}, nil
+}
+
 func (s productFreshnessReportRepositoryStub) ListByProductID(ctx context.Context, productID string) ([]domain.ProductFreshnessReport, error) {
 	if s.listByProductID != nil {
 		return s.listByProductID(ctx, productID)
+	}
+	return nil, nil
+}
+
+func (s productFreshnessReportRepositoryStub) ListByReporterUserID(ctx context.Context, reporterUserID string) ([]domain.ProductFreshnessReport, error) {
+	if s.listByReporterID != nil {
+		return s.listByReporterID(ctx, reporterUserID)
 	}
 	return nil, nil
 }
@@ -270,5 +286,37 @@ func TestListFreshnessReportsFiltersActiveByProduct(t *testing.T) {
 	}
 	if len(reports) != 1 || reports[0].ReportID != "report-1" {
 		t.Fatalf("unexpected reports: %#v", reports)
+	}
+}
+
+func TestModerateFreshnessReport(t *testing.T) {
+	service := NewService(productRepositoryStub{}, productFreshnessReportRepositoryStub{
+		getByID: func(ctx context.Context, reportID string) (domain.ProductFreshnessReport, error) {
+			return domain.ProductFreshnessReport{ReportID: reportID, Status: FreshnessReportStatusActive, Version: 1}, nil
+		},
+		save: func(ctx context.Context, report domain.ProductFreshnessReport) error {
+			if report.Status != FreshnessReportStatusFlagged || report.Version != 2 || report.ModeratedByUserID != "admin-1" {
+				t.Fatalf("unexpected moderated report: %#v", report)
+			}
+			return nil
+		},
+	}, shopRepositoryStub{}, userRepositoryStub{
+		getByID: func(ctx context.Context, userID string) (domain.User, error) {
+			return domain.User{UserID: userID, Role: "admin"}, nil
+		},
+	}, &auditLoggerStub{})
+
+	report, err := service.ModerateFreshnessReport(context.Background(), ModerateFreshnessReportInput{
+		ReportID:        "report-1",
+		ModeratorUserID: "admin-1",
+		ExpectedVersion: 1,
+		Status:          FreshnessReportStatusFlagged,
+		ModerationNote:  "suspicious",
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if report.Status != FreshnessReportStatusFlagged || report.Version != 2 {
+		t.Fatalf("unexpected report: %#v", report)
 	}
 }

@@ -69,6 +69,13 @@ BESU_PRIVATE_KEY=8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be6
 
 This lets the backend sign raw transactions locally instead of depending on unlocked RPC accounts.
 
+For production-like API limits across multiple replicas, prefer:
+
+```dotenv
+RATE_LIMIT_BACKEND=firestore
+RATE_LIMIT_COLLECTION=rate_limits
+```
+
 Override values if needed:
 
 ```bash
@@ -93,3 +100,4 @@ touch besu/qbft/data/validator{1,2,3,4}/.gitkeep
 - The network is private and intended for local/dev use only.
 - Validator 1 is the bootnode.
 - Genesis prefunds sample dev accounts from the upstream Besu example network.
+- After changing `IntegrityRegistry.sol` to add revoke support, redeploy the contract and update `BESU_CONTRACT_ADDRESS`.

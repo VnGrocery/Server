@@ -60,13 +60,24 @@ type PledgeIntegrityResponse struct {
 	PledgeID          string     `json:"pledgeId"`
 	ShopID            string     `json:"shopId"`
 	DataHash          string     `json:"dataHash"`
+	ProvidedDataHash  string     `json:"providedDataHash,omitempty"`
 	ChainTxHash       string     `json:"chainTxHash,omitempty"`
 	ChainBlockNumber  int64      `json:"chainBlockNumber,omitempty"`
 	ChainAnchorStatus string     `json:"chainAnchorStatus"`
 	ChainAnchorTime   *time.Time `json:"chainAnchorTime,omitempty"`
 	IntegrityStatus   string     `json:"integrityStatus"`
 	OnChainMatch      bool       `json:"onChainMatch"`
+	ProvidedHashMatch bool       `json:"providedHashMatch"`
 	OnChainDataHash   string     `json:"onChainDataHash,omitempty"`
 	OnChainVersion    int        `json:"onChainVersion,omitempty"`
 	OnChainTimestamp  *time.Time `json:"onChainTimestamp,omitempty"`
+	OnChainPresent    bool       `json:"onChainPresent"`
+	MismatchReason    string     `json:"mismatchReason,omitempty"`
+	LastCheckedAt     *time.Time `json:"lastCheckedAt,omitempty"`
+	CanReanchor       bool       `json:"canReanchor"`
+	CanRevoke         bool       `json:"canRevoke"`
+}
+
+type ModeratePledgeIntegrityRequest struct {
+	ExpectedVersion int `json:"expectedVersion"`
 }

@@ -22,6 +22,7 @@ type ProductService interface {
 	GetByID(ctx context.Context, shopID, productID string) (domain.Product, error)
 	List(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error)
 	CreateFreshnessReport(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error)
+	ModerateFreshnessReport(ctx context.Context, input productsvc.ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error)
 	ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error)
 }
 
@@ -275,6 +276,33 @@ func (h *ProductHandler) ListFreshnessReports(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.ProductFreshnessReportListResponse{Items: items})
 }
 
+func (h *ProductHandler) ModerateFreshnessReport(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	var request dto.ModerateProductFreshnessReportRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	report, err := h.products.ModerateFreshnessReport(c.Request.Context(), productsvc.ModerateFreshnessReportInput{
+		ReportID:        c.Param("reportId"),
+		ModeratorUserID: principal.UserID,
+		ExpectedVersion: request.ExpectedVersion,
+		Status:          request.Status,
+		ModerationNote:  request.ModerationNote,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, toProductFreshnessReportResponse(report))
+}
+
 func (h *ProductHandler) writeError(c *gin.Context, err error) {
 	status := http.StatusInternalServerError
 	switch {
@@ -292,19 +320,22 @@ func (h *ProductHandler) writeError(c *gin.Context, err error) {
 
 func toProductFreshnessReportResponse(report domain.ProductFreshnessReport) dto.ProductFreshnessReportResponse {
 	return dto.ProductFreshnessReportResponse{
-		ReportID:       report.ReportID,
-		ProductID:      report.ProductID,
-		ShopID:         report.ShopID,
-		ReporterUserID: report.ReporterUserID,
-		Status:         report.Status,
-		Version:        report.Version,
-		Score:          report.Score,
-		Category:       report.Category,
-		Confidence:     report.Confidence,
-		Comment:        report.Comment,
-		ImageHash:      report.ImageHash,
-		CreatedAt:      report.CreatedAt,
-		UpdatedAt:      report.UpdatedAt,
+		ReportID:          report.ReportID,
+		ProductID:         report.ProductID,
+		ShopID:            report.ShopID,
+		ReporterUserID:    report.ReporterUserID,
+		Status:            report.Status,
+		Version:           report.Version,
+		Score:             report.Score,
+		Category:          report.Category,
+		Confidence:        report.Confidence,
+		Comment:           report.Comment,
+		ImageHash:         report.ImageHash,
+		ModeratedByUserID: report.ModeratedByUserID,
+		ModerationNote:    report.ModerationNote,
+		ModeratedAt:       report.ModeratedAt,
+		CreatedAt:         report.CreatedAt,
+		UpdatedAt:         report.UpdatedAt,
 	}
 }
 

@@ -53,7 +53,9 @@ type ProductRepository interface {
 
 type ProductFreshnessReportRepository interface {
 	Save(ctx context.Context, report domain.ProductFreshnessReport) error
+	GetByID(ctx context.Context, reportID string) (domain.ProductFreshnessReport, error)
 	ListByProductID(ctx context.Context, productID string) ([]domain.ProductFreshnessReport, error)
+	ListByReporterUserID(ctx context.Context, reporterUserID string) ([]domain.ProductFreshnessReport, error)
 }
 
 type PledgeRepository interface {
@@ -65,7 +67,9 @@ type PledgeRepository interface {
 
 type BuyerCheckRepository interface {
 	Save(ctx context.Context, check domain.BuyerCheck) error
+	GetByID(ctx context.Context, checkID string) (domain.BuyerCheck, error)
 	ListByShopID(ctx context.Context, shopID string) ([]domain.BuyerCheck, error)
+	ListByBuyerUserID(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error)
 }
 
 type ShopReviewRepository interface {

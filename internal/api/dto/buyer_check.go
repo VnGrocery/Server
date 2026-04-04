@@ -4,6 +4,8 @@ type BuyerCheckResponse struct {
 	CheckID          string   `json:"checkId,omitempty"`
 	ShopID           string   `json:"shopId,omitempty"`
 	ProductID        string   `json:"productId,omitempty"`
+	Status           string   `json:"status,omitempty"`
+	Version          int      `json:"version,omitempty"`
 	PolicyVersion    string   `json:"policyVersion"`
 	HasPledge        bool     `json:"hasPledge"`
 	PledgeID         string   `json:"pledgeId,omitempty"`
@@ -18,4 +20,10 @@ type BuyerCheckResponse struct {
 	ActualConfidence float64  `json:"actualConfidence"`
 	CategoryMatch    bool     `json:"categoryMatch"`
 	Reasons          []string `json:"reasons"`
+}
+
+type ModerateBuyerCheckRequest struct {
+	ExpectedVersion int    `json:"expectedVersion"`
+	Status          string `json:"status"`
+	ModerationNote  string `json:"moderationNote"`
 }

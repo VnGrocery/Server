@@ -23,6 +23,8 @@ type ShopService interface {
 	List(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
 	ListPledges(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error)
 	GetPledgeIntegrity(ctx context.Context, input shopsvc.PledgeIntegrityInput) (shopsvc.PledgeIntegrityView, error)
+	ReanchorPledgeIntegrity(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error)
+	RevokePledgeIntegrity(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error)
 	Review(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
 	DeleteReview(ctx context.Context, input shopsvc.DeleteReviewInput) (domain.ShopReview, error)
 	ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error)
@@ -256,6 +258,7 @@ func (h *ShopHandler) GetPledgeIntegrity(c *gin.Context) {
 	integrityView, err := h.shops.GetPledgeIntegrity(c.Request.Context(), shopsvc.PledgeIntegrityInput{
 		ShopID:   c.Param("shopId"),
 		PledgeID: c.Param("pledgeId"),
+		DataHash: c.Query("dataHash"),
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -266,16 +269,71 @@ func (h *ShopHandler) GetPledgeIntegrity(c *gin.Context) {
 		PledgeID:          integrityView.PledgeID,
 		ShopID:            integrityView.ShopID,
 		DataHash:          integrityView.DataHash,
+		ProvidedDataHash:  integrityView.ProvidedDataHash,
 		ChainTxHash:       integrityView.ChainTxHash,
 		ChainBlockNumber:  integrityView.ChainBlockNumber,
 		ChainAnchorStatus: integrityView.ChainAnchorStatus,
 		ChainAnchorTime:   integrityView.ChainAnchorTime,
 		IntegrityStatus:   integrityView.IntegrityStatus,
 		OnChainMatch:      integrityView.OnChainMatch,
+		ProvidedHashMatch: integrityView.ProvidedHashMatch,
 		OnChainDataHash:   integrityView.OnChainDataHash,
 		OnChainVersion:    integrityView.OnChainVersion,
 		OnChainTimestamp:  integrityView.OnChainTimestamp,
+		OnChainPresent:    integrityView.OnChainPresent,
+		MismatchReason:    integrityView.MismatchReason,
+		LastCheckedAt:     integrityView.LastCheckedAt,
+		CanReanchor:       integrityView.CanReanchor,
+		CanRevoke:         integrityView.CanRevoke,
 	})
+}
+
+func (h *ShopHandler) ReanchorPledgeIntegrity(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+	var request dto.ModeratePledgeIntegrityRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+	pledge, err := h.shops.ReanchorPledgeIntegrity(c.Request.Context(), shopsvc.ModeratePledgeIntegrityInput{
+		ShopID:          c.Param("shopId"),
+		PledgeID:        c.Param("pledgeId"),
+		ActorUserID:     principal.UserID,
+		ExpectedVersion: request.ExpectedVersion,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, toPledgeResponse(pledge))
+}
+
+func (h *ShopHandler) RevokePledgeIntegrity(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+	var request dto.ModeratePledgeIntegrityRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+	pledge, err := h.shops.RevokePledgeIntegrity(c.Request.Context(), shopsvc.ModeratePledgeIntegrityInput{
+		ShopID:          c.Param("shopId"),
+		PledgeID:        c.Param("pledgeId"),
+		ActorUserID:     principal.UserID,
+		ExpectedVersion: request.ExpectedVersion,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, toPledgeResponse(pledge))
 }
 
 func (h *ShopHandler) CreateReview(c *gin.Context) {

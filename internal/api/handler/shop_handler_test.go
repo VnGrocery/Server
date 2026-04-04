@@ -307,17 +307,19 @@ func TestGetPledgeIntegrity(t *testing.T) {
 }
 
 type shopServiceAdapter struct {
-	create             func(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error)
-	update             func(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error)
-	deleteFn           func(ctx context.Context, input shopsvc.DeleteInput) (domain.Shop, error)
-	getByID            func(ctx context.Context, shopID string) (shopsvc.ShopView, error)
-	list               func(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
-	listPledges        func(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error)
-	getPledgeIntegrity func(ctx context.Context, input shopsvc.PledgeIntegrityInput) (shopsvc.PledgeIntegrityView, error)
-	moderate           func(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error)
-	review             func(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
-	deleteReview       func(ctx context.Context, input shopsvc.DeleteReviewInput) (domain.ShopReview, error)
-	listReviews        func(ctx context.Context, shopID string) ([]domain.ShopReview, error)
+	create                  func(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error)
+	update                  func(ctx context.Context, input shopsvc.UpdateInput) (domain.Shop, error)
+	deleteFn                func(ctx context.Context, input shopsvc.DeleteInput) (domain.Shop, error)
+	getByID                 func(ctx context.Context, shopID string) (shopsvc.ShopView, error)
+	list                    func(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
+	listPledges             func(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error)
+	getPledgeIntegrity      func(ctx context.Context, input shopsvc.PledgeIntegrityInput) (shopsvc.PledgeIntegrityView, error)
+	reanchorPledgeIntegrity func(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error)
+	revokePledgeIntegrity   func(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error)
+	moderate                func(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error)
+	review                  func(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
+	deleteReview            func(ctx context.Context, input shopsvc.DeleteReviewInput) (domain.ShopReview, error)
+	listReviews             func(ctx context.Context, shopID string) ([]domain.ShopReview, error)
 }
 
 func (s shopServiceAdapter) Create(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error) {
@@ -358,6 +360,18 @@ func (s shopServiceAdapter) GetPledgeIntegrity(ctx context.Context, input shopsv
 		return shopsvc.PledgeIntegrityView{}, errors.New("not implemented")
 	}
 	return s.getPledgeIntegrity(ctx, input)
+}
+func (s shopServiceAdapter) ReanchorPledgeIntegrity(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error) {
+	if s.reanchorPledgeIntegrity == nil {
+		return domain.Pledge{}, errors.New("not implemented")
+	}
+	return s.reanchorPledgeIntegrity(ctx, input)
+}
+func (s shopServiceAdapter) RevokePledgeIntegrity(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error) {
+	if s.revokePledgeIntegrity == nil {
+		return domain.Pledge{}, errors.New("not implemented")
+	}
+	return s.revokePledgeIntegrity(ctx, input)
 }
 func (s shopServiceAdapter) Review(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error) {
 	return s.review(ctx, input)

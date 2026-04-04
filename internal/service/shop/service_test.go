@@ -55,8 +55,10 @@ func (p pledgeRepositoryStub) ListByChainAnchorStatus(ctx context.Context, statu
 }
 
 type buyerCheckRepositoryStub struct {
-	save         func(ctx context.Context, check domain.BuyerCheck) error
-	listByShopID func(ctx context.Context, shopID string) ([]domain.BuyerCheck, error)
+	save              func(ctx context.Context, check domain.BuyerCheck) error
+	getByID           func(ctx context.Context, checkID string) (domain.BuyerCheck, error)
+	listByShopID      func(ctx context.Context, shopID string) ([]domain.BuyerCheck, error)
+	listByBuyerUserID func(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error)
 }
 
 func (b buyerCheckRepositoryStub) Save(ctx context.Context, check domain.BuyerCheck) error {
@@ -66,11 +68,25 @@ func (b buyerCheckRepositoryStub) Save(ctx context.Context, check domain.BuyerCh
 	return b.save(ctx, check)
 }
 
+func (b buyerCheckRepositoryStub) GetByID(ctx context.Context, checkID string) (domain.BuyerCheck, error) {
+	if b.getByID != nil {
+		return b.getByID(ctx, checkID)
+	}
+	return domain.BuyerCheck{}, nil
+}
+
 func (b buyerCheckRepositoryStub) ListByShopID(ctx context.Context, shopID string) ([]domain.BuyerCheck, error) {
 	if b.listByShopID == nil {
 		return nil, nil
 	}
 	return b.listByShopID(ctx, shopID)
+}
+
+func (b buyerCheckRepositoryStub) ListByBuyerUserID(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error) {
+	if b.listByBuyerUserID != nil {
+		return b.listByBuyerUserID(ctx, buyerUserID)
+	}
+	return nil, nil
 }
 
 type userRepositoryStub struct {
@@ -94,6 +110,18 @@ type integrityReaderStub struct {
 
 func (s integrityReaderStub) GetPledgeIntegrity(ctx context.Context, pledge domain.Pledge) (PledgeIntegrityView, error) {
 	return s.get(ctx, pledge)
+}
+
+func (s integrityReaderStub) VerifyPledgeHash(ctx context.Context, pledge domain.Pledge, dataHash string) (PledgeIntegrityView, error) {
+	return s.get(ctx, pledge)
+}
+
+func (s integrityReaderStub) ReanchorPledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error) {
+	return pledge, nil
+}
+
+func (s integrityReaderStub) RevokePledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error) {
+	return pledge, nil
 }
 
 type reviewRepositoryStub struct {

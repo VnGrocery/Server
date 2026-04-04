@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 	"vngrocery/internal/service/audit"
 	visionservice "vngrocery/internal/service/vision"
 )
@@ -35,7 +37,10 @@ func (s pledgeRepositoryStub) ListByChainAnchorStatus(ctx context.Context, statu
 }
 
 type buyerCheckRepositoryStub struct {
-	save func(ctx context.Context, check domain.BuyerCheck) error
+	save              func(ctx context.Context, check domain.BuyerCheck) error
+	getByID           func(ctx context.Context, checkID string) (domain.BuyerCheck, error)
+	listByShopID      func(ctx context.Context, shopID string) ([]domain.BuyerCheck, error)
+	listByBuyerUserID func(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error)
 }
 
 func (s buyerCheckRepositoryStub) Save(ctx context.Context, check domain.BuyerCheck) error {
@@ -45,7 +50,34 @@ func (s buyerCheckRepositoryStub) Save(ctx context.Context, check domain.BuyerCh
 	return s.save(ctx, check)
 }
 
+func (s buyerCheckRepositoryStub) GetByID(ctx context.Context, checkID string) (domain.BuyerCheck, error) {
+	if s.getByID != nil {
+		return s.getByID(ctx, checkID)
+	}
+	return domain.BuyerCheck{}, errors.New("not implemented")
+}
+
 func (s buyerCheckRepositoryStub) ListByShopID(ctx context.Context, shopID string) ([]domain.BuyerCheck, error) {
+	if s.listByShopID != nil {
+		return s.listByShopID(ctx, shopID)
+	}
+	return nil, nil
+}
+
+func (s buyerCheckRepositoryStub) ListByBuyerUserID(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error) {
+	if s.listByBuyerUserID != nil {
+		return s.listByBuyerUserID(ctx, buyerUserID)
+	}
+	return nil, nil
+}
+
+type userRepositoryStub struct{}
+
+func (userRepositoryStub) Save(ctx context.Context, user domain.User) error { return nil }
+func (userRepositoryStub) GetByID(ctx context.Context, userID string) (domain.User, error) {
+	return domain.User{UserID: userID, Role: "admin"}, nil
+}
+func (userRepositoryStub) List(ctx context.Context, filter repository.UserListFilter) ([]domain.User, error) {
 	return nil, nil
 }
 
@@ -100,6 +132,7 @@ func TestCheckReturnsTrustedVerdict(t *testing.T) {
 				return nil
 			},
 		},
+		userRepositoryStub{},
 		scorerStub{
 			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
 				return visionservice.ScoreResult{
@@ -166,6 +199,7 @@ func TestCheckReturnsHighRiskOnMismatch(t *testing.T) {
 			},
 		},
 		buyerCheckRepositoryStub{},
+		userRepositoryStub{},
 		scorerStub{
 			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
 				return visionservice.ScoreResult{
@@ -213,6 +247,7 @@ func TestCheckReturnsWarningForLowConfidence(t *testing.T) {
 			},
 		},
 		buyerCheckRepositoryStub{},
+		userRepositoryStub{},
 		scorerStub{
 			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
 				return visionservice.ScoreResult{
@@ -266,6 +301,7 @@ func TestCheckWithoutPledgeReturnsStandaloneQuality(t *testing.T) {
 			},
 		},
 		buyerCheckRepositoryStub{},
+		userRepositoryStub{},
 		scorerStub{
 			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
 				return visionservice.ScoreResult{
@@ -306,5 +342,39 @@ func TestCheckWithoutPledgeReturnsStandaloneQuality(t *testing.T) {
 	}
 	if result.CheckID == "" || result.BuyerUserID != "buyer-1" || result.ImageHash != "image-hash-1" {
 		t.Fatalf("expected persisted standalone check metadata, got %#v", result)
+	}
+}
+
+func TestCheckRejectsWhenQuotaExceeded(t *testing.T) {
+	service := NewService(
+		pledgeRepositoryStub{},
+		buyerCheckRepositoryStub{
+			listByBuyerUserID: func(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error) {
+				now := time.Now().UTC()
+				items := make([]domain.BuyerCheck, 0, 10)
+				for i := 0; i < 10; i++ {
+					items = append(items, domain.BuyerCheck{CheckID: "check", CreatedAt: now})
+				}
+				return items, nil
+			},
+		},
+		userRepositoryStub{},
+		scorerStub{
+			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
+				return visionservice.ScoreResult{}, nil
+			},
+		},
+		nil,
+	)
+
+	_, err := service.Check(context.Background(), CheckInput{
+		BuyerUserID: "buyer-1",
+		Image: visionservice.ImageInput{
+			Filename: "buyer.jpg",
+			Content:  bytes.NewBuffer([]byte("fake")),
+		},
+	})
+	if !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("expected rate limit error, got %v", err)
 	}
 }

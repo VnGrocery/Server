@@ -24,12 +24,14 @@ var (
 )
 
 const (
-	ProductStatusActive         = "active"
-	ProductStatusDraft          = "draft"
-	ProductStatusPublished      = "published"
-	ProductStatusArchived       = "archived"
-	ProductStatusDeleted        = "deleted"
-	FreshnessReportStatusActive = "active"
+	ProductStatusActive           = "active"
+	ProductStatusDraft            = "draft"
+	ProductStatusPublished        = "published"
+	ProductStatusArchived         = "archived"
+	ProductStatusDeleted          = "deleted"
+	FreshnessReportStatusActive   = "active"
+	FreshnessReportStatusFlagged  = "flagged"
+	FreshnessReportStatusRejected = "rejected"
 )
 
 type CreateInput struct {
@@ -119,6 +121,14 @@ type FreshnessReportInput struct {
 	Confidence     float64
 	Comment        string
 	ImageHash      string
+}
+
+type ModerateFreshnessReportInput struct {
+	ReportID        string
+	ModeratorUserID string
+	ExpectedVersion int
+	Status          string
+	ModerationNote  string
 }
 
 type AuditLogger interface {
@@ -459,6 +469,9 @@ func (s *Service) CreateFreshnessReport(ctx context.Context, input FreshnessRepo
 	if s.products == nil || s.shops == nil || s.reports == nil {
 		return domain.ProductFreshnessReport{}, fmt.Errorf("product freshness report dependencies are not configured")
 	}
+	if err := s.ensureFreshnessReportQuota(ctx, input.ReporterUserID); err != nil {
+		return domain.ProductFreshnessReport{}, err
+	}
 	product, err := s.GetByID(ctx, input.ShopID, input.ProductID)
 	if err != nil {
 		return domain.ProductFreshnessReport{}, err
@@ -484,6 +497,55 @@ func (s *Service) CreateFreshnessReport(ctx context.Context, input FreshnessRepo
 		return domain.ProductFreshnessReport{}, err
 	}
 	if err := s.logReportMutation(ctx, report.ReporterUserID, report.ReportID, report.Version, "product_freshness_report.created", audit.MutationPayload{After: report}, "created"); err != nil {
+		return domain.ProductFreshnessReport{}, err
+	}
+	return report, nil
+}
+
+func (s *Service) ModerateFreshnessReport(ctx context.Context, input ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error) {
+	if strings.TrimSpace(input.ReportID) == "" {
+		return domain.ProductFreshnessReport{}, fmt.Errorf("%w: reportId is required", ErrInvalidProduct)
+	}
+	if strings.TrimSpace(input.ModeratorUserID) == "" {
+		return domain.ProductFreshnessReport{}, fmt.Errorf("%w: moderatorUserId is required", ErrInvalidProduct)
+	}
+	if input.ExpectedVersion <= 0 {
+		return domain.ProductFreshnessReport{}, ErrVersionConflict
+	}
+	if s.reports == nil || s.users == nil {
+		return domain.ProductFreshnessReport{}, fmt.Errorf("product freshness report moderation dependencies are not configured")
+	}
+	if err := s.ensureAdmin(ctx, input.ModeratorUserID); err != nil {
+		return domain.ProductFreshnessReport{}, err
+	}
+
+	report, err := s.reports.GetByID(ctx, strings.TrimSpace(input.ReportID))
+	if err != nil || report.ReportID == "" {
+		return domain.ProductFreshnessReport{}, ErrNotFound
+	}
+	if report.Version != input.ExpectedVersion {
+		return domain.ProductFreshnessReport{}, ErrVersionConflict
+	}
+	status, err := validateFreshnessReportStatus(input.Status)
+	if err != nil {
+		return domain.ProductFreshnessReport{}, err
+	}
+
+	before := report
+	report.Status = status
+	report.Version++
+	report.ModeratedByUserID = strings.TrimSpace(input.ModeratorUserID)
+	report.ModerationNote = strings.TrimSpace(input.ModerationNote)
+	now := s.now().UTC()
+	report.ModeratedAt = &now
+	report.UpdatedAt = now
+	if err := s.reports.Save(ctx, report); err != nil {
+		return domain.ProductFreshnessReport{}, err
+	}
+	if err := s.logReportMutation(ctx, input.ModeratorUserID, report.ReportID, report.Version, "product_freshness_report.moderated", audit.MutationPayload{
+		Before: before,
+		After:  report,
+	}, report.Status); err != nil {
 		return domain.ProductFreshnessReport{}, err
 	}
 	return report, nil
@@ -615,6 +677,34 @@ func validateFreshnessReportInput(input FreshnessReportInput) error {
 	}
 	if input.Confidence < 0 || input.Confidence > 1 {
 		return fmt.Errorf("%w: confidence must be between 0 and 1", ErrInvalidProduct)
+	}
+	return nil
+}
+
+func validateFreshnessReportStatus(status string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(status))
+	switch normalized {
+	case FreshnessReportStatusActive, FreshnessReportStatusFlagged, FreshnessReportStatusRejected:
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("%w: invalid freshness report status", ErrInvalidProduct)
+	}
+}
+
+func (s *Service) ensureFreshnessReportQuota(ctx context.Context, reporterUserID string) error {
+	reports, err := s.reports.ListByReporterUserID(ctx, strings.TrimSpace(reporterUserID))
+	if err != nil {
+		return err
+	}
+	since := s.now().UTC().Add(-1 * time.Hour)
+	count := 0
+	for _, report := range reports {
+		if report.CreatedAt.After(since) {
+			count++
+		}
+	}
+	if count >= 10 {
+		return fmt.Errorf("%w: freshness report rate limit exceeded", ErrInvalidProduct)
 	}
 	return nil
 }

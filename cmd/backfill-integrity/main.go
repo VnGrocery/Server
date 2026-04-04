@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"log"
 	"strconv"
 	"strings"
@@ -16,6 +17,11 @@ import (
 )
 
 func main() {
+	startAfter := flag.String("start-after", "", "resume after the given pledge ID")
+	batchSize := flag.Int("batch-size", 200, "maximum pledges to process")
+	dryRun := flag.Bool("dry-run", false, "compute changes without persisting them")
+	flag.Parse()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
@@ -56,6 +62,12 @@ func main() {
 
 	var updatedCount int
 	for _, doc := range docs {
+		if strings.TrimSpace(*startAfter) != "" && doc.Ref.ID <= strings.TrimSpace(*startAfter) {
+			continue
+		}
+		if *batchSize > 0 && updatedCount >= *batchSize {
+			break
+		}
 		var pledge domain.Pledge
 		if err := doc.DataTo(&pledge); err != nil {
 			log.Printf("skip invalid pledge %s: %v", doc.Ref.ID, err)
@@ -83,12 +95,16 @@ func main() {
 			}
 		}
 
+		if *dryRun {
+			log.Printf("dry-run pledge %s status=%s integrity=%s tx=%s", pledge.PledgeID, pledge.ChainAnchorStatus, pledge.IntegrityStatus, pledge.ChainTxHash)
+			continue
+		}
 		if _, err := app.Firestore.Collection(firestorerepo.PledgesCollection).Doc(pledge.PledgeID).Set(ctx, pledge); err != nil {
 			log.Printf("save pledge %s failed: %v", pledge.PledgeID, err)
 		}
 	}
 
-	log.Printf("backfill completed, updated pledges: %d", updatedCount)
+	log.Printf("backfill completed, processed pledges: %d", updatedCount)
 }
 
 func mergeIntegrityFields(current, prepared domain.Pledge) domain.Pledge {
@@ -107,6 +123,19 @@ type besuClientAdapter struct {
 
 func (a besuClientAdapter) CommitHash(ctx context.Context, recordID, dataHash string, timestamp time.Time, version int) (integrityservice.CommitResult, error) {
 	result, err := a.client.CommitHash(ctx, recordID, dataHash, timestamp, version)
+	if err != nil {
+		return integrityservice.CommitResult{}, err
+	}
+	return integrityservice.CommitResult{
+		TxHash:      result.TxHash,
+		BlockNumber: result.BlockNumber,
+		BlockTime:   result.BlockTime,
+		Mined:       result.Mined,
+	}, nil
+}
+
+func (a besuClientAdapter) RevokeHash(ctx context.Context, recordID string, version int) (integrityservice.CommitResult, error) {
+	result, err := a.client.RevokeHash(ctx, recordID, version)
 	if err != nil {
 		return integrityservice.CommitResult{}, err
 	}

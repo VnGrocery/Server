@@ -36,7 +36,7 @@ Backfills should be idempotent and should emit signed event logs when they chang
 For pledge integrity metadata, use:
 
 ```bash
-go run ./cmd/backfill-integrity
+go run ./cmd/backfill-integrity --batch-size 200 --start-after=<pledge-id> --dry-run
 ```
 
 With `BESU_ENABLED=false`, this fills `dataHash`, `chainAnchorStatus=pending_anchor`, and `integrityStatus=pending_anchor` for legacy pledges.
@@ -78,3 +78,32 @@ ALERT_WEBHOOK_URL=https://your-alert-endpoint
 ```
 
 The background worker retries `pending_anchor` pledges, periodically verifies `anchored` pledges against on-chain state, and emits webhook alerts on `mismatch_detected`.
+
+## Rate limiting
+
+The API supports:
+
+- `RATE_LIMIT_BACKEND=memory` for simple local/dev
+- `RATE_LIMIT_BACKEND=firestore` for multi-instance deployments
+
+Relevant env vars:
+
+```bash
+RATE_LIMIT_BACKEND=firestore
+RATE_LIMIT_COLLECTION=rate_limits
+RATE_LIMIT_MAX_REQUESTS=120
+RATE_LIMIT_WINDOW_SEC=60
+```
+
+Authenticated requests are limited by `user:<userId>`; unauthenticated requests fall back to client IP.
+
+## Integrity runbook
+
+When a pledge enters `mismatch_detected`:
+
+1. Check `GET /v1/shops/:shopId/pledges/:pledgeId/integrity`
+2. Compare `dataHash`, `onChainDataHash`, and `mismatchReason`
+3. If the DB version is correct and you want the chain to follow current DB state, use `POST /v1/admin/shops/:shopId/pledges/:pledgeId/reanchor`
+4. If the pledge must be invalidated, use `POST /v1/admin/shops/:shopId/pledges/:pledgeId/revoke`
+
+These actions create new immutable chain states and new signed audit events; they do not erase prior history.

@@ -150,6 +150,44 @@ func (c *Client) CommitHash(ctx context.Context, recordID, dataHash string, time
 	return receipt, nil
 }
 
+func (c *Client) RevokeHash(ctx context.Context, recordID string, version int) (CommitResult, error) {
+	input := encodeMethod(
+		"revokeHash(string,uint256)",
+		encodeDynamicString(recordID),
+		encodeUint256(uint64(version)),
+	)
+
+	var txHash string
+	var err error
+	if c.privateKey != nil {
+		txHash, err = c.sendRawTransaction(ctx, input)
+	} else {
+		err = c.rpc(ctx, "eth_sendTransaction", []map[string]string{{
+			"from":     c.fromAddress,
+			"to":       c.contractAddress,
+			"data":     input,
+			"gas":      hexUint64(c.gasLimit),
+			"gasPrice": "0x0",
+		}}, &txHash)
+	}
+	if err != nil {
+		return CommitResult{}, err
+	}
+
+	receipt, err := c.waitReceipt(ctx, txHash)
+	if err != nil {
+		return CommitResult{TxHash: txHash}, err
+	}
+	if !receipt.Mined {
+		return receipt, nil
+	}
+	blockTime, err := c.getBlockTime(ctx, receipt.BlockNumber)
+	if err == nil {
+		receipt.BlockTime = blockTime
+	}
+	return receipt, nil
+}
+
 func (c *Client) Verify(ctx context.Context, recordID, dataHash string) (bool, error) {
 	input, err := encodeVerify(recordID, dataHash)
 	if err != nil {

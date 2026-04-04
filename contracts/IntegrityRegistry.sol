@@ -14,6 +14,7 @@ contract IntegrityRegistry {
     address public owner;
 
     event HashCommitted(string indexed recordId, bytes32 indexed dataHash, uint256 timestamp, uint256 version);
+    event HashRevoked(string indexed recordId, uint256 version);
 
     modifier onlyOwner() {
         require(msg.sender == owner, "not authorized");
@@ -37,6 +38,18 @@ contract IntegrityRegistry {
         });
 
         emit HashCommitted(recordId, dataHash, timestamp, version);
+    }
+
+    function revokeHash(string calldata recordId, uint256 version) external onlyOwner {
+        Record storage current = latestByRecordId[recordId];
+        require(current.exists, "record not found");
+        require(version > current.version, "version must increase");
+
+        current.timestamp = block.timestamp;
+        current.version = version;
+        current.revoked = true;
+
+        emit HashRevoked(recordId, version);
     }
 
     function getLatest(string calldata recordId) external view returns (bytes32, uint256, uint256, bool) {

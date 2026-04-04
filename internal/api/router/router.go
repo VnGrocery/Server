@@ -10,22 +10,37 @@ import (
 )
 
 type Dependencies struct {
-	HealthHandler    *handler.HealthHandler
-	DocsHandler      *handler.DocsHandler
-	AuthHandler      *handler.AuthHandler
-	AdminUserHandler *handler.AdminUserHandler
-	EventLogHandler  *handler.EventLogHandler
-	ProductHandler   *handler.ProductHandler
-	SellerHandler    *handler.SellerHandler
-	BuyerHandler     *handler.BuyerHandler
-	ShopHandler      *handler.ShopHandler
-	AuthMiddleware   *middleware.AuthRequired
+	HealthHandler        *handler.HealthHandler
+	DocsHandler          *handler.DocsHandler
+	AuthHandler          *handler.AuthHandler
+	AdminUserHandler     *handler.AdminUserHandler
+	EventLogHandler      *handler.EventLogHandler
+	ProductHandler       *handler.ProductHandler
+	SellerHandler        *handler.SellerHandler
+	BuyerHandler         *handler.BuyerHandler
+	ShopHandler          *handler.ShopHandler
+	AuthMiddleware       *middleware.AuthRequired
+	Metrics              *middleware.Metrics
+	RateLimitStore       middleware.RateLimitStore
+	RateLimitMaxRequests int
+	RateLimitWindow      time.Duration
 }
 
 func New(deps Dependencies) *gin.Engine {
 	engine := gin.New()
-	metrics := middleware.NewMetrics()
-	engine.Use(gin.Recovery(), middleware.StructuredLogger(metrics), middleware.RateLimit(120, time.Minute))
+	metrics := deps.Metrics
+	if metrics == nil {
+		metrics = middleware.NewMetrics()
+	}
+	maxRequests := deps.RateLimitMaxRequests
+	if maxRequests <= 0 {
+		maxRequests = 120
+	}
+	window := deps.RateLimitWindow
+	if window <= 0 {
+		window = time.Minute
+	}
+	engine.Use(gin.Recovery(), middleware.StructuredLogger(metrics), middleware.RateLimitWithStore(deps.RateLimitStore, maxRequests, window, metrics))
 	engine.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, Origin, X-Requested-With")
@@ -79,7 +94,11 @@ func New(deps Dependencies) *gin.Engine {
 		v1.DELETE("/shops/:shopId/reviews/me", deps.AuthMiddleware.Handle(), deps.ShopHandler.DeleteReview)
 		v1.GET("/admin/shops", deps.AuthMiddleware.Handle(), deps.ShopHandler.AdminList)
 		v1.PATCH("/admin/shops/:shopId/moderation", deps.AuthMiddleware.Handle(), deps.ShopHandler.Moderate)
+		v1.POST("/admin/shops/:shopId/pledges/:pledgeId/reanchor", deps.AuthMiddleware.Handle(), deps.ShopHandler.ReanchorPledgeIntegrity)
+		v1.POST("/admin/shops/:shopId/pledges/:pledgeId/revoke", deps.AuthMiddleware.Handle(), deps.ShopHandler.RevokePledgeIntegrity)
 		v1.PATCH("/admin/products/:productId/moderation", deps.AuthMiddleware.Handle(), deps.ProductHandler.Moderate)
+		v1.PATCH("/admin/product-freshness-reports/:reportId/moderation", deps.AuthMiddleware.Handle(), deps.ProductHandler.ModerateFreshnessReport)
+		v1.PATCH("/admin/buyer-checks/:checkId/moderation", deps.AuthMiddleware.Handle(), deps.BuyerHandler.Moderate)
 		v1.GET("/admin/users", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.List)
 		v1.PATCH("/admin/users/:userId/role", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.UpdateRole)
 		v1.PATCH("/admin/users/:userId/status", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.UpdateStatus)

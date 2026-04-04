@@ -86,6 +86,13 @@ func main() {
 	refreshTokenRepository := firestorerepo.NewRefreshTokenRepository(app.Firestore)
 	passwordResetTokenRepository := firestorerepo.NewPasswordResetTokenRepository(app.Firestore)
 	eventLogRepository := firestorerepo.NewEventLogRepository(app.Firestore)
+	metrics := middleware.NewMetrics()
+	var rateLimitStore middleware.RateLimitStore
+	if cfg.RateLimitBackend == "firestore" {
+		rateLimitStore = middleware.NewFirestoreRateLimitStore(app.Firestore, cfg.RateLimitCollection)
+	} else {
+		rateLimitStore = middleware.NewMemoryRateLimitStore()
+	}
 	var accountKeys authservice.AccountKeyStore
 	var auditSigner auditservice.Signer
 	var integrityManager *integrityservice.Service
@@ -128,6 +135,7 @@ func main() {
 			client: alertpkg.NewWebhookClient(cfg.AlertWebhookURL, time.Duration(mustParseInt(cfg.AlertTimeoutSec, 5))*time.Second),
 		})
 	}
+	integrityManager.SetObserver(metrics)
 	accountService := authservice.NewAccountService(authUserRepository, userRepository, refreshTokenRepository, passwordResetTokenRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, 30*24*time.Hour, cfg.GoogleClientID)
 	productManager := productservice.NewService(productRepository, productFreshnessReportRepository, shopRepository, userRepository, auditLogger)
 	userAdminService := useradminservice.NewService(userRepository, authUserRepository, accountKeys, auditLogger)
@@ -135,7 +143,7 @@ func main() {
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, productRepository, auditLogger)
 	shopManager.SetPledgeIntegrityReader(integrityAdapter{service: integrityManager})
 	sellerCommitService.SetIntegrityManager(integrityManager)
-	buyerCheckService := buyerservice.NewService(pledgeRepository, buyerCheckRepository, visionScorer, auditLogger)
+	buyerCheckService := buyerservice.NewService(pledgeRepository, buyerCheckRepository, userRepository, visionScorer, auditLogger)
 	authMiddleware := middleware.NewAuthRequired(jwtService)
 	healthHandler := handler.NewHealthHandler()
 	docsHandler := handler.NewDocsHandler()
@@ -148,16 +156,20 @@ func main() {
 	shopHandler := handler.NewShopHandler(shopManager)
 
 	engine := router.New(router.Dependencies{
-		HealthHandler:    healthHandler,
-		DocsHandler:      docsHandler,
-		AuthHandler:      authHandler,
-		AdminUserHandler: adminUserHandler,
-		EventLogHandler:  eventLogHandler,
-		ProductHandler:   productHandler,
-		SellerHandler:    sellerHandler,
-		BuyerHandler:     buyerHandler,
-		ShopHandler:      shopHandler,
-		AuthMiddleware:   authMiddleware,
+		HealthHandler:        healthHandler,
+		DocsHandler:          docsHandler,
+		AuthHandler:          authHandler,
+		AdminUserHandler:     adminUserHandler,
+		EventLogHandler:      eventLogHandler,
+		ProductHandler:       productHandler,
+		SellerHandler:        sellerHandler,
+		BuyerHandler:         buyerHandler,
+		ShopHandler:          shopHandler,
+		AuthMiddleware:       authMiddleware,
+		Metrics:              metrics,
+		RateLimitStore:       rateLimitStore,
+		RateLimitMaxRequests: mustParseInt(cfg.RateLimitMaxRequests, 120),
+		RateLimitWindow:      time.Duration(mustParseInt(cfg.RateLimitWindowSec, 60)) * time.Second,
 	})
 
 	if err := engine.Run(":" + cfg.Port); err != nil {
@@ -171,6 +183,19 @@ type besuClientAdapter struct {
 
 func (a besuClientAdapter) CommitHash(ctx context.Context, recordID, dataHash string, timestamp time.Time, version int) (integrityservice.CommitResult, error) {
 	result, err := a.client.CommitHash(ctx, recordID, dataHash, timestamp, version)
+	if err != nil {
+		return integrityservice.CommitResult{}, err
+	}
+	return integrityservice.CommitResult{
+		TxHash:      result.TxHash,
+		BlockNumber: result.BlockNumber,
+		BlockTime:   result.BlockTime,
+		Mined:       result.Mined,
+	}, nil
+}
+
+func (a besuClientAdapter) RevokeHash(ctx context.Context, recordID string, version int) (integrityservice.CommitResult, error) {
+	result, err := a.client.RevokeHash(ctx, recordID, version)
 	if err != nil {
 		return integrityservice.CommitResult{}, err
 	}
@@ -226,16 +251,59 @@ func (a integrityAdapter) GetPledgeIntegrity(ctx context.Context, pledge domain.
 		PledgeID:          result.PledgeID,
 		ShopID:            result.ShopID,
 		DataHash:          result.DataHash,
+		ProvidedDataHash:  result.ProvidedDataHash,
 		ChainTxHash:       result.ChainTxHash,
 		ChainBlockNumber:  result.ChainBlockNumber,
 		ChainAnchorStatus: result.ChainAnchorStatus,
 		ChainAnchorTime:   result.ChainAnchorTime,
 		IntegrityStatus:   result.IntegrityStatus,
 		OnChainMatch:      result.OnChainMatch,
+		ProvidedHashMatch: result.ProvidedHashMatch,
 		OnChainDataHash:   result.OnChainDataHash,
 		OnChainVersion:    result.OnChainVersion,
 		OnChainTimestamp:  result.OnChainTimestamp,
+		OnChainPresent:    result.OnChainPresent,
+		MismatchReason:    result.MismatchReason,
+		LastCheckedAt:     result.LastCheckedAt,
+		CanReanchor:       result.CanReanchor,
+		CanRevoke:         result.CanRevoke,
 	}, nil
+}
+
+func (a integrityAdapter) VerifyPledgeHash(ctx context.Context, pledge domain.Pledge, dataHash string) (shopservice.PledgeIntegrityView, error) {
+	result, err := a.service.VerifyPledgeHash(ctx, pledge, dataHash)
+	if err != nil {
+		return shopservice.PledgeIntegrityView{}, err
+	}
+	return shopservice.PledgeIntegrityView{
+		PledgeID:          result.PledgeID,
+		ShopID:            result.ShopID,
+		DataHash:          result.DataHash,
+		ProvidedDataHash:  result.ProvidedDataHash,
+		ChainTxHash:       result.ChainTxHash,
+		ChainBlockNumber:  result.ChainBlockNumber,
+		ChainAnchorStatus: result.ChainAnchorStatus,
+		ChainAnchorTime:   result.ChainAnchorTime,
+		IntegrityStatus:   result.IntegrityStatus,
+		OnChainMatch:      result.OnChainMatch,
+		ProvidedHashMatch: result.ProvidedHashMatch,
+		OnChainDataHash:   result.OnChainDataHash,
+		OnChainVersion:    result.OnChainVersion,
+		OnChainTimestamp:  result.OnChainTimestamp,
+		OnChainPresent:    result.OnChainPresent,
+		MismatchReason:    result.MismatchReason,
+		LastCheckedAt:     result.LastCheckedAt,
+		CanReanchor:       result.CanReanchor,
+		CanRevoke:         result.CanRevoke,
+	}, nil
+}
+
+func (a integrityAdapter) ReanchorPledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error) {
+	return a.service.ReanchorPledge(ctx, pledge)
+}
+
+func (a integrityAdapter) RevokePledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error) {
+	return a.service.RevokePledge(ctx, pledge)
 }
 
 func mustParseInt(raw string, fallback int) int {

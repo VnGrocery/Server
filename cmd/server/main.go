@@ -136,11 +136,13 @@ func main() {
 			VerifyBatch:     mustParseInt(cfg.BesuVerifyBatchSize, 50),
 		})
 	}
-	if cfg.AlertWebhookURL != "" {
-		integrityManager.SetNotifier(alertAdapter{
-			client: alertpkg.NewWebhookClient(cfg.AlertWebhookURL, time.Duration(mustParseInt(cfg.AlertTimeoutSec, 5))*time.Second),
-		})
-	}
+	alertNotifier := alertpkg.NewMultiNotifier(
+		alertpkg.NewWebhookClient(cfg.AlertWebhookURL, time.Duration(mustParseInt(cfg.AlertTimeoutSec, 5))*time.Second),
+		alertpkg.NewSlackClient(cfg.AlertSlackWebhookURL, time.Duration(mustParseInt(cfg.AlertTimeoutSec, 5))*time.Second),
+		alertpkg.NewTelegramClient(cfg.AlertTelegramBotToken, cfg.AlertTelegramChatID, time.Duration(mustParseInt(cfg.AlertTimeoutSec, 5))*time.Second),
+		alertpkg.NewSMTPClient(cfg.AlertSMTPHost, cfg.AlertSMTPPort, cfg.AlertSMTPUsername, cfg.AlertSMTPPassword, cfg.AlertSMTPFrom, cfg.AlertSMTPTo),
+	)
+	integrityManager.SetNotifier(alertAdapter{client: alertNotifier})
 	integrityManager.SetObserver(metrics)
 	accountService := authservice.NewAccountService(authUserRepository, userRepository, refreshTokenRepository, passwordResetTokenRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, 30*24*time.Hour, cfg.GoogleClientID)
 	productManager := productservice.NewService(productRepository, productFreshnessReportRepository, shopRepository, userRepository, auditLogger)
@@ -377,7 +379,7 @@ func splitCommaSeparated(raw string) []string {
 }
 
 type alertAdapter struct {
-	client *alertpkg.WebhookClient
+	client alertpkg.IntegrityNotifier
 }
 
 func (a alertAdapter) NotifyIntegrityMismatch(ctx context.Context, payload integrityservice.IntegrityAlertPayload) error {

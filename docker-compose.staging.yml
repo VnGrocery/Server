@@ -1,0 +1,37 @@
+services:
+  api:
+    environment:
+      VAULT_ADDR: http://vault:8200
+      IPFS_API_URL: http://ipfs:5001
+      IPFS_GATEWAY_URL: https://ipfs-staging.example.internal
+      RATE_LIMIT_BACKEND: firestore
+      RATE_LIMIT_COLLECTION: rate_limits
+    restart: unless-stopped
+
+  proxy:
+    image: nginx:1.29-alpine
+    container_name: vngrocery-proxy
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+
+  vault:
+    extends:
+      file: docker-compose.vault-persistent.yml
+      service: vault
+
+  ipfs:
+    volumes:
+      - ipfs-staging:/export
+      - ipfs-data:/data/ipfs
+    restart: unless-stopped
+
+volumes:
+  vault-data:
+  ipfs-staging:
+  ipfs-data:

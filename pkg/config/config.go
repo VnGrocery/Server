@@ -34,6 +34,15 @@ type Config struct {
 	BesuPendingBatchSize    string
 	BesuVerifyBatchSize     string
 	AlertWebhookURL         string
+	AlertSlackWebhookURL    string
+	AlertTelegramBotToken   string
+	AlertTelegramChatID     string
+	AlertSMTPHost           string
+	AlertSMTPPort           string
+	AlertSMTPUsername       string
+	AlertSMTPPassword       string
+	AlertSMTPFrom           string
+	AlertSMTPTo             string
 	AlertTimeoutSec         string
 	IPFSEnabled             bool
 	IPFSAPIURL              string
@@ -78,6 +87,15 @@ func Load() (Config, error) {
 		BesuPendingBatchSize:    getEnvOrDefault("BESU_PENDING_BATCH_SIZE", "25"),
 		BesuVerifyBatchSize:     getEnvOrDefault("BESU_VERIFY_BATCH_SIZE", "50"),
 		AlertWebhookURL:         os.Getenv("ALERT_WEBHOOK_URL"),
+		AlertSlackWebhookURL:    os.Getenv("ALERT_SLACK_WEBHOOK_URL"),
+		AlertTelegramBotToken:   os.Getenv("ALERT_TELEGRAM_BOT_TOKEN"),
+		AlertTelegramChatID:     os.Getenv("ALERT_TELEGRAM_CHAT_ID"),
+		AlertSMTPHost:           os.Getenv("ALERT_SMTP_HOST"),
+		AlertSMTPPort:           getEnvOrDefault("ALERT_SMTP_PORT", "587"),
+		AlertSMTPUsername:       os.Getenv("ALERT_SMTP_USERNAME"),
+		AlertSMTPPassword:       os.Getenv("ALERT_SMTP_PASSWORD"),
+		AlertSMTPFrom:           os.Getenv("ALERT_SMTP_FROM"),
+		AlertSMTPTo:             os.Getenv("ALERT_SMTP_TO"),
 		AlertTimeoutSec:         getEnvOrDefault("ALERT_TIMEOUT_SEC", "5"),
 		IPFSEnabled:             os.Getenv("IPFS_ENABLED") == "true",
 		IPFSAPIURL:              os.Getenv("IPFS_API_URL"),

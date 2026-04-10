@@ -83,6 +83,17 @@ RATE_LIMIT_BACKEND=firestore
 RATE_LIMIT_COLLECTION=rate_limits
 ```
 
+For staging-style integration with proxy and persistent Vault:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.vault-persistent.yml \
+  -f docker-compose.besu-qbft.yml \
+  -f docker-compose.staging.yml \
+  up --build
+```
+
 Override values if needed:
 
 ```bash

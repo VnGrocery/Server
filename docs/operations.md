@@ -51,6 +51,31 @@ Keep `firestore.indexes.json` in sync with query patterns before production impo
 
 The baseline CI runs `go test ./...` on push and pull request. Add deploy jobs only after secrets and target environments are finalized.
 
+## Staging and production compose
+
+For staging-style local validation with persistent Vault and reverse proxy:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.vault-persistent.yml \
+  -f docker-compose.besu-qbft.yml \
+  -f docker-compose.staging.yml \
+  up --build
+```
+
+For production-oriented compose layering in this repo:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.vault-persistent.yml \
+  -f docker-compose.prod.yml \
+  up -d
+```
+
+The production file is only a repo baseline. Replace local mounts, secrets, and host ports with environment-specific infrastructure controls before real deployment.
+
 ## Besu QBFT integrity anchoring
 
 When `BESU_ENABLED=true`, the backend computes a canonical `dataHash` for each new pledge, submits `commitHash(...)` to the configured `IntegrityRegistry`, and stores chain metadata back into Firestore.
@@ -75,6 +100,15 @@ Optional alerting:
 
 ```bash
 ALERT_WEBHOOK_URL=https://your-alert-endpoint
+ALERT_SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+ALERT_TELEGRAM_BOT_TOKEN=...
+ALERT_TELEGRAM_CHAT_ID=...
+ALERT_SMTP_HOST=smtp.example.com
+ALERT_SMTP_PORT=587
+ALERT_SMTP_USERNAME=...
+ALERT_SMTP_PASSWORD=...
+ALERT_SMTP_FROM=alerts@example.com
+ALERT_SMTP_TO=ops@example.com,security@example.com
 ```
 
 The background worker retries `pending_anchor` pledges, periodically verifies `anchored` pledges against on-chain state, and emits webhook alerts on `mismatch_detected`.

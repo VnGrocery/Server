@@ -83,6 +83,10 @@ The background worker retries `pending_anchor` pledges, periodically verifies `a
 
 When `IPFS_ENABLED=true`, the backend uploads raw image bytes from `seller/score` and `buyer/check` into Kubo and returns/stores `imageCid`.
 
+For reusable uploads from mobile clients, use:
+
+`POST /v1/media/images`
+
 Required env vars:
 
 ```bash
@@ -96,6 +100,7 @@ Current usage:
 - `POST /v1/seller/commit` accepts optional `imageCid`
 - `POST /v1/buyer/check` stores uploaded image as `imageCid`
 - product freshness reports accept optional `imageCid`
+- `POST /v1/media/images` returns `imageHash`, `imageCid`, `gatewayUrl`, `contentType`, `sizeBytes`
 
 For pledges, canonical `dataHash` now includes `imageCid` when present.
 
@@ -122,6 +127,7 @@ Authenticated requests are limited by `user:<userId>`; unauthenticated requests 
 When a pledge enters `mismatch_detected`:
 
 1. Check `GET /v1/shops/:shopId/pledges/:pledgeId/integrity`
+2. For buyer-facing rendering, prefer `GET /v1/shops/:shopId/pledges/:pledgeId/proof`
 2. Compare `dataHash`, `onChainDataHash`, and `mismatchReason`
 3. If the DB version is correct and you want the chain to follow current DB state, use `POST /v1/admin/shops/:shopId/pledges/:pledgeId/reanchor`
 4. If the pledge must be invalidated, use `POST /v1/admin/shops/:shopId/pledges/:pledgeId/revoke`

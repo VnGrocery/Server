@@ -81,6 +81,22 @@ type PledgeIntegrityResponse struct {
 	CanRevoke         bool       `json:"canRevoke"`
 }
 
+type PledgeProofBundleResponse struct {
+	PledgeID           string                  `json:"pledgeId"`
+	ShopID             string                  `json:"shopId"`
+	ProductID          string                  `json:"productId,omitempty"`
+	Score              float64                 `json:"score"`
+	Category           string                  `json:"category"`
+	Confidence         float64                 `json:"confidence"`
+	ImageHash          string                  `json:"imageHash"`
+	ImageCID           string                  `json:"imageCid,omitempty"`
+	ProofStatus        string                  `json:"proofStatus"`
+	ProofHeadline      string                  `json:"proofHeadline"`
+	ProofSummary       string                  `json:"proofSummary"`
+	RecommendedActions []string                `json:"recommendedActions"`
+	Integrity          PledgeIntegrityResponse `json:"integrity"`
+}
+
 type ModeratePledgeIntegrityRequest struct {
 	ExpectedVersion int `json:"expectedVersion"`
 }

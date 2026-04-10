@@ -15,6 +15,7 @@ type Dependencies struct {
 	AuthHandler          *handler.AuthHandler
 	AdminUserHandler     *handler.AdminUserHandler
 	EventLogHandler      *handler.EventLogHandler
+	MediaHandler         *handler.MediaHandler
 	ProductHandler       *handler.ProductHandler
 	SellerHandler        *handler.SellerHandler
 	BuyerHandler         *handler.BuyerHandler
@@ -76,6 +77,7 @@ func New(deps Dependencies) *gin.Engine {
 		v1.GET("/shops/:shopId", deps.ShopHandler.GetByID)
 		v1.GET("/shops/:shopId/pledges", deps.ShopHandler.ListPledges)
 		v1.GET("/shops/:shopId/pledges/:pledgeId/integrity", deps.ShopHandler.GetPledgeIntegrity)
+		v1.GET("/shops/:shopId/pledges/:pledgeId/proof", deps.ShopHandler.GetPledgeProof)
 		v1.GET("/shops/:shopId/products", deps.ProductHandler.List)
 		v1.GET("/shops/:shopId/products/:productId", deps.ProductHandler.GetByID)
 		v1.GET("/shops/:shopId/products/:productId/freshness-reports", deps.ProductHandler.ListFreshnessReports)
@@ -108,6 +110,9 @@ func New(deps Dependencies) *gin.Engine {
 		v1.POST("/seller/score", deps.AuthMiddleware.Handle(), deps.SellerHandler.Score)
 		v1.POST("/seller/commit", deps.AuthMiddleware.Handle(), deps.SellerHandler.Commit)
 		v1.POST("/buyer/check", deps.AuthMiddleware.Handle(), deps.BuyerHandler.Check)
+		if deps.MediaHandler != nil {
+			v1.POST("/media/images", deps.AuthMiddleware.Handle(), deps.MediaHandler.UploadImage)
+		}
 	}
 
 	return engine

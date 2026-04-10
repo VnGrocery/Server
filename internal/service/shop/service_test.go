@@ -375,6 +375,12 @@ func TestListReturnsTrustSummary(t *testing.T) {
 	if result.Items[0].TrustSummary.TrustedCheckCount != 1 {
 		t.Fatalf("expected trusted check count 1, got %d", result.Items[0].TrustSummary.TrustedCheckCount)
 	}
+	if result.Items[0].TrustSummary.FormulaVersion != "trust_score_v2" {
+		t.Fatalf("unexpected formula version: %s", result.Items[0].TrustSummary.FormulaVersion)
+	}
+	if result.Items[0].TrustSummary.CoverageScore <= 0 || result.Items[0].TrustSummary.RecencyScore <= 0 {
+		t.Fatalf("expected v2 breakdown scores, got %#v", result.Items[0].TrustSummary)
+	}
 }
 
 func TestListPledgesFiltersByProductAndCategory(t *testing.T) {
@@ -439,6 +445,52 @@ func TestGetPledgeIntegrityUsesReader(t *testing.T) {
 	}
 	if result.PledgeID != "pledge-1" || !result.OnChainMatch || result.DataHash != "data-hash" {
 		t.Fatalf("unexpected integrity result: %#v", result)
+	}
+}
+
+func TestGetPledgeProofBuildsViewerBundle(t *testing.T) {
+	service := NewService(shopRepositoryStub{}, pledgeRepositoryStub{
+		getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+			return domain.Pledge{
+				PledgeID:          pledgeID,
+				ShopID:            "shop-1",
+				ProductID:         "product-1",
+				Score:             8.9,
+				Category:          "fresh_produce",
+				Confidence:        0.93,
+				ImageHash:         "hash-1",
+				ImageCID:          "cid-1",
+				DataHash:          "data-hash",
+				ChainAnchorStatus: "anchored",
+				IntegrityStatus:   "anchored",
+			}, nil
+		},
+	}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
+	service.SetPledgeIntegrityReader(integrityReaderStub{
+		get: func(ctx context.Context, pledge domain.Pledge) (PledgeIntegrityView, error) {
+			return PledgeIntegrityView{
+				PledgeID:          pledge.PledgeID,
+				ShopID:            pledge.ShopID,
+				DataHash:          pledge.DataHash,
+				ChainAnchorStatus: pledge.ChainAnchorStatus,
+				IntegrityStatus:   pledge.IntegrityStatus,
+				OnChainMatch:      true,
+			}, nil
+		},
+	})
+
+	result, err := service.GetPledgeProof(context.Background(), PledgeIntegrityInput{
+		ShopID:   "shop-1",
+		PledgeID: "pledge-1",
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.ProofStatus != "verified" {
+		t.Fatalf("unexpected proof status: %#v", result)
+	}
+	if len(result.RecommendedActions) == 0 || result.Integrity.PledgeID != "pledge-1" {
+		t.Fatalf("unexpected proof bundle: %#v", result)
 	}
 }
 

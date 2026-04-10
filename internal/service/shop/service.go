@@ -34,6 +34,8 @@ const (
 	defaultPage             = 1
 	defaultPageSize         = 20
 	maxPageSize             = 100
+	trustedDeltaThreshold   = 1.0
+	warningDeltaThreshold   = 2.5
 )
 
 type CreateInput struct {
@@ -82,6 +84,22 @@ type PledgeIntegrityInput struct {
 	DataHash string
 }
 
+type PledgeProofBundle struct {
+	PledgeID           string
+	ShopID             string
+	ProductID          string
+	Score              float64
+	Category           string
+	Confidence         float64
+	ImageHash          string
+	ImageCID           string
+	ProofStatus        string
+	ProofHeadline      string
+	ProofSummary       string
+	RecommendedActions []string
+	Integrity          PledgeIntegrityView
+}
+
 type ModeratePledgeIntegrityInput struct {
 	ShopID          string
 	PledgeID        string
@@ -114,6 +132,9 @@ type TrustSummary struct {
 	PledgeScore        float64
 	ReviewScore        float64
 	BuyerCheckScore    float64
+	ConsistencyScore   float64
+	RecencyScore       float64
+	CoverageScore      float64
 	BuyerCheckCount    int
 	TrustedCheckCount  int
 	HighRiskCheckCount int
@@ -181,6 +202,58 @@ type PledgeIntegrityView struct {
 	LastCheckedAt     *time.Time
 	CanReanchor       bool
 	CanRevoke         bool
+}
+
+func buildProofBundle(pledge domain.Pledge, integrity PledgeIntegrityView) PledgeProofBundle {
+	bundle := PledgeProofBundle{
+		PledgeID:           pledge.PledgeID,
+		ShopID:             pledge.ShopID,
+		ProductID:          pledge.ProductID,
+		Score:              pledge.Score,
+		Category:           pledge.Category,
+		Confidence:         pledge.Confidence,
+		ImageHash:          pledge.ImageHash,
+		ImageCID:           pledge.ImageCID,
+		RecommendedActions: []string{},
+		Integrity:          integrity,
+	}
+
+	switch {
+	case integrity.IntegrityStatus == "mismatch_detected":
+		bundle.ProofStatus = "warning"
+		bundle.ProofHeadline = "Phat hien sai lech du lieu"
+		bundle.ProofSummary = "Du lieu hien tai khong con khop voi ban ghi da duoc neo len blockchain."
+		bundle.RecommendedActions = []string{"show_warning", "contact_admin", "consider_reanchor"}
+	case integrity.IntegrityStatus == "revoked":
+		bundle.ProofStatus = "revoked"
+		bundle.ProofHeadline = "Cam ket da bi thu hoi"
+		bundle.ProofSummary = "Ban ghi nay da bi thu hoi tren lop integrity va khong con duoc xem la cam ket hop le."
+		bundle.RecommendedActions = []string{"hide_trust_badge", "show_revoked_state"}
+	case integrity.ChainAnchorStatus != "anchored":
+		bundle.ProofStatus = "pending"
+		bundle.ProofHeadline = "Dang cho neo len blockchain"
+		bundle.ProofSummary = "Cam ket da duoc tao nhung chua hoan tat viec neo hash len blockchain."
+		bundle.RecommendedActions = []string{"show_pending_badge", "retry_later"}
+	case integrity.OnChainMatch:
+		bundle.ProofStatus = "verified"
+		bundle.ProofHeadline = "Cam ket da duoc xac thuc"
+		bundle.ProofSummary = "Hash du lieu trong co so du lieu trung khop voi ban ghi da duoc neo len blockchain."
+		bundle.RecommendedActions = []string{"show_verified_badge"}
+	default:
+		bundle.ProofStatus = "unknown"
+		bundle.ProofHeadline = "Chua xac thuc duoc"
+		bundle.ProofSummary = "He thong chua co du thong tin de ket luan trang thai integrity cua cam ket nay."
+		bundle.RecommendedActions = []string{"show_neutral_state"}
+	}
+
+	if integrity.ProvidedDataHash != "" && !integrity.ProvidedHashMatch {
+		bundle.ProofStatus = "warning"
+		bundle.ProofHeadline = "Hash doi chieu khong khop"
+		bundle.ProofSummary = "Hash duoc cung cap khong trung voi ban ghi pledge hien tai."
+		bundle.RecommendedActions = []string{"show_warning", "refresh_record"}
+	}
+
+	return bundle
 }
 
 func NewService(shops repository.ShopRepository, pledges repository.PledgeRepository, checks repository.BuyerCheckRepository, reviews repository.ShopReviewRepository, users repository.UserRepository, auditLogger AuditLogger) *Service {
@@ -712,6 +785,33 @@ func (s *Service) GetPledgeIntegrity(ctx context.Context, input PledgeIntegrityI
 	return s.integrity.GetPledgeIntegrity(ctx, pledge)
 }
 
+func (s *Service) GetPledgeProof(ctx context.Context, input PledgeIntegrityInput) (PledgeProofBundle, error) {
+	if strings.TrimSpace(input.ShopID) == "" {
+		return PledgeProofBundle{}, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
+	}
+	if strings.TrimSpace(input.PledgeID) == "" {
+		return PledgeProofBundle{}, fmt.Errorf("%w: pledgeId is required", ErrInvalidShop)
+	}
+	if s.pledges == nil {
+		return PledgeProofBundle{}, fmt.Errorf("pledge repository is not configured")
+	}
+
+	pledge, err := s.pledges.GetByID(ctx, strings.TrimSpace(input.PledgeID))
+	if err != nil {
+		return PledgeProofBundle{}, fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
+	if pledge.PledgeID == "" || pledge.ShopID != strings.TrimSpace(input.ShopID) {
+		return PledgeProofBundle{}, ErrNotFound
+	}
+
+	integrityView, err := s.GetPledgeIntegrity(ctx, input)
+	if err != nil {
+		return PledgeProofBundle{}, err
+	}
+
+	return buildProofBundle(pledge, integrityView), nil
+}
+
 func (s *Service) ReanchorPledgeIntegrity(ctx context.Context, input ModeratePledgeIntegrityInput) (domain.Pledge, error) {
 	if err := s.ensureAdmin(ctx, input.ActorUserID); err != nil {
 		return domain.Pledge{}, err
@@ -843,23 +943,32 @@ func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView
 	return shopView, nil
 }
 
-const trustScoreFormulaVersion = "trust_score_v1"
+const trustScoreFormulaVersion = "trust_score_v2"
 
 func applyTrustScore(summary *TrustSummary, rating RatingSummary, pledges []domain.Pledge, reviews []domain.ShopReview, checks []domain.BuyerCheck) {
 	pledgeScore, pledgeReasons := calculatePledgeTrustScore(pledges)
 	reviewScore, reviewReasons := calculateReviewTrustScore(rating, len(reviews))
 	buyerCheckScore, trustedChecks, highRiskChecks, checkReasons := calculateBuyerCheckTrustScore(checks)
+	consistencyScore, consistencyReasons := calculateConsistencyScore(pledges, checks)
+	recencyScore, recencyReasons := calculateRecencyScore(pledges, reviews, checks)
+	coverageScore, coverageReasons := calculateCoverageScore(pledges, reviews, checks)
 
 	weights := []weightedTrustComponent{
-		{score: pledgeScore, weight: 0.45, available: len(pledges) > 0},
-		{score: reviewScore, weight: 0.30, available: len(reviews) > 0},
-		{score: buyerCheckScore, weight: 0.25, available: len(checks) > 0},
+		{score: pledgeScore, weight: 0.30, available: len(pledges) > 0},
+		{score: reviewScore, weight: 0.20, available: len(reviews) > 0},
+		{score: buyerCheckScore, weight: 0.20, available: len(checks) > 0},
+		{score: consistencyScore, weight: 0.15, available: len(pledges) > 0 || len(checks) > 0},
+		{score: recencyScore, weight: 0.10, available: len(pledges) > 0 || len(reviews) > 0 || len(checks) > 0},
+		{score: coverageScore, weight: 0.05, available: true},
 	}
 
 	score, reasons := weightedTrustScore(weights)
 	reasons = append(reasons, pledgeReasons...)
 	reasons = append(reasons, reviewReasons...)
 	reasons = append(reasons, checkReasons...)
+	reasons = append(reasons, consistencyReasons...)
+	reasons = append(reasons, recencyReasons...)
+	reasons = append(reasons, coverageReasons...)
 
 	summary.Score = round(score, 1)
 	summary.Grade = trustGrade(summary.Score)
@@ -867,6 +976,9 @@ func applyTrustScore(summary *TrustSummary, rating RatingSummary, pledges []doma
 	summary.PledgeScore = round(pledgeScore, 1)
 	summary.ReviewScore = round(reviewScore, 1)
 	summary.BuyerCheckScore = round(buyerCheckScore, 1)
+	summary.ConsistencyScore = round(consistencyScore, 1)
+	summary.RecencyScore = round(recencyScore, 1)
+	summary.CoverageScore = round(coverageScore, 1)
 	summary.BuyerCheckCount = len(checks)
 	summary.TrustedCheckCount = trustedChecks
 	summary.HighRiskCheckCount = highRiskChecks
@@ -905,11 +1017,14 @@ func calculatePledgeTrustScore(pledges []domain.Pledge) (float64, []string) {
 	}
 
 	total := 0.0
+	totalWeight := 0.0
 	lowConfidence := 0
 	for _, pledge := range pledges {
 		scoreComponent := clamp(pledge.Score*10, 0, 100)
 		confidenceComponent := clamp(pledge.Confidence*100, 0, 100)
-		total += scoreComponent*0.7 + confidenceComponent*0.3
+		weight := recencyWeight(pledge.UpdatedAt)
+		total += (scoreComponent*0.7 + confidenceComponent*0.3) * weight
+		totalWeight += weight
 		if pledge.Confidence < 0.60 {
 			lowConfidence++
 		}
@@ -922,7 +1037,7 @@ func calculatePledgeTrustScore(pledges []domain.Pledge) (float64, []string) {
 	if lowConfidence > 0 {
 		reasons = append(reasons, "some_pledges_low_confidence")
 	}
-	return total / float64(len(pledges)), reasons
+	return total / totalWeight, reasons
 }
 
 func calculateReviewTrustScore(rating RatingSummary, reviewCount int) (float64, []string) {
@@ -939,6 +1054,130 @@ func calculateReviewTrustScore(rating RatingSummary, reviewCount int) (float64, 
 		reasons = append(reasons, "low_customer_rating")
 	}
 	return score, reasons
+}
+
+func calculateConsistencyScore(pledges []domain.Pledge, checks []domain.BuyerCheck) (float64, []string) {
+	if len(pledges) == 0 && len(checks) == 0 {
+		return 50, []string{"no_consistency_signals"}
+	}
+
+	total := 0.0
+	count := 0.0
+	for _, check := range checks {
+		if check.Status == "rejected" {
+			continue
+		}
+		score := 85.0
+		if !check.CategoryMatch {
+			score -= 20
+		}
+		if check.ScoreDeltaAbs > warningDeltaThreshold {
+			score -= 25
+		} else if check.ScoreDeltaAbs > trustedDeltaThreshold {
+			score -= 10
+		}
+		if check.Verdict == "high_risk" {
+			score -= 25
+		}
+		if check.Status == "flagged" {
+			score -= 10
+		}
+		total += clamp(score, 0, 100)
+		count++
+	}
+	if count == 0 {
+		return 70, []string{"limited_consistency_data"}
+	}
+	reasons := []string{}
+	avg := total / count
+	if avg >= 80 {
+		reasons = append(reasons, "pledges_consistent_with_buyer_checks")
+	}
+	if avg < 55 {
+		reasons = append(reasons, "buyer_checks_show_consistency_issues")
+	}
+	return avg, reasons
+}
+
+func calculateRecencyScore(pledges []domain.Pledge, reviews []domain.ShopReview, checks []domain.BuyerCheck) (float64, []string) {
+	latest := latestActivityTime(pledges, reviews, checks)
+	if latest.IsZero() {
+		return 50, []string{"no_recent_activity"}
+	}
+	age := time.Since(latest)
+	score := 45.0
+	switch {
+	case age <= 72*time.Hour:
+		score = 100
+	case age <= 7*24*time.Hour:
+		score = 90
+	case age <= 14*24*time.Hour:
+		score = 78
+	case age <= 30*24*time.Hour:
+		score = 64
+	}
+	reasons := []string{}
+	if score >= 90 {
+		reasons = append(reasons, "recent_activity_available")
+	}
+	if score <= 50 {
+		reasons = append(reasons, "trust_signals_are_stale")
+	}
+	return score, reasons
+}
+
+func calculateCoverageScore(pledges []domain.Pledge, reviews []domain.ShopReview, checks []domain.BuyerCheck) (float64, []string) {
+	coverage := 0.0
+	reasons := []string{}
+	if len(pledges) > 0 {
+		coverage += 40
+	}
+	if len(reviews) > 0 {
+		coverage += 30
+	}
+	if len(checks) > 0 {
+		coverage += 30
+	}
+	if coverage == 100 {
+		reasons = append(reasons, "full_trust_signal_coverage")
+	} else if coverage < 70 {
+		reasons = append(reasons, "limited_signal_coverage")
+	}
+	return coverage, reasons
+}
+
+func latestActivityTime(pledges []domain.Pledge, reviews []domain.ShopReview, checks []domain.BuyerCheck) time.Time {
+	var latest time.Time
+	for _, pledge := range pledges {
+		if pledge.UpdatedAt.After(latest) {
+			latest = pledge.UpdatedAt
+		}
+	}
+	for _, review := range reviews {
+		if review.UpdatedAt.After(latest) {
+			latest = review.UpdatedAt
+		}
+	}
+	for _, check := range checks {
+		if check.UpdatedAt.After(latest) {
+			latest = check.UpdatedAt
+		}
+	}
+	return latest
+}
+
+func recencyWeight(updatedAt time.Time) float64 {
+	age := time.Since(updatedAt)
+	switch {
+	case age <= 72*time.Hour:
+		return 1.15
+	case age <= 7*24*time.Hour:
+		return 1.0
+	case age <= 30*24*time.Hour:
+		return 0.85
+	default:
+		return 0.7
+	}
 }
 
 func calculateBuyerCheckTrustScore(checks []domain.BuyerCheck) (float64, int, int, []string) {
@@ -972,7 +1211,7 @@ func calculateBuyerCheckTrustScore(checks []domain.BuyerCheck) (float64, int, in
 		if !check.CategoryMatch {
 			checkScore -= 15
 		}
-		if check.ScoreDeltaAbs > warningMaxScoreDelta {
+		if check.ScoreDeltaAbs > warningDeltaThreshold {
 			checkScore -= 15
 		}
 		weight := 1.0

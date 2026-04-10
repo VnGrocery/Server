@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"strconv"
+	"strings"
 	"time"
 
 	"vngrocery/internal/api/handler"
@@ -158,11 +159,18 @@ func main() {
 	productHandler := handler.NewProductHandler(productManager)
 	sellerHandler := handler.NewSellerHandler(visionScorer, sellerCommitService)
 	buyerHandler := handler.NewBuyerHandler(buyerCheckService)
+	uploadCfg := handler.NewMediaUploadConfigForRuntime(
+		int64(mustParseInt(cfg.MediaMaxImageBytes, 10<<20)),
+		splitCommaSeparated(cfg.MediaAllowedTypes),
+	)
+	sellerHandler.SetUploadConfig(uploadCfg)
+	buyerHandler.SetUploadConfig(uploadCfg)
 	if ipfsClient != nil {
 		uploader := ipfsUploadAdapter{client: ipfsClient}
 		sellerHandler.SetUploader(uploader)
 		buyerHandler.SetUploader(uploader)
 	}
+	mediaHandler := handler.NewMediaHandler(ipfsUploadAdapterOrNil(ipfsClient), uploadCfg)
 	shopHandler := handler.NewShopHandler(shopManager)
 
 	engine := router.New(router.Dependencies{
@@ -171,6 +179,7 @@ func main() {
 		AuthHandler:          authHandler,
 		AdminUserHandler:     adminUserHandler,
 		EventLogHandler:      eventLogHandler,
+		MediaHandler:         mediaHandler,
 		ProductHandler:       productHandler,
 		SellerHandler:        sellerHandler,
 		BuyerHandler:         buyerHandler,
@@ -193,6 +202,13 @@ type besuClientAdapter struct {
 
 type ipfsUploadAdapter struct {
 	client *ipfspkg.Client
+}
+
+func ipfsUploadAdapterOrNil(client *ipfspkg.Client) handler.ImageUploader {
+	if client == nil {
+		return nil
+	}
+	return ipfsUploadAdapter{client: client}
 }
 
 func (a ipfsUploadAdapter) AddBytes(ctx context.Context, filename string, data []byte) (handler.ImageUploadResult, error) {
@@ -345,6 +361,19 @@ func mustParseUint(raw string, fallback uint64) uint64 {
 		return fallback
 	}
 	return value
+}
+
+func splitCommaSeparated(raw string) []string {
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+		result = append(result, trimmed)
+	}
+	return result
 }
 
 type alertAdapter struct {

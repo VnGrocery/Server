@@ -23,6 +23,7 @@ type ShopService interface {
 	List(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
 	ListPledges(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error)
 	GetPledgeIntegrity(ctx context.Context, input shopsvc.PledgeIntegrityInput) (shopsvc.PledgeIntegrityView, error)
+	GetPledgeProof(ctx context.Context, input shopsvc.PledgeIntegrityInput) (shopsvc.PledgeProofBundle, error)
 	ReanchorPledgeIntegrity(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error)
 	RevokePledgeIntegrity(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error)
 	Review(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
@@ -288,6 +289,54 @@ func (h *ShopHandler) GetPledgeIntegrity(c *gin.Context) {
 	})
 }
 
+func (h *ShopHandler) GetPledgeProof(c *gin.Context) {
+	proof, err := h.shops.GetPledgeProof(c.Request.Context(), shopsvc.PledgeIntegrityInput{
+		ShopID:   c.Param("shopId"),
+		PledgeID: c.Param("pledgeId"),
+		DataHash: c.Query("dataHash"),
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.PledgeProofBundleResponse{
+		PledgeID:           proof.PledgeID,
+		ShopID:             proof.ShopID,
+		ProductID:          proof.ProductID,
+		Score:              proof.Score,
+		Category:           proof.Category,
+		Confidence:         proof.Confidence,
+		ImageHash:          proof.ImageHash,
+		ImageCID:           proof.ImageCID,
+		ProofStatus:        proof.ProofStatus,
+		ProofHeadline:      proof.ProofHeadline,
+		ProofSummary:       proof.ProofSummary,
+		RecommendedActions: proof.RecommendedActions,
+		Integrity: dto.PledgeIntegrityResponse{
+			PledgeID:          proof.Integrity.PledgeID,
+			ShopID:            proof.Integrity.ShopID,
+			DataHash:          proof.Integrity.DataHash,
+			ProvidedDataHash:  proof.Integrity.ProvidedDataHash,
+			ChainTxHash:       proof.Integrity.ChainTxHash,
+			ChainBlockNumber:  proof.Integrity.ChainBlockNumber,
+			ChainAnchorStatus: proof.Integrity.ChainAnchorStatus,
+			ChainAnchorTime:   proof.Integrity.ChainAnchorTime,
+			IntegrityStatus:   proof.Integrity.IntegrityStatus,
+			OnChainMatch:      proof.Integrity.OnChainMatch,
+			ProvidedHashMatch: proof.Integrity.ProvidedHashMatch,
+			OnChainDataHash:   proof.Integrity.OnChainDataHash,
+			OnChainVersion:    proof.Integrity.OnChainVersion,
+			OnChainTimestamp:  proof.Integrity.OnChainTimestamp,
+			OnChainPresent:    proof.Integrity.OnChainPresent,
+			MismatchReason:    proof.Integrity.MismatchReason,
+			LastCheckedAt:     proof.Integrity.LastCheckedAt,
+			CanReanchor:       proof.Integrity.CanReanchor,
+			CanRevoke:         proof.Integrity.CanRevoke,
+		},
+	})
+}
+
 func (h *ShopHandler) ReanchorPledgeIntegrity(c *gin.Context) {
 	principal, ok := middleware.GetPrincipal(c)
 	if !ok {
@@ -477,6 +526,9 @@ func toShopResponse(view shopsvc.ShopView) dto.ShopResponse {
 			PledgeScore:        view.TrustSummary.PledgeScore,
 			ReviewScore:        view.TrustSummary.ReviewScore,
 			BuyerCheckScore:    view.TrustSummary.BuyerCheckScore,
+			ConsistencyScore:   view.TrustSummary.ConsistencyScore,
+			RecencyScore:       view.TrustSummary.RecencyScore,
+			CoverageScore:      view.TrustSummary.CoverageScore,
 			BuyerCheckCount:    view.TrustSummary.BuyerCheckCount,
 			TrustedCheckCount:  view.TrustSummary.TrustedCheckCount,
 			HighRiskCheckCount: view.TrustSummary.HighRiskCheckCount,

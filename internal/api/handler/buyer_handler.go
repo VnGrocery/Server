@@ -1,10 +1,8 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"strings"
 
@@ -20,16 +18,24 @@ import (
 const maxBuyerImageBytes = 10 << 20
 
 type BuyerHandler struct {
-	checker  buyerservice.CheckService
-	uploader ImageUploader
+	checker   buyerservice.CheckService
+	uploader  ImageUploader
+	uploadCfg mediaUploadConfig
 }
 
 func NewBuyerHandler(checker buyerservice.CheckService) *BuyerHandler {
-	return &BuyerHandler{checker: checker}
+	return &BuyerHandler{
+		checker:   checker,
+		uploadCfg: newMediaUploadConfig(maxBuyerImageBytes, nil),
+	}
 }
 
 func (h *BuyerHandler) SetUploader(uploader ImageUploader) {
 	h.uploader = uploader
+}
+
+func (h *BuyerHandler) SetUploadConfig(cfg mediaUploadConfig) {
+	h.uploadCfg = cfg
 }
 
 func (h *BuyerHandler) Check(c *gin.Context) {
@@ -50,51 +56,19 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		})
 		return
 	}
-	if fileHeader.Size <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "image file must not be empty",
-		})
-		return
-	}
-	if fileHeader.Size > maxBuyerImageBytes {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
-			"error": "image file exceeds 10 MB limit",
-		})
-		return
-	}
-
-	file, err := fileHeader.Open()
+	upload, err := readMultipartImage(fileHeader, h.uploadCfg)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "failed to open uploaded image",
-		})
-		return
-	}
-	defer file.Close()
-
-	imageBytes, err := io.ReadAll(io.LimitReader(file, maxBuyerImageBytes+1))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "failed to read uploaded image",
-		})
-		return
-	}
-	if len(imageBytes) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "image file must not be empty",
-		})
-		return
-	}
-	if len(imageBytes) > maxBuyerImageBytes {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
-			"error": "image file exceeds 10 MB limit",
-		})
+		status := http.StatusBadRequest
+		if fileHeader.Size > h.uploadCfg.maxImageBytes {
+			status = http.StatusRequestEntityTooLarge
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 
 	imageCID := ""
 	if h.uploader != nil {
-		uploaded, err := h.uploader.AddBytes(c.Request.Context(), fileHeader.Filename, imageBytes)
+		uploaded, err := h.uploader.AddBytes(c.Request.Context(), upload.filename, upload.data)
 		if err == nil {
 			imageCID = uploaded.CID
 		}
@@ -103,12 +77,12 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 	result, err := h.checker.Check(c.Request.Context(), buyerservice.CheckInput{
 		PledgeID:    pledgeID,
 		BuyerUserID: principal.UserID,
-		ImageHash:   sha256Hex(imageBytes),
+		ImageHash:   sha256Hex(upload.data),
 		ImageCID:    imageCID,
 		Image: visionservice.ImageInput{
-			Filename: fileHeader.Filename,
-			Size:     int64(len(imageBytes)),
-			Content:  bytes.NewReader(imageBytes),
+			Filename: upload.filename,
+			Size:     int64(len(upload.data)),
+			Content:  newImageReader(upload.data),
 		},
 	})
 	if err != nil {

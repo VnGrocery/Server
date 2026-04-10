@@ -1,12 +1,10 @@
 package handler
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -23,6 +21,7 @@ type SellerHandler struct {
 	scorer    visionservice.ImageScorer
 	committer sellerservice.CommitService
 	uploader  ImageUploader
+	uploadCfg mediaUploadConfig
 }
 
 type ImageUploader interface {
@@ -38,11 +37,16 @@ func NewSellerHandler(scorer visionservice.ImageScorer, committer sellerservice.
 	return &SellerHandler{
 		scorer:    scorer,
 		committer: committer,
+		uploadCfg: newMediaUploadConfig(maxSellerImageBytes, nil),
 	}
 }
 
 func (h *SellerHandler) SetUploader(uploader ImageUploader) {
 	h.uploader = uploader
+}
+
+func (h *SellerHandler) SetUploadConfig(cfg mediaUploadConfig) {
+	h.uploadCfg = cfg
 }
 
 func (h *SellerHandler) Score(c *gin.Context) {
@@ -54,61 +58,28 @@ func (h *SellerHandler) Score(c *gin.Context) {
 		return
 	}
 
-	if fileHeader.Size <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "image file must not be empty",
-		})
-		return
-	}
-
-	if fileHeader.Size > maxSellerImageBytes {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
-			"error": "image file exceeds 10 MB limit",
-		})
-		return
-	}
-
-	file, err := fileHeader.Open()
+	upload, err := readMultipartImage(fileHeader, h.uploadCfg)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "failed to open uploaded image",
-		})
-		return
-	}
-	defer file.Close()
-
-	imageBytes, err := io.ReadAll(io.LimitReader(file, maxSellerImageBytes+1))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "failed to read uploaded image",
-		})
-		return
-	}
-	if len(imageBytes) == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "image file must not be empty",
-		})
-		return
-	}
-	if len(imageBytes) > maxSellerImageBytes {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{
-			"error": "image file exceeds 10 MB limit",
-		})
+		status := http.StatusBadRequest
+		if fileHeader.Size > h.uploadCfg.maxImageBytes {
+			status = http.StatusRequestEntityTooLarge
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
 		return
 	}
 
-	imageHash := sha256Hex(imageBytes)
+	imageHash := sha256Hex(upload.data)
 	imageCID := ""
 	if h.uploader != nil {
-		uploaded, err := h.uploader.AddBytes(c.Request.Context(), fileHeader.Filename, imageBytes)
+		uploaded, err := h.uploader.AddBytes(c.Request.Context(), upload.filename, upload.data)
 		if err == nil {
 			imageCID = uploaded.CID
 		}
 	}
 	result, err := h.scorer.Score(c.Request.Context(), visionservice.ImageInput{
-		Filename: fileHeader.Filename,
-		Size:     int64(len(imageBytes)),
-		Content:  bytes.NewReader(imageBytes),
+		Filename: upload.filename,
+		Size:     int64(len(upload.data)),
+		Content:  newImageReader(upload.data),
 	})
 	if err != nil {
 		status := http.StatusInternalServerError

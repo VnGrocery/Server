@@ -32,6 +32,9 @@ type ShopTrustSummaryResponse struct {
 	PledgeScore        float64    `json:"pledgeScore"`
 	ReviewScore        float64    `json:"reviewScore"`
 	BuyerCheckScore    float64    `json:"buyerCheckScore"`
+	ConsistencyScore   float64    `json:"consistencyScore"`
+	RecencyScore       float64    `json:"recencyScore"`
+	CoverageScore      float64    `json:"coverageScore"`
 	BuyerCheckCount    int        `json:"buyerCheckCount"`
 	TrustedCheckCount  int        `json:"trustedCheckCount"`
 	HighRiskCheckCount int        `json:"highRiskCheckCount"`

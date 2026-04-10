@@ -314,6 +314,7 @@ type shopServiceAdapter struct {
 	list                    func(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
 	listPledges             func(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error)
 	getPledgeIntegrity      func(ctx context.Context, input shopsvc.PledgeIntegrityInput) (shopsvc.PledgeIntegrityView, error)
+	getPledgeProof          func(ctx context.Context, input shopsvc.PledgeIntegrityInput) (shopsvc.PledgeProofBundle, error)
 	reanchorPledgeIntegrity func(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error)
 	revokePledgeIntegrity   func(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error)
 	moderate                func(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error)
@@ -360,6 +361,12 @@ func (s shopServiceAdapter) GetPledgeIntegrity(ctx context.Context, input shopsv
 		return shopsvc.PledgeIntegrityView{}, errors.New("not implemented")
 	}
 	return s.getPledgeIntegrity(ctx, input)
+}
+func (s shopServiceAdapter) GetPledgeProof(ctx context.Context, input shopsvc.PledgeIntegrityInput) (shopsvc.PledgeProofBundle, error) {
+	if s.getPledgeProof == nil {
+		return shopsvc.PledgeProofBundle{}, errors.New("not implemented")
+	}
+	return s.getPledgeProof(ctx, input)
 }
 func (s shopServiceAdapter) ReanchorPledgeIntegrity(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error) {
 	if s.reanchorPledgeIntegrity == nil {

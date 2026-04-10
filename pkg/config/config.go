@@ -38,6 +38,8 @@ type Config struct {
 	IPFSEnabled             bool
 	IPFSAPIURL              string
 	IPFSGatewayURL          string
+	MediaMaxImageBytes      string
+	MediaAllowedTypes       string
 	RateLimitBackend        string
 	RateLimitCollection     string
 	RateLimitMaxRequests    string
@@ -80,6 +82,8 @@ func Load() (Config, error) {
 		IPFSEnabled:             os.Getenv("IPFS_ENABLED") == "true",
 		IPFSAPIURL:              os.Getenv("IPFS_API_URL"),
 		IPFSGatewayURL:          getEnvOrDefault("IPFS_GATEWAY_URL", "http://127.0.0.1:8080"),
+		MediaMaxImageBytes:      getEnvOrDefault("MEDIA_MAX_IMAGE_BYTES", "10485760"),
+		MediaAllowedTypes:       getEnvOrDefault("MEDIA_ALLOWED_TYPES", "image/jpeg,image/png,image/webp"),
 		RateLimitBackend:        getEnvOrDefault("RATE_LIMIT_BACKEND", "memory"),
 		RateLimitCollection:     getEnvOrDefault("RATE_LIMIT_COLLECTION", "rate_limits"),
 		RateLimitMaxRequests:    getEnvOrDefault("RATE_LIMIT_MAX_REQUESTS", "120"),

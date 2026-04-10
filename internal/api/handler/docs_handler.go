@@ -252,6 +252,9 @@ func buildSchemas() gin.H {
 				"pledgeScore":        gin.H{"type": "number"},
 				"reviewScore":        gin.H{"type": "number"},
 				"buyerCheckScore":    gin.H{"type": "number"},
+				"consistencyScore":   gin.H{"type": "number"},
+				"recencyScore":       gin.H{"type": "number"},
+				"coverageScore":      gin.H{"type": "number"},
 				"buyerCheckCount":    gin.H{"type": "integer"},
 				"trustedCheckCount":  gin.H{"type": "integer"},
 				"highRiskCheckCount": gin.H{"type": "integer"},
@@ -510,6 +513,34 @@ func buildSchemas() gin.H {
 				"lastCheckedAt":     gin.H{"type": "string", "format": "date-time"},
 				"canReanchor":       gin.H{"type": "boolean"},
 				"canRevoke":         gin.H{"type": "boolean"},
+			},
+		},
+		"PledgeProofBundleResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"pledgeId":           gin.H{"type": "string"},
+				"shopId":             gin.H{"type": "string"},
+				"productId":          gin.H{"type": "string"},
+				"score":              gin.H{"type": "number"},
+				"category":           gin.H{"type": "string"},
+				"confidence":         gin.H{"type": "number"},
+				"imageHash":          gin.H{"type": "string"},
+				"imageCid":           gin.H{"type": "string"},
+				"proofStatus":        gin.H{"type": "string"},
+				"proofHeadline":      gin.H{"type": "string"},
+				"proofSummary":       gin.H{"type": "string"},
+				"recommendedActions": gin.H{"type": "array", "items": gin.H{"type": "string"}},
+				"integrity":          gin.H{"$ref": "#/components/schemas/PledgeIntegrityResponse"},
+			},
+		},
+		"MediaImageUploadResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"imageHash":   gin.H{"type": "string"},
+				"imageCid":    gin.H{"type": "string"},
+				"gatewayUrl":  gin.H{"type": "string"},
+				"contentType": gin.H{"type": "string"},
+				"sizeBytes":   gin.H{"type": "integer"},
 			},
 		},
 		"ModeratePledgeIntegrityRequest": gin.H{
@@ -880,6 +911,38 @@ func buildPaths() gin.H {
 					queryParam("dataHash", "string"),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "PledgeIntegrityResponse"), errorResponse),
+			},
+		},
+		"/v1/shops/{shopId}/pledges/{pledgeId}/proof": gin.H{
+			"get": gin.H{
+				"summary": "Get buyer-friendly pledge proof bundle",
+				"parameters": []gin.H{
+					pathParam("shopId"),
+					pathParam("pledgeId"),
+					queryParam("dataHash", "string"),
+				},
+				"responses": mergeResponses(success(http.StatusOK, "PledgeProofBundleResponse"), errorResponse),
+			},
+		},
+		"/v1/media/images": gin.H{
+			"post": gin.H{
+				"summary":  "Upload image and return reusable media metadata",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"requestBody": gin.H{
+					"required": true,
+					"content": gin.H{
+						"multipart/form-data": gin.H{
+							"schema": gin.H{
+								"type":     "object",
+								"required": []string{"image"},
+								"properties": gin.H{
+									"image": gin.H{"type": "string", "format": "binary"},
+								},
+							},
+						},
+					},
+				},
+				"responses": mergeResponses(success(http.StatusCreated, "MediaImageUploadResponse"), errorResponse),
 			},
 		},
 		"/v1/shops/{shopId}/products": gin.H{

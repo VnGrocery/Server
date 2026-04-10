@@ -604,6 +604,24 @@ func (shopHandlerStub) GetPledgeIntegrity(ctx context.Context, input shopservice
 	}, nil
 }
 
+func (shopHandlerStub) GetPledgeProof(ctx context.Context, input shopservice.PledgeIntegrityInput) (shopservice.PledgeProofBundle, error) {
+	return shopservice.PledgeProofBundle{
+		PledgeID:      input.PledgeID,
+		ShopID:        input.ShopID,
+		ProofStatus:   "verified",
+		ProofHeadline: "Cam ket da duoc xac thuc",
+		ProofSummary:  "Hash trung khop voi ban ghi da neo",
+		Integrity: shopservice.PledgeIntegrityView{
+			PledgeID:          input.PledgeID,
+			ShopID:            input.ShopID,
+			DataHash:          "data-hash",
+			ChainAnchorStatus: "anchored",
+			IntegrityStatus:   "anchored",
+			OnChainMatch:      true,
+		},
+	}, nil
+}
+
 func (shopHandlerStub) ReanchorPledgeIntegrity(ctx context.Context, input shopservice.ModeratePledgeIntegrityInput) (domain.Pledge, error) {
 	return domain.Pledge{PledgeID: input.PledgeID, ShopID: input.ShopID, IntegrityStatus: "reanchored", Version: input.ExpectedVersion + 1}, nil
 }

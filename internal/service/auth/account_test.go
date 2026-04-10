@@ -255,6 +255,48 @@ func TestAccountServiceRegisterCreatesVaultKeyAndReturnsPublicKey(t *testing.T) 
 	}
 }
 
+func TestAccountServiceRegisterBootstrapsAdminRoleByEmail(t *testing.T) {
+	keys := &accountKeyStoreStub{
+		create: func(ctx context.Context, userID string) (AccountKey, error) {
+			return AccountKey{
+				PublicKey: "pub-key",
+				Algorithm: "Ed25519",
+				VaultPath: "account-keys/user-1",
+			}, nil
+		},
+	}
+
+	var savedUser domain.User
+	service := NewAccountService(
+		authUserRepoStub{
+			newUserID: "user-1",
+		},
+		userRepoStub{
+			save: func(ctx context.Context, user domain.User) error {
+				savedUser = user
+				return nil
+			},
+		},
+		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
+		keys,
+		nil,
+		nil,
+		issuerStub{},
+		time.Hour,
+		30*24*time.Hour,
+		"google-client-id",
+		"admin@example.com",
+	)
+
+	if _, err := service.Register(context.Background(), "Admin@example.com", "password123", "Admin"); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if savedUser.Role != "admin" {
+		t.Fatalf("expected admin role, got %s", savedUser.Role)
+	}
+}
+
 func TestAccountServiceRegisterDoesNotCreateKeyWhenEmailExists(t *testing.T) {
 	keys := &accountKeyStoreStub{}
 	service := NewAccountService(
@@ -445,6 +487,55 @@ func TestAccountServiceGoogleLoginCreatesVaultKeyForNewUser(t *testing.T) {
 	}
 	if keys.createHits != 1 {
 		t.Fatalf("expected key generation once, got %d", keys.createHits)
+	}
+}
+
+func TestAccountServiceGoogleLoginBootstrapsAdminRoleByEmail(t *testing.T) {
+	keys := &accountKeyStoreStub{
+		create: func(ctx context.Context, userID string) (AccountKey, error) {
+			return AccountKey{
+				PublicKey: "pub-key",
+				Algorithm: "Ed25519",
+				VaultPath: "account-keys/user-2",
+			}, nil
+		},
+	}
+
+	var savedUser domain.User
+	service := NewAccountService(
+		authUserRepoStub{
+			newUserID: "user-2",
+			getByGoogleSub: func(ctx context.Context, googleSub string) (domain.AuthUser, error) {
+				return domain.AuthUser{}, errors.New("not found")
+			},
+		},
+		userRepoStub{
+			save: func(ctx context.Context, user domain.User) error {
+				savedUser = user
+				return nil
+			},
+		},
+		&refreshTokenRepoStub{},
+		&passwordResetTokenRepoStub{},
+		keys,
+		nil,
+		googleTokensStub{
+			validate: func(ctx context.Context, idToken, audience string) (GoogleIdentity, error) {
+				return GoogleIdentity{Subject: "google-sub", Email: "admin@example.com"}, nil
+			},
+		},
+		issuerStub{},
+		time.Hour,
+		30*24*time.Hour,
+		"google-client-id",
+		"admin@example.com",
+	)
+
+	if _, err := service.GoogleLogin(context.Background(), "google-token"); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if savedUser.Role != "admin" {
+		t.Fatalf("expected admin role, got %s", savedUser.Role)
 	}
 }
 

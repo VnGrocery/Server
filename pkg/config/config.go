@@ -16,6 +16,7 @@ type Config struct {
 	FirebaseCredentialsFile string
 	JWTSecret               string
 	GoogleClientID          string
+	BootstrapAdminEmails    string
 	VaultEnabled            bool
 	VaultAddr               string
 	VaultToken              string
@@ -69,6 +70,7 @@ func Load() (Config, error) {
 		FirebaseCredentialsFile: os.Getenv("FIREBASE_CREDENTIALS_FILE"),
 		JWTSecret:               os.Getenv("JWT_SECRET"),
 		GoogleClientID:          os.Getenv("GOOGLE_CLIENT_ID"),
+		BootstrapAdminEmails:    os.Getenv("BOOTSTRAP_ADMIN_EMAILS"),
 		VaultEnabled:            os.Getenv("VAULT_ENABLED") == "true",
 		VaultAddr:               os.Getenv("VAULT_ADDR"),
 		VaultToken:              os.Getenv("VAULT_TOKEN"),

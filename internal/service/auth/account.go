@@ -50,6 +50,7 @@ type AccountService struct {
 	refreshTTL       time.Duration
 	passwordResetTTL time.Duration
 	googleClientID   string
+	bootstrapAdmins  map[string]struct{}
 }
 
 type AccountKey struct {
@@ -108,7 +109,7 @@ func (googleTokenValidator) Validate(ctx context.Context, idToken, audience stri
 	}, nil
 }
 
-func NewAccountService(authUsers repository.AuthUserRepository, users repository.UserRepository, refreshTokens repository.RefreshTokenRepository, passwordResets repository.PasswordResetTokenRepository, keys AccountKeyStore, auditLogger AuditLogger, googleTokens GoogleTokenValidator, jwt Issuer, jwtTTL, refreshTTL time.Duration, googleClientID string) *AccountService {
+func NewAccountService(authUsers repository.AuthUserRepository, users repository.UserRepository, refreshTokens repository.RefreshTokenRepository, passwordResets repository.PasswordResetTokenRepository, keys AccountKeyStore, auditLogger AuditLogger, googleTokens GoogleTokenValidator, jwt Issuer, jwtTTL, refreshTTL time.Duration, googleClientID string, bootstrapAdminEmails ...string) *AccountService {
 	if googleTokens == nil {
 		googleTokens = googleTokenValidator{}
 	}
@@ -128,6 +129,7 @@ func NewAccountService(authUsers repository.AuthUserRepository, users repository
 		refreshTTL:       refreshTTL,
 		passwordResetTTL: time.Hour,
 		googleClientID:   googleClientID,
+		bootstrapAdmins:  normalizeBootstrapAdmins(bootstrapAdminEmails),
 	}
 }
 
@@ -156,6 +158,7 @@ func (s *AccountService) Register(ctx context.Context, email, password, displayN
 
 	userID := s.authUsers.NewUserID()
 	now := time.Now().UTC()
+	role := s.roleForNewUser(emailLower)
 	key, err := s.keys.CreateAccountKey(ctx, userID)
 	if err != nil {
 		return AuthResult{}, fmt.Errorf("failed to create account key: %w", err)
@@ -184,7 +187,7 @@ func (s *AccountService) Register(ctx context.Context, email, password, displayN
 		UserID:      userID,
 		Email:       emailLower,
 		DisplayName: strings.TrimSpace(displayName),
-		Role:        "user",
+		Role:        role,
 		Status:      AccountStatusActive,
 		Version:     1,
 		CreatedAt:   now,
@@ -255,6 +258,7 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 	if err != nil || authUser.UserID == "" {
 		userID := s.authUsers.NewUserID()
 		now := time.Now().UTC()
+		role := s.roleForNewUser(emailLower)
 		key, err := s.keys.CreateAccountKey(ctx, userID)
 		if err != nil {
 			return AuthResult{}, fmt.Errorf("failed to create account key: %w", err)
@@ -281,7 +285,7 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 			UserID:      userID,
 			Email:       emailLower,
 			DisplayName: "",
-			Role:        "user",
+			Role:        role,
 			Status:      AccountStatusActive,
 			Version:     1,
 			CreatedAt:   now,
@@ -300,6 +304,34 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 
 	principal := Principal{UserID: authUser.UserID, Email: emailLower}
 	return s.issueAuthResult(ctx, principal, authUser.PublicKey)
+}
+
+func normalizeBootstrapAdmins(emails []string) map[string]struct{} {
+	if len(emails) == 0 {
+		return nil
+	}
+	result := make(map[string]struct{}, len(emails))
+	for _, email := range emails {
+		normalized := strings.ToLower(strings.TrimSpace(email))
+		if normalized == "" {
+			continue
+		}
+		result[normalized] = struct{}{}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+func (s *AccountService) roleForNewUser(email string) string {
+	normalized := strings.ToLower(strings.TrimSpace(email))
+	if normalized != "" && s.bootstrapAdmins != nil {
+		if _, ok := s.bootstrapAdmins[normalized]; ok {
+			return "admin"
+		}
+	}
+	return "user"
 }
 
 func (s *AccountService) Refresh(ctx context.Context, refreshToken string) (AuthResult, error) {

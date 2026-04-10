@@ -144,7 +144,20 @@ func main() {
 	)
 	integrityManager.SetNotifier(alertAdapter{client: alertNotifier})
 	integrityManager.SetObserver(metrics)
-	accountService := authservice.NewAccountService(authUserRepository, userRepository, refreshTokenRepository, passwordResetTokenRepository, accountKeys, auditLogger, nil, jwtService, 24*time.Hour, 30*24*time.Hour, cfg.GoogleClientID)
+	accountService := authservice.NewAccountService(
+		authUserRepository,
+		userRepository,
+		refreshTokenRepository,
+		passwordResetTokenRepository,
+		accountKeys,
+		auditLogger,
+		nil,
+		jwtService,
+		24*time.Hour,
+		30*24*time.Hour,
+		cfg.GoogleClientID,
+		splitCommaSeparated(cfg.BootstrapAdminEmails)...,
+	)
 	productManager := productservice.NewService(productRepository, productFreshnessReportRepository, shopRepository, userRepository, auditLogger)
 	userAdminService := useradminservice.NewService(userRepository, authUserRepository, accountKeys, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, buyerCheckRepository, shopReviewRepository, userRepository, auditLogger)

@@ -1,33 +1,45 @@
 # Mobile Handoff
 
-## Core screens
+## Main screens
 - `Auth`: `POST /v1/auth/register`, `POST /v1/auth/login`, `POST /v1/auth/google`, `POST /v1/auth/refresh`
-- `Shop list/detail`: `GET /v1/shops`, `GET /v1/shops/:shopId`
-- `Product list/detail`: `GET /v1/shops/:shopId/products`, `GET /v1/shops/:shopId/products/:productId`
-- `Seller pledge flow`: `POST /v1/media/images`, `POST /v1/seller/score`, `POST /v1/seller/commit`
-- `Buyer check flow`: `POST /v1/media/images`, `POST /v1/buyer/check`
-- `Proof view`: `GET /v1/shops/:shopId/pledges/:pledgeId/proof`
+- `Shop feed`: `GET /v1/shops`
+- `Shop detail`: `GET /v1/shops/:shopId`, `GET /v1/shops/:shopId/pledges`
+- `Product detail`: `GET /v1/shops/:shopId/products/:productId`, `GET /v1/shops/:shopId/products/:productId/freshness-reports`
+- `Seller pledge`: `POST /v1/media/images`, `POST /v1/seller/score`, `POST /v1/seller/commit`
+- `Buyer check`: `POST /v1/media/images`, `POST /v1/buyer/check`
+- `Proof screen`: `GET /v1/shops/:shopId/pledges/:pledgeId/proof`
 
-## Suggested mobile flow
-1. Upload image with `POST /v1/media/images`.
-2. Reuse returned `imageHash`, `imageCid`, `gatewayUrl` in seller commit, buyer check, or freshness report.
-3. Show trust summary from shop detail. Treat `formulaVersion=trust_score_v2` as the current score contract.
-4. For pledge proof, prefer `proofStatus`, `proofHeadline`, `proofSummary`, and `recommendedActions`. Do not expose Besu/IPFS jargon by default.
+## Per-screen data contract
+- `Shop feed`: use `trustSummary.score`, `trustSummary.grade`, `trustSummary.formulaVersion`
+- `Shop detail`: show latest pledge history and proof CTA when a pledge exists
+- `Product detail`: show `freshnessScore`, `freshnessNote`, product images, and recent freshness reports
+- `Seller pledge`: upload once, then reuse `imageHash`, `imageCid`, and `gatewayUrl`
+- `Buyer check`: prefer image upload first, then attach `pledgeId` when the user is checking against a known seller pledge
+- `Proof screen`: render `proofStatus`, `proofHeadline`, `proofSummary`, `recommendedActions` as primary copy
 
-## UI mapping
-- `proofStatus=verified`: show green verified state.
-- `proofStatus=pending`: show neutral "dang dong bo" state.
-- `proofStatus=warning`: show warning banner and mismatch copy.
-- `proofStatus=revoked`: show revoked badge and reduce trust emphasis.
+## UI state mapping
+- `proofStatus=verified`: green verified state, show trust badge
+- `proofStatus=pending`: neutral syncing state, allow pull-to-refresh
+- `proofStatus=warning`: warning banner, reduce trust emphasis
+- `proofStatus=revoked`: revoked badge, disable verified UI
+- `grade=excellent|good`: positive trust treatment
+- `grade=watch|risk`: warning treatment
 
-## Sample proof payload
+## Frontend rules
+- Always upload image first with `POST /v1/media/images` for retryable flows.
+- Cache `imageCid` and `gatewayUrl` locally until the user finishes commit or check.
+- Treat `recommendedActions` as machine-friendly hints for UI logic.
+- Treat `reasons` arrays as diagnostics for support or admin tooling, not primary user copy.
+- Do not show blockchain wording by default. Use `Cam ket da duoc xac thuc`, `Dang dong bo`, `Can xem xet`, `Da thu hoi`.
+
+## Example proof payload
 ```json
 {
   "pledgeId": "pledge-1",
   "shopId": "shop-1",
   "proofStatus": "verified",
   "proofHeadline": "Cam ket da duoc xac thuc",
-  "proofSummary": "Hash du lieu trong co so du lieu trung khop voi ban ghi da duoc neo len blockchain.",
+  "proofSummary": "Du lieu hien tai trung khop voi ban ghi da duoc neo.",
   "recommendedActions": ["show_verified_badge"],
   "integrity": {
     "chainAnchorStatus": "anchored",
@@ -36,8 +48,3 @@
   }
 }
 ```
-
-## Frontend rules
-- Always call `POST /v1/media/images` before sending image-based actions from mobile.
-- Persist `imageCid` and `gatewayUrl` locally if the UI needs preview/retry.
-- Treat `reasons` arrays as diagnostics, not primary user copy.

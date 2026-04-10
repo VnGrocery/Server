@@ -51,6 +51,12 @@ Keep `firestore.indexes.json` in sync with query patterns before production impo
 
 The baseline CI runs `go test ./...` on push and pull request. Add deploy jobs only after secrets and target environments are finalized.
 
+For manual end-to-end smoke testing before release, run:
+
+```bash
+IMAGE_PATH=/abs/path/to/image.jpg ./scripts/e2e-mobile-flow.sh
+```
+
 ## Staging and production compose
 
 For staging-style local validation with persistent Vault and reverse proxy:
@@ -75,6 +81,12 @@ docker compose \
 ```
 
 The production file is only a repo baseline. Replace local mounts, secrets, and host ports with environment-specific infrastructure controls before real deployment.
+
+For frontend and QA handoff, use:
+
+- `docs/frontend-handoff-final.md`
+- `docs/mobile-handoff.md`
+- `docs/mobile-api-playbook.md`
 
 ## Besu QBFT integrity anchoring
 

@@ -27,6 +27,7 @@
 - Alert on `integrityStatus=mismatch_detected`
 - Track `/metrics` for anchor attempts, anchor failures, verify mismatches, and rate-limit rejections
 - Run `go run ./cmd/backfill-integrity --batch-size 200` after data migrations that affect pledges
+- Run `IMAGE_PATH=/abs/path/to/image.jpg ./scripts/e2e-mobile-flow.sh` against staging before each release
 
 ## Minimum go-live checklist
 - TLS in front of API and private RPC access for Besu

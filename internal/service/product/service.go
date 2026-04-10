@@ -121,6 +121,7 @@ type FreshnessReportInput struct {
 	Confidence     float64
 	Comment        string
 	ImageHash      string
+	ImageCID       string
 }
 
 type ModerateFreshnessReportInput struct {
@@ -490,6 +491,7 @@ func (s *Service) CreateFreshnessReport(ctx context.Context, input FreshnessRepo
 		Confidence:     input.Confidence,
 		Comment:        strings.TrimSpace(input.Comment),
 		ImageHash:      strings.TrimSpace(input.ImageHash),
+		ImageCID:       strings.TrimSpace(input.ImageCID),
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}

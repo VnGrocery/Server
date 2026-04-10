@@ -14,6 +14,7 @@ type ProductFreshnessReport struct {
 	Confidence        float64    `firestore:"confidence"`
 	Comment           string     `firestore:"comment"`
 	ImageHash         string     `firestore:"imageHash"`
+	ImageCID          string     `firestore:"imageCid"`
 	ModeratedByUserID string     `firestore:"moderatedByUserId"`
 	ModerationNote    string     `firestore:"moderationNote"`
 	ModeratedAt       *time.Time `firestore:"moderatedAt"`

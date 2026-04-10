@@ -24,6 +24,7 @@ import (
 	besupkg "vngrocery/pkg/besu"
 	"vngrocery/pkg/config"
 	firebasepkg "vngrocery/pkg/firebase"
+	ipfspkg "vngrocery/pkg/ipfs"
 	vaultpkg "vngrocery/pkg/vault"
 	visionpkg "vngrocery/pkg/vision"
 )
@@ -96,6 +97,10 @@ func main() {
 	var accountKeys authservice.AccountKeyStore
 	var auditSigner auditservice.Signer
 	var integrityManager *integrityservice.Service
+	var ipfsClient *ipfspkg.Client
+	if cfg.IPFSEnabled {
+		ipfsClient = ipfspkg.NewClient(cfg.IPFSAPIURL, cfg.IPFSGatewayURL)
+	}
 	if cfg.VaultEnabled {
 		vaultClient := vaultpkg.NewClient(vaultpkg.Config{
 			Address:        cfg.VaultAddr,
@@ -153,6 +158,11 @@ func main() {
 	productHandler := handler.NewProductHandler(productManager)
 	sellerHandler := handler.NewSellerHandler(visionScorer, sellerCommitService)
 	buyerHandler := handler.NewBuyerHandler(buyerCheckService)
+	if ipfsClient != nil {
+		uploader := ipfsUploadAdapter{client: ipfsClient}
+		sellerHandler.SetUploader(uploader)
+		buyerHandler.SetUploader(uploader)
+	}
 	shopHandler := handler.NewShopHandler(shopManager)
 
 	engine := router.New(router.Dependencies{
@@ -179,6 +189,21 @@ func main() {
 
 type besuClientAdapter struct {
 	client *besupkg.Client
+}
+
+type ipfsUploadAdapter struct {
+	client *ipfspkg.Client
+}
+
+func (a ipfsUploadAdapter) AddBytes(ctx context.Context, filename string, data []byte) (handler.ImageUploadResult, error) {
+	result, err := a.client.AddBytes(ctx, filename, data)
+	if err != nil {
+		return handler.ImageUploadResult{}, err
+	}
+	return handler.ImageUploadResult{
+		CID:        result.CID,
+		GatewayURL: result.GatewayURL,
+	}, nil
 }
 
 func (a besuClientAdapter) CommitHash(ctx context.Context, recordID, dataHash string, timestamp time.Time, version int) (integrityservice.CommitResult, error) {

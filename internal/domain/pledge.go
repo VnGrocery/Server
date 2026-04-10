@@ -13,6 +13,7 @@ type Pledge struct {
 	Category          string     `firestore:"category"`
 	Confidence        float64    `firestore:"confidence"`
 	ImageHash         string     `firestore:"imageHash"`
+	ImageCID          string     `firestore:"imageCid"`
 	DataHash          string     `firestore:"dataHash"`
 	ChainTxHash       string     `firestore:"chainTxHash"`
 	ChainBlockNumber  int64      `firestore:"chainBlockNumber"`

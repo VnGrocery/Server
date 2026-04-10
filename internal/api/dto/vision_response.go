@@ -5,4 +5,5 @@ type SellerScoreResponse struct {
 	Category   string  `json:"category"`
 	Confidence float64 `json:"confidence"`
 	ImageHash  string  `json:"imageHash"`
+	ImageCID   string  `json:"imageCid,omitempty"`
 }

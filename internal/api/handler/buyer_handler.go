@@ -20,11 +20,16 @@ import (
 const maxBuyerImageBytes = 10 << 20
 
 type BuyerHandler struct {
-	checker buyerservice.CheckService
+	checker  buyerservice.CheckService
+	uploader ImageUploader
 }
 
 func NewBuyerHandler(checker buyerservice.CheckService) *BuyerHandler {
 	return &BuyerHandler{checker: checker}
+}
+
+func (h *BuyerHandler) SetUploader(uploader ImageUploader) {
+	h.uploader = uploader
 }
 
 func (h *BuyerHandler) Check(c *gin.Context) {
@@ -87,10 +92,19 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		return
 	}
 
+	imageCID := ""
+	if h.uploader != nil {
+		uploaded, err := h.uploader.AddBytes(c.Request.Context(), fileHeader.Filename, imageBytes)
+		if err == nil {
+			imageCID = uploaded.CID
+		}
+	}
+
 	result, err := h.checker.Check(c.Request.Context(), buyerservice.CheckInput{
 		PledgeID:    pledgeID,
 		BuyerUserID: principal.UserID,
 		ImageHash:   sha256Hex(imageBytes),
+		ImageCID:    imageCID,
 		Image: visionservice.ImageInput{
 			Filename: fileHeader.Filename,
 			Size:     int64(len(imageBytes)),
@@ -135,6 +149,8 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		ActualCategory:   result.ActualCategory,
 		ActualConfidence: result.ActualConfidence,
 		CategoryMatch:    result.CategoryMatch,
+		ImageHash:        result.ImageHash,
+		ImageCID:         result.ImageCID,
 		Reasons:          result.Reasons,
 	})
 }
@@ -198,6 +214,8 @@ func (h *BuyerHandler) Moderate(c *gin.Context) {
 		ActualCategory:   check.ActualCategory,
 		ActualConfidence: check.ActualConfidence,
 		CategoryMatch:    check.CategoryMatch,
+		ImageHash:        check.ImageHash,
+		ImageCID:         check.ImageCID,
 		Reasons:          check.Reasons,
 	})
 }

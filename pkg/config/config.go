@@ -35,6 +35,9 @@ type Config struct {
 	BesuVerifyBatchSize     string
 	AlertWebhookURL         string
 	AlertTimeoutSec         string
+	IPFSEnabled             bool
+	IPFSAPIURL              string
+	IPFSGatewayURL          string
 	RateLimitBackend        string
 	RateLimitCollection     string
 	RateLimitMaxRequests    string
@@ -74,6 +77,9 @@ func Load() (Config, error) {
 		BesuVerifyBatchSize:     getEnvOrDefault("BESU_VERIFY_BATCH_SIZE", "50"),
 		AlertWebhookURL:         os.Getenv("ALERT_WEBHOOK_URL"),
 		AlertTimeoutSec:         getEnvOrDefault("ALERT_TIMEOUT_SEC", "5"),
+		IPFSEnabled:             os.Getenv("IPFS_ENABLED") == "true",
+		IPFSAPIURL:              os.Getenv("IPFS_API_URL"),
+		IPFSGatewayURL:          getEnvOrDefault("IPFS_GATEWAY_URL", "http://127.0.0.1:8080"),
 		RateLimitBackend:        getEnvOrDefault("RATE_LIMIT_BACKEND", "memory"),
 		RateLimitCollection:     getEnvOrDefault("RATE_LIMIT_COLLECTION", "rate_limits"),
 		RateLimitMaxRequests:    getEnvOrDefault("RATE_LIMIT_MAX_REQUESTS", "120"),
@@ -135,6 +141,9 @@ func (c Config) Validate() error {
 		if c.BesuFromAddress == "" && c.BesuPrivateKey == "" {
 			return errors.New("BESU_FROM_ADDRESS or BESU_PRIVATE_KEY is required when BESU_ENABLED=true")
 		}
+	}
+	if c.IPFSEnabled && c.IPFSAPIURL == "" {
+		return errors.New("IPFS_API_URL is required when IPFS_ENABLED=true")
 	}
 	if c.RateLimitBackend != "" && c.RateLimitBackend != "memory" && c.RateLimitBackend != "firestore" {
 		return fmt.Errorf("unsupported RATE_LIMIT_BACKEND: %s", c.RateLimitBackend)

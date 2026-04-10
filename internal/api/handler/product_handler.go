@@ -254,6 +254,7 @@ func (h *ProductHandler) CreateFreshnessReport(c *gin.Context) {
 		Confidence:     request.Confidence,
 		Comment:        request.Comment,
 		ImageHash:      request.ImageHash,
+		ImageCID:       request.ImageCID,
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -331,6 +332,7 @@ func toProductFreshnessReportResponse(report domain.ProductFreshnessReport) dto.
 		Confidence:        report.Confidence,
 		Comment:           report.Comment,
 		ImageHash:         report.ImageHash,
+		ImageCID:          report.ImageCID,
 		ModeratedByUserID: report.ModeratedByUserID,
 		ModerationNote:    report.ModerationNote,
 		ModeratedAt:       report.ModeratedAt,

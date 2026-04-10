@@ -59,6 +59,7 @@ type CreateProductFreshnessReportRequest struct {
 	Confidence float64 `json:"confidence"`
 	Comment    string  `json:"comment"`
 	ImageHash  string  `json:"imageHash"`
+	ImageCID   string  `json:"imageCid"`
 }
 
 type ModerateProductFreshnessReportRequest struct {
@@ -79,6 +80,7 @@ type ProductFreshnessReportResponse struct {
 	Confidence        float64    `json:"confidence"`
 	Comment           string     `json:"comment"`
 	ImageHash         string     `json:"imageHash"`
+	ImageCID          string     `json:"imageCid,omitempty"`
 	ModeratedByUserID string     `json:"moderatedByUserId,omitempty"`
 	ModerationNote    string     `json:"moderationNote,omitempty"`
 	ModeratedAt       *time.Time `json:"moderatedAt,omitempty"`

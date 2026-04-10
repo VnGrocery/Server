@@ -28,6 +28,7 @@ type CommitInput struct {
 	Category        string
 	Confidence      float64
 	ImageHash       string
+	ImageCID        string
 }
 
 type CommitService interface {
@@ -109,6 +110,7 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 		Category:        strings.TrimSpace(input.Category),
 		Confidence:      input.Confidence,
 		ImageHash:       strings.TrimSpace(input.ImageHash),
+		ImageCID:        strings.TrimSpace(input.ImageCID),
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}

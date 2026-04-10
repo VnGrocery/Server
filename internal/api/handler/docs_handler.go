@@ -385,6 +385,7 @@ func buildSchemas() gin.H {
 				"confidence": gin.H{"type": "number"},
 				"comment":    gin.H{"type": "string"},
 				"imageHash":  gin.H{"type": "string"},
+				"imageCid":   gin.H{"type": "string"},
 			},
 		},
 		"ProductFreshnessReportResponse": gin.H{
@@ -401,6 +402,7 @@ func buildSchemas() gin.H {
 				"confidence":        gin.H{"type": "number"},
 				"comment":           gin.H{"type": "string"},
 				"imageHash":         gin.H{"type": "string"},
+				"imageCid":          gin.H{"type": "string"},
 				"moderatedByUserId": gin.H{"type": "string"},
 				"moderationNote":    gin.H{"type": "string"},
 				"moderatedAt":       gin.H{"type": "string", "format": "date-time"},
@@ -436,6 +438,7 @@ func buildSchemas() gin.H {
 				"category":   gin.H{"type": "string"},
 				"confidence": gin.H{"type": "number"},
 				"imageHash":  gin.H{"type": "string"},
+				"imageCid":   gin.H{"type": "string"},
 			},
 		},
 		"SellerCommitResponse": gin.H{
@@ -450,6 +453,7 @@ func buildSchemas() gin.H {
 				"category":          gin.H{"type": "string"},
 				"confidence":        gin.H{"type": "number"},
 				"imageHash":         gin.H{"type": "string"},
+				"imageCid":          gin.H{"type": "string"},
 				"dataHash":          gin.H{"type": "string"},
 				"chainTxHash":       gin.H{"type": "string"},
 				"chainBlockNumber":  gin.H{"type": "integer"},
@@ -473,6 +477,7 @@ func buildSchemas() gin.H {
 				"category":          gin.H{"type": "string"},
 				"confidence":        gin.H{"type": "number"},
 				"imageHash":         gin.H{"type": "string"},
+				"imageCid":          gin.H{"type": "string"},
 				"dataHash":          gin.H{"type": "string"},
 				"chainTxHash":       gin.H{"type": "string"},
 				"chainBlockNumber":  gin.H{"type": "integer"},
@@ -530,6 +535,7 @@ func buildSchemas() gin.H {
 				"category":   gin.H{"type": "string"},
 				"confidence": gin.H{"type": "number"},
 				"imageHash":  gin.H{"type": "string"},
+				"imageCid":   gin.H{"type": "string"},
 			},
 		},
 		"BuyerCheckResponse": gin.H{
@@ -553,6 +559,8 @@ func buildSchemas() gin.H {
 				"actualCategory":   gin.H{"type": "string"},
 				"actualConfidence": gin.H{"type": "number"},
 				"categoryMatch":    gin.H{"type": "boolean"},
+				"imageHash":        gin.H{"type": "string"},
+				"imageCid":         gin.H{"type": "string"},
 				"reasons": gin.H{
 					"type":  "array",
 					"items": gin.H{"type": "string"},

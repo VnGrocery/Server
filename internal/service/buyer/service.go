@@ -29,6 +29,7 @@ type CheckInput struct {
 	PledgeID    string
 	BuyerUserID string
 	ImageHash   string
+	ImageCID    string
 	Image       visionservice.ImageInput
 }
 
@@ -59,6 +60,7 @@ type CheckResult struct {
 	ActualConfidence float64
 	CategoryMatch    bool
 	ImageHash        string
+	ImageCID         string
 	Reasons          []string
 }
 
@@ -128,12 +130,14 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 		result := standaloneQualityResult(scored)
 		result.BuyerUserID = buyerUserID
 		result.ImageHash = strings.TrimSpace(input.ImageHash)
+		result.ImageCID = strings.TrimSpace(input.ImageCID)
 		return s.persistCheck(ctx, result)
 	}
 
 	result := comparePledge(pledge, scored)
 	result.BuyerUserID = buyerUserID
 	result.ImageHash = strings.TrimSpace(input.ImageHash)
+	result.ImageCID = strings.TrimSpace(input.ImageCID)
 	return s.persistCheck(ctx, result)
 }
 
@@ -313,6 +317,7 @@ func (r CheckResult) toBuyerCheck(checkID string, createdAt time.Time) domain.Bu
 		ActualConfidence: r.ActualConfidence,
 		CategoryMatch:    r.CategoryMatch,
 		ImageHash:        r.ImageHash,
+		ImageCID:         r.ImageCID,
 		Reasons:          r.Reasons,
 		CreatedAt:        createdAt,
 		UpdatedAt:        createdAt,

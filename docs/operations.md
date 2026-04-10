@@ -79,6 +79,26 @@ ALERT_WEBHOOK_URL=https://your-alert-endpoint
 
 The background worker retries `pending_anchor` pledges, periodically verifies `anchored` pledges against on-chain state, and emits webhook alerts on `mismatch_detected`.
 
+## Kubo IPFS
+
+When `IPFS_ENABLED=true`, the backend uploads raw image bytes from `seller/score` and `buyer/check` into Kubo and returns/stores `imageCid`.
+
+Required env vars:
+
+```bash
+IPFS_API_URL=http://127.0.0.1:5001
+IPFS_GATEWAY_URL=http://127.0.0.1:8080
+```
+
+Current usage:
+
+- `POST /v1/seller/score` returns `imageHash` and `imageCid`
+- `POST /v1/seller/commit` accepts optional `imageCid`
+- `POST /v1/buyer/check` stores uploaded image as `imageCid`
+- product freshness reports accept optional `imageCid`
+
+For pledges, canonical `dataHash` now includes `imageCid` when present.
+
 ## Rate limiting
 
 The API supports:

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -21,6 +22,16 @@ const maxSellerImageBytes = 10 << 20
 type SellerHandler struct {
 	scorer    visionservice.ImageScorer
 	committer sellerservice.CommitService
+	uploader  ImageUploader
+}
+
+type ImageUploader interface {
+	AddBytes(ctx context.Context, filename string, data []byte) (ImageUploadResult, error)
+}
+
+type ImageUploadResult struct {
+	CID        string
+	GatewayURL string
 }
 
 func NewSellerHandler(scorer visionservice.ImageScorer, committer sellerservice.CommitService) *SellerHandler {
@@ -28,6 +39,10 @@ func NewSellerHandler(scorer visionservice.ImageScorer, committer sellerservice.
 		scorer:    scorer,
 		committer: committer,
 	}
+}
+
+func (h *SellerHandler) SetUploader(uploader ImageUploader) {
+	h.uploader = uploader
 }
 
 func (h *SellerHandler) Score(c *gin.Context) {
@@ -83,6 +98,13 @@ func (h *SellerHandler) Score(c *gin.Context) {
 	}
 
 	imageHash := sha256Hex(imageBytes)
+	imageCID := ""
+	if h.uploader != nil {
+		uploaded, err := h.uploader.AddBytes(c.Request.Context(), fileHeader.Filename, imageBytes)
+		if err == nil {
+			imageCID = uploaded.CID
+		}
+	}
 	result, err := h.scorer.Score(c.Request.Context(), visionservice.ImageInput{
 		Filename: fileHeader.Filename,
 		Size:     int64(len(imageBytes)),
@@ -108,6 +130,7 @@ func (h *SellerHandler) Score(c *gin.Context) {
 		Category:   result.Category,
 		Confidence: result.Confidence,
 		ImageHash:  imageHash,
+		ImageCID:   imageCID,
 	})
 }
 
@@ -136,6 +159,7 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 		Category:        request.Category,
 		Confidence:      request.Confidence,
 		ImageHash:       request.ImageHash,
+		ImageCID:        request.ImageCID,
 	})
 	if err != nil {
 		status := http.StatusInternalServerError
@@ -163,6 +187,7 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 		Category:          pledge.Category,
 		Confidence:        pledge.Confidence,
 		ImageHash:         pledge.ImageHash,
+		ImageCID:          pledge.ImageCID,
 		DataHash:          pledge.DataHash,
 		ChainTxHash:       pledge.ChainTxHash,
 		ChainBlockNumber:  pledge.ChainBlockNumber,

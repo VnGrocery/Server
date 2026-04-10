@@ -503,6 +503,7 @@ func toPledgeResponse(pledge domain.Pledge) dto.PledgeResponse {
 		Category:          pledge.Category,
 		Confidence:        pledge.Confidence,
 		ImageHash:         pledge.ImageHash,
+		ImageCID:          pledge.ImageCID,
 		DataHash:          pledge.DataHash,
 		ChainTxHash:       pledge.ChainTxHash,
 		ChainBlockNumber:  pledge.ChainBlockNumber,

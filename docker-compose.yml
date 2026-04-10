@@ -13,6 +13,9 @@ services:
       VAULT_TOKEN: root
       VAULT_KV_MOUNT: secret
       VAULT_KEYS_PATH_PREFIX: account-keys
+      IPFS_ENABLED: "true"
+      IPFS_API_URL: http://ipfs:5001
+      IPFS_GATEWAY_URL: http://ipfs:8080
     ports:
       - "5000:5000"
     volumes:
@@ -20,6 +23,8 @@ services:
     depends_on:
       vault:
         condition: service_healthy
+      ipfs:
+        condition: service_started
     restart: unless-stopped
 
   vault:
@@ -40,3 +45,19 @@ services:
       retries: 20
       start_period: 5s
     restart: unless-stopped
+
+  ipfs:
+    image: ipfs/kubo:release
+    container_name: vngrocery-ipfs
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+      - "8080:8080"
+    volumes:
+      - ipfs-staging:/export
+      - ipfs-data:/data/ipfs
+    restart: unless-stopped
+
+volumes:
+  ipfs-staging:
+  ipfs-data:

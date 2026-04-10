@@ -9,6 +9,7 @@ type SellerCommitRequest struct {
 	Category   string  `json:"category"`
 	Confidence float64 `json:"confidence"`
 	ImageHash  string  `json:"imageHash"`
+	ImageCID   string  `json:"imageCid"`
 }
 
 type SellerCommitResponse struct {
@@ -21,6 +22,7 @@ type SellerCommitResponse struct {
 	Category          string     `json:"category"`
 	Confidence        float64    `json:"confidence"`
 	ImageHash         string     `json:"imageHash"`
+	ImageCID          string     `json:"imageCid,omitempty"`
 	DataHash          string     `json:"dataHash"`
 	ChainTxHash       string     `json:"chainTxHash,omitempty"`
 	ChainBlockNumber  int64      `json:"chainBlockNumber,omitempty"`
@@ -46,6 +48,7 @@ type PledgeResponse struct {
 	Category          string     `json:"category"`
 	Confidence        float64    `json:"confidence"`
 	ImageHash         string     `json:"imageHash"`
+	ImageCID          string     `json:"imageCid,omitempty"`
 	DataHash          string     `json:"dataHash"`
 	ChainTxHash       string     `json:"chainTxHash,omitempty"`
 	ChainBlockNumber  int64      `json:"chainBlockNumber,omitempty"`

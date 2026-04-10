@@ -19,6 +19,8 @@ type BuyerCheckResponse struct {
 	ActualCategory   string   `json:"actualCategory"`
 	ActualConfidence float64  `json:"actualConfidence"`
 	CategoryMatch    bool     `json:"categoryMatch"`
+	ImageHash        string   `json:"imageHash,omitempty"`
+	ImageCID         string   `json:"imageCid,omitempty"`
 	Reasons          []string `json:"reasons"`
 }
 

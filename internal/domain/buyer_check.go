@@ -22,6 +22,7 @@ type BuyerCheck struct {
 	ActualConfidence  float64    `firestore:"actualConfidence"`
 	CategoryMatch     bool       `firestore:"categoryMatch"`
 	ImageHash         string     `firestore:"imageHash"`
+	ImageCID          string     `firestore:"imageCid"`
 	Reasons           []string   `firestore:"reasons"`
 	ModeratedByUserID string     `firestore:"moderatedByUserId"`
 	ModerationNote    string     `firestore:"moderationNote"`

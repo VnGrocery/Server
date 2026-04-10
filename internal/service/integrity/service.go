@@ -120,6 +120,7 @@ type pledgeHashPayload struct {
 	Category        string    `json:"category"`
 	Confidence      float64   `json:"confidence"`
 	ImageHash       string    `json:"imageHash"`
+	ImageCID        string    `json:"imageCid,omitempty"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
@@ -350,6 +351,7 @@ func HashPledge(pledge domain.Pledge) (string, error) {
 		Category:        strings.TrimSpace(pledge.Category),
 		Confidence:      pledge.Confidence,
 		ImageHash:       strings.TrimSpace(pledge.ImageHash),
+		ImageCID:        strings.TrimSpace(pledge.ImageCID),
 		CreatedAt:       pledge.CreatedAt.UTC(),
 		UpdatedAt:       pledge.UpdatedAt.UTC(),
 	}

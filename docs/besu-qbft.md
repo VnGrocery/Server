@@ -10,6 +10,13 @@ Run Besu together with the existing API and Vault stack:
 docker compose -f docker-compose.yml -f docker-compose.besu-qbft.yml up --build
 ```
 
+The default compose stack now also includes Kubo IPFS:
+
+- API: `5000`
+- Vault: `8200`
+- IPFS API: `5001`
+- IPFS gateway: `8080`
+
 Validator RPC ports on the host:
 
 - `8545` -> `besu-validator1`

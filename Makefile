@@ -26,7 +26,9 @@ help:
 	@echo "  make logs service=api    # tail logs for a service in deploy compose"
 	@echo "  make ps                  # show deploy stack containers"
 	@echo "  make down                # stop deploy stack"
+	@echo "  make clean               # stop deploy stack and remove local temp artifacts"
 	@echo "  make clean-local         # stop deploy stack and remove orphan containers"
+	@echo "  make clean-all           # stop deploy stack and remove local volumes"
 
 .PHONY: api-up
 api-up:
@@ -80,6 +82,16 @@ ps:
 down:
 	$(COMPOSE) $(DEPLOY_COMPOSE) down
 
+.PHONY: clean
+clean:
+	$(COMPOSE) $(DEPLOY_COMPOSE) down --remove-orphans
+	rm -f /tmp/vngrocery-deploy-compose*.txt /tmp/vngrocery-vault-status*.txt /tmp/vngrocery-vault-runall*.txt
+
 .PHONY: clean-local
 clean-local:
 	$(COMPOSE) $(DEPLOY_COMPOSE) down --remove-orphans
+
+.PHONY: clean-all
+clean-all:
+	$(COMPOSE) $(DEPLOY_COMPOSE) down --remove-orphans --volumes
+	rm -f /tmp/vngrocery-deploy-compose*.txt /tmp/vngrocery-vault-status*.txt /tmp/vngrocery-vault-runall*.txt

@@ -8,6 +8,16 @@ Deploy `contracts/IntegrityRegistry.sol` lên Besu local để backend có thể
 ./scripts/deploy-integrity.sh
 ```
 
+Mặc định script local dùng:
+- RPC: `http://127.0.0.1:8545`
+- chainId: `1337`
+
+Nếu Besu nằm ở máy khác, chạy với env:
+
+```bash
+RPC_URL=http://10.0.0.11:8545 CHAIN_ID=1337 ./scripts/deploy-integrity.sh
+```
+
 Script sẽ in ra:
 - `contractAddress`
 - `transactionHash`
@@ -44,3 +54,14 @@ Khởi động lại stack:
 ```bash
 make run-all
 ```
+
+## Nếu mỗi validator chạy ở một server riêng
+Bạn vẫn chỉ deploy contract qua 1 RPC endpoint.
+
+Ví dụ:
+```dotenv
+BESU_RPC_URL=http://10.0.0.11:8545
+```
+
+Không cần deploy 4 lần.
+Contract chỉ cần deploy một lần trên chain QBFT đó.

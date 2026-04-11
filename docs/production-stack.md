@@ -7,6 +7,42 @@
 - `besu`: private QBFT validators plus one internal RPC endpoint
 - `firestore`: source of truth for app data
 
+## Network patterns
+
+### Pattern A: everything on one machine
+- API, Vault, IPFS, Besu đều chạy cùng máy
+- nếu backend ở Docker: dùng tên service
+- nếu backend ở host: dùng `127.0.0.1`
+
+### Pattern B: blockchain on another server
+- API chạy server A
+- Besu RPC chạy server B
+- dùng:
+  - `BESU_RPC_URL=http://<server-b-private-ip>:8545`
+
+### Pattern C: one validator per server
+- validator1: server B1
+- validator2: server B2
+- validator3: server B3
+- validator4: server B4
+- backend chỉ gọi 1 RPC endpoint:
+  - validator1
+  - hoặc RPC gateway riêng
+
+Ví dụ:
+```dotenv
+BESU_RPC_URL=http://10.0.0.11:8545
+```
+
+### Pattern D: services all on separate servers
+Ví dụ:
+```dotenv
+VAULT_ADDR=http://10.0.0.30:8200
+IPFS_API_URL=http://10.0.0.40:5001
+IPFS_GATEWAY_URL=http://10.0.0.40:8080
+BESU_RPC_URL=http://10.0.0.11:8545
+```
+
 ## Required env
 - `BESU_ENABLED=true`
 - `BESU_RPC_URL=https://besu-rpc.internal`

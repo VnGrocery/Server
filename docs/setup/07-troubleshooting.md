@@ -22,11 +22,48 @@ Kiểm tra:
 - `BESU_CONTRACT_ADDRESS` đúng
 - `BESU_PRIVATE_KEY` hoặc `BESU_FROM_ADDRESS` đúng
 
+Nếu backend chạy trong Docker mà bạn lại dùng:
+
+```dotenv
+BESU_RPC_URL=http://127.0.0.1:8545
+```
+
+thì thường sẽ lỗi, vì `127.0.0.1` lúc đó trỏ vào chính container API.
+
+Khi backend chạy trong Docker Compose, hãy dùng:
+
+```dotenv
+BESU_RPC_URL=http://besu-validator1:8545
+```
+
+Khi backend chạy trên host, hãy dùng:
+
+```dotenv
+BESU_RPC_URL=http://127.0.0.1:8545
+```
+
+Khi backend chạy ở server khác, hãy dùng IP hoặc domain thật của Besu RPC:
+
+```dotenv
+BESU_RPC_URL=http://10.0.0.11:8545
+```
+
 ## 3. IPFS chạy nhưng không có `imageCid`
 Kiểm tra:
 - `IPFS_ENABLED=true`
 - `IPFS_API_URL` đúng
 - image upload có thực sự đi qua `POST /v1/media/images`
+
+Giống Besu:
+- backend trong Docker: `IPFS_API_URL=http://ipfs:5001`
+- backend trên host: `IPFS_API_URL=http://127.0.0.1:5001`
+- backend ở máy khác: `IPFS_API_URL=http://<IP_IPFS>:5001`
+
+## 3b. Vault chạy nhưng app không ký được
+Kiểm tra:
+- backend trong Docker: `VAULT_ADDR=http://vault:8200`
+- backend trên host: `VAULT_ADDR=http://127.0.0.1:8200`
+- backend ở máy khác: `VAULT_ADDR=http://<IP_VAULT>:8200`
 
 ## 4. Firebase lỗi
 Kiểm tra:

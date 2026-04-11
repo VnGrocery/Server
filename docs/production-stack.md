@@ -18,6 +18,12 @@
 - `MEDIA_MAX_IMAGE_BYTES=10485760`
 - `MEDIA_ALLOWED_TYPES=image/jpeg,image/png,image/webp`
 
+## One-command local deploy baseline
+- `./scripts/init-vault.sh`
+- `./scripts/up-deploy.sh`
+- `./scripts/run-all.sh`
+- stack entrypoint file: `docker-compose.deploy.yml`
+
 ## Storage rules
 - Keep raw images off-chain.
 - Upload image to IPFS, store `imageCid`, include `imageCid` in pledge hash payload, anchor only canonical `dataHash` on Besu.

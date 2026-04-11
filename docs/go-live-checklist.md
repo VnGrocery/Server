@@ -7,6 +7,7 @@
 - Put reverse proxy/TLS in front of the API.
 - Restrict Besu RPC, Vault, and IPFS API to private network access only.
 - Validate persistent disk sizing for Firestore export, Vault snapshots, and IPFS pinned content.
+- Confirm `docker-compose.deploy.yml` is customized or replaced for the target environment.
 
 ## Secrets
 - Store `BESU_PRIVATE_KEY`, Vault token, and Firebase credentials in a secret manager.

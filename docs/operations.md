@@ -10,6 +10,21 @@ For local persistent Vault, run:
 docker compose -f docker-compose.yml -f docker-compose.vault-persistent.yml up --build
 ```
 
+If you want the full deploy-style stack with one compose file, use:
+
+```bash
+./scripts/init-vault.sh
+./scripts/up-deploy.sh
+```
+
+Or use the single entrypoint script:
+
+```bash
+./scripts/run-all.sh
+```
+
+It starts Vault first, checks whether Vault is initialized and unsealed, and only starts the full stack when Vault is ready.
+
 The persistent Vault uses file storage at the named Docker volume `vault-data`. It must be initialized and unsealed with standard Vault commands before the API can sign events:
 
 ```bash
@@ -81,6 +96,12 @@ docker compose \
 ```
 
 The production file is only a repo baseline. Replace local mounts, secrets, and host ports with environment-specific infrastructure controls before real deployment.
+
+For a single-file deploy baseline in this repo, use:
+
+```bash
+docker compose -f docker-compose.deploy.yml up -d --build
+```
 
 For frontend and QA handoff, use:
 

@@ -1,0 +1,100 @@
+services:
+  api:
+    extends:
+      file: docker-compose.yml
+      service: api
+    container_name: vngrocery-api-deploy
+    environment:
+      VAULT_ENABLED: "true"
+      VAULT_ADDR: http://vault:8200
+      IPFS_ENABLED: "true"
+      IPFS_API_URL: http://ipfs:5001
+      IPFS_GATEWAY_URL: http://ipfs:8080
+      BESU_ENABLED: "true"
+      BESU_RPC_URL: http://besu-validator1:8545
+      RATE_LIMIT_BACKEND: firestore
+      RATE_LIMIT_COLLECTION: rate_limits
+    depends_on:
+      vault:
+        condition: service_healthy
+      ipfs:
+        condition: service_started
+      besu-validator1:
+        condition: service_started
+    restart: always
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      default:
+      besu_qbft:
+
+  proxy:
+    extends:
+      file: docker-compose.prod.yml
+      service: proxy
+
+  vault:
+    extends:
+      file: docker-compose.yml
+      service: vault
+    container_name: vngrocery-vault-deploy
+    environment:
+      VAULT_API_ADDR: http://127.0.0.1:8200
+    command: vault server -config=/vault/config/vault.hcl
+    volumes:
+      - vault-data:/vault/file
+      - ./vault/config:/vault/config:ro
+    restart: always
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  ipfs:
+    extends:
+      file: docker-compose.yml
+      service: ipfs
+    container_name: vngrocery-ipfs-deploy
+    restart: always
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  besu-validator1:
+    extends:
+      file: docker-compose.besu-qbft.yml
+      service: besu-validator1
+
+  besu-validator2:
+    extends:
+      file: docker-compose.besu-qbft.yml
+      service: besu-validator2
+
+  besu-validator3:
+    extends:
+      file: docker-compose.besu-qbft.yml
+      service: besu-validator3
+
+  besu-validator4:
+    extends:
+      file: docker-compose.besu-qbft.yml
+      service: besu-validator4
+
+volumes:
+  vault-data:
+  ipfs-staging:
+  ipfs-data:
+
+networks:
+  besu_qbft:
+    driver: bridge
+    driver_opts:
+      com.docker.network.enable_ipv6: "false"
+    ipam:
+      driver: default
+      config:
+        - subnet: 10.42.0.0/16
+          gateway: 10.42.0.1

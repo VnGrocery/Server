@@ -1,5 +1,9 @@
 # Operations Notes
 
+Nếu bạn là người mới hoàn toàn, bắt đầu ở:
+
+- [00-start-here.md](/home/dora/VNGrocery/server/docs/setup/00-start-here.md)
+
 ## Vault local persistence
 
 Default `docker-compose.yml` still runs Vault dev mode for fast local development. Dev mode is ephemeral and loses keys when the container is recreated.

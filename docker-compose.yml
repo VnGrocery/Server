@@ -25,6 +25,8 @@ services:
         condition: service_healthy
       ipfs:
         condition: service_started
+    networks:
+      - vngrocery_app
     restart: unless-stopped
 
   vault:
@@ -44,6 +46,8 @@ services:
       timeout: 3s
       retries: 20
       start_period: 5s
+    networks:
+      - vngrocery_app
     restart: unless-stopped
 
   ipfs:
@@ -56,8 +60,14 @@ services:
     volumes:
       - ipfs-staging:/export
       - ipfs-data:/data/ipfs
+    networks:
+      - vngrocery_app
     restart: unless-stopped
 
 volumes:
   ipfs-staging:
   ipfs-data:
+
+networks:
+  vngrocery_app:
+    name: vngrocery_app

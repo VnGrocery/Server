@@ -26,6 +26,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
+	if cfg.UseMongo() {
+		log.Fatalf("backfill-integrity currently supports Firestore only; set MONGODB_ENABLED=false to use this command")
+	}
 
 	app, err := firebasepkg.NewApp(cfg)
 	if err != nil {

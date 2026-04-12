@@ -8,8 +8,9 @@ import (
 
 func TestLoadUsesDefaultPort(t *testing.T) {
 	t.Setenv("PORT", "")
-	t.Setenv("FIREBASE_CREDENTIALS_FILE", "/tmp/firebase.json")
-	t.Setenv("FIREBASE_PROJECT_ID", "demo-project")
+	t.Setenv("MONGODB_ENABLED", "true")
+	t.Setenv("MONGODB_URI", "mongodb://127.0.0.1:27017")
+	t.Setenv("MONGODB_DATABASE", "vngrocery")
 	t.Setenv("JWT_SECRET", "test-secret")
 	t.Setenv("VAULT_ENABLED", "false")
 	t.Setenv("OPENAI_API_KEY", "test-key")
@@ -26,6 +27,7 @@ func TestLoadUsesDefaultPort(t *testing.T) {
 
 func TestLoadRequiresCredentialsFile(t *testing.T) {
 	t.Setenv("PORT", "8081")
+	t.Setenv("MONGODB_ENABLED", "false")
 	t.Setenv("FIREBASE_CREDENTIALS_FILE", "")
 	t.Setenv("JWT_SECRET", "test-secret")
 	t.Setenv("VAULT_ENABLED", "false")
@@ -39,7 +41,9 @@ func TestLoadRequiresCredentialsFile(t *testing.T) {
 
 func TestLoadRequiresOpenAIAPIKey(t *testing.T) {
 	t.Setenv("PORT", "8081")
-	t.Setenv("FIREBASE_CREDENTIALS_FILE", "/tmp/firebase.json")
+	t.Setenv("MONGODB_ENABLED", "true")
+	t.Setenv("MONGODB_URI", "mongodb://127.0.0.1:27017")
+	t.Setenv("MONGODB_DATABASE", "vngrocery")
 	t.Setenv("JWT_SECRET", "test-secret")
 	t.Setenv("VAULT_ENABLED", "false")
 	t.Setenv("OPENAI_API_KEY", "")
@@ -92,6 +96,9 @@ func TestLoadReadsDotEnvFile(t *testing.T) {
 	for _, key := range []string{
 		"FIREBASE_CREDENTIALS_FILE",
 		"FIREBASE_PROJECT_ID",
+		"MONGODB_ENABLED",
+		"MONGODB_URI",
+		"MONGODB_DATABASE",
 		"JWT_SECRET",
 		"VAULT_ENABLED",
 		"OPENAI_API_KEY",
@@ -124,18 +131,23 @@ func TestLoadReadsDotEnvFile(t *testing.T) {
 	if cfg.FirebaseProjectID != "demo-from-env-file" {
 		t.Fatalf("unexpected FIREBASE_PROJECT_ID: %s", cfg.FirebaseProjectID)
 	}
+	if !cfg.UseMongo() {
+		t.Fatal("expected MongoDB to be enabled by default")
+	}
 }
 
 func TestValidateRequiresVaultSettingsWhenEnabled(t *testing.T) {
 	cfg := Config{
-		Port:                    "8080",
-		FirebaseCredentialsFile: "/tmp/firebase.json",
-		JWTSecret:               "test-secret",
-		VaultEnabled:            true,
-		VaultAddr:               "",
-		VaultToken:              "",
-		VaultKVMount:            "secret",
-		VaultKeysPathPrefix:     "account-keys",
+		Port:                "8080",
+		MongoEnabled:        true,
+		MongoURI:            "mongodb://127.0.0.1:27017",
+		MongoDatabase:       "vngrocery",
+		JWTSecret:           "test-secret",
+		VaultEnabled:        true,
+		VaultAddr:           "",
+		VaultToken:          "",
+		VaultKVMount:        "secret",
+		VaultKeysPathPrefix: "account-keys",
 	}
 
 	err := cfg.Validate()
@@ -146,12 +158,14 @@ func TestValidateRequiresVaultSettingsWhenEnabled(t *testing.T) {
 
 func TestValidateRequiresBesuSignerWhenEnabled(t *testing.T) {
 	cfg := Config{
-		Port:                    "8080",
-		FirebaseCredentialsFile: "/tmp/firebase.json",
-		JWTSecret:               "test-secret",
-		BesuEnabled:             true,
-		BesuRPCURL:              "http://127.0.0.1:8545",
-		BesuContractAddress:     "0x123",
+		Port:                "8080",
+		MongoEnabled:        true,
+		MongoURI:            "mongodb://127.0.0.1:27017",
+		MongoDatabase:       "vngrocery",
+		JWTSecret:           "test-secret",
+		BesuEnabled:         true,
+		BesuRPCURL:          "http://127.0.0.1:8545",
+		BesuContractAddress: "0x123",
 	}
 
 	err := cfg.Validate()
@@ -162,16 +176,39 @@ func TestValidateRequiresBesuSignerWhenEnabled(t *testing.T) {
 
 func TestValidateAllowsBesuPrivateKeyWithoutFromAddress(t *testing.T) {
 	cfg := Config{
-		Port:                    "8080",
-		FirebaseCredentialsFile: "/tmp/firebase.json",
-		JWTSecret:               "test-secret",
-		BesuEnabled:             true,
-		BesuRPCURL:              "http://127.0.0.1:8545",
-		BesuContractAddress:     "0x123",
-		BesuPrivateKey:          "abcd",
+		Port:                "8080",
+		MongoEnabled:        true,
+		MongoURI:            "mongodb://127.0.0.1:27017",
+		MongoDatabase:       "vngrocery",
+		JWTSecret:           "test-secret",
+		BesuEnabled:         true,
+		BesuRPCURL:          "http://127.0.0.1:8545",
+		BesuContractAddress: "0x123",
+		BesuPrivateKey:      "abcd",
 	}
 
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected nil error, got %v", err)
+	}
+}
+
+func TestValidateRequiresMongoSettingsWhenMongoEnabled(t *testing.T) {
+	cfg := Config{
+		Port:          "8080",
+		MongoEnabled:  true,
+		MongoURI:      "",
+		MongoDatabase: "vngrocery",
+		JWTSecret:     "test-secret",
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestUseMongoDefaultsToTrue(t *testing.T) {
+	cfg := Config{MongoEnabled: true}
+	if !cfg.UseMongo() {
+		t.Fatal("expected MongoDB to be active")
 	}
 }

@@ -12,8 +12,12 @@ const defaultPort = "8080"
 
 type Config struct {
 	Port                    string
+	FirebaseEnabled         bool
 	FirebaseProjectID       string
 	FirebaseCredentialsFile string
+	MongoEnabled            bool
+	MongoURI                string
+	MongoDatabase           string
 	JWTSecret               string
 	GoogleClientID          string
 	BootstrapAdminEmails    string
@@ -66,8 +70,12 @@ func Load() (Config, error) {
 
 	cfg := Config{
 		Port:                    getEnvOrDefault("PORT", defaultPort),
+		FirebaseEnabled:         os.Getenv("FIREBASE_ENABLED") == "true",
 		FirebaseProjectID:       os.Getenv("FIREBASE_PROJECT_ID"),
 		FirebaseCredentialsFile: os.Getenv("FIREBASE_CREDENTIALS_FILE"),
+		MongoEnabled:            getEnvOrDefault("MONGODB_ENABLED", "true") == "true",
+		MongoURI:                getEnvOrDefault("MONGODB_URI", "mongodb://127.0.0.1:27017"),
+		MongoDatabase:           getEnvOrDefault("MONGODB_DATABASE", "vngrocery"),
 		JWTSecret:               os.Getenv("JWT_SECRET"),
 		GoogleClientID:          os.Getenv("GOOGLE_CLIENT_ID"),
 		BootstrapAdminEmails:    os.Getenv("BOOTSTRAP_ADMIN_EMAILS"),
@@ -132,14 +140,21 @@ func getEnvOrDefault(key, fallback string) string {
 }
 
 func (c Config) Validate() error {
-	if c.FirebaseCredentialsFile == "" {
-		return errors.New("FIREBASE_CREDENTIALS_FILE is required")
-	}
 	if c.Port == "" {
 		return fmt.Errorf("PORT must not be empty")
 	}
 	if c.JWTSecret == "" {
 		return errors.New("JWT_SECRET is required")
+	}
+	if c.UseMongo() {
+		if c.MongoURI == "" {
+			return errors.New("MONGODB_URI is required when MongoDB is enabled")
+		}
+		if c.MongoDatabase == "" {
+			return errors.New("MONGODB_DATABASE is required when MongoDB is enabled")
+		}
+	} else if c.FirebaseCredentialsFile == "" {
+		return errors.New("FIREBASE_CREDENTIALS_FILE is required when MongoDB is disabled")
 	}
 	if c.VaultEnabled {
 		if c.VaultAddr == "" {
@@ -174,6 +189,10 @@ func (c Config) Validate() error {
 	}
 
 	return nil
+}
+
+func (c Config) UseMongo() bool {
+	return c.MongoEnabled
 }
 
 func (c Config) HasVisionProvider() bool {

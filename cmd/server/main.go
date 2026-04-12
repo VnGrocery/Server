@@ -11,7 +11,9 @@ import (
 	"vngrocery/internal/api/middleware"
 	"vngrocery/internal/api/router"
 	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 	firestorerepo "vngrocery/internal/repository/firestore"
+	mongorepo "vngrocery/internal/repository/mongo"
 	auditservice "vngrocery/internal/service/audit"
 	authservice "vngrocery/internal/service/auth"
 	buyerservice "vngrocery/internal/service/buyer"
@@ -26,6 +28,7 @@ import (
 	"vngrocery/pkg/config"
 	firebasepkg "vngrocery/pkg/firebase"
 	ipfspkg "vngrocery/pkg/ipfs"
+	mongopkg "vngrocery/pkg/mongodb"
 	vaultpkg "vngrocery/pkg/vault"
 	visionpkg "vngrocery/pkg/vision"
 )
@@ -61,40 +64,82 @@ func main() {
 		log.Fatalf("failed to validate vision config: %v", err)
 	}
 
-	app, err := firebasepkg.NewApp(cfg)
-	if err != nil {
-		log.Fatalf("failed to initialize Firebase: %v", err)
-	}
-	defer func() {
-		if closeErr := app.Close(); closeErr != nil {
-			log.Printf("failed to close Firebase resources: %v", closeErr)
-		}
-	}()
-
 	jwtService := authservice.NewJWTService(cfg.JWTSecret, "vngrocery")
 	var visionScorer visionservice.ImageScorer = visionservice.NewService(nil)
 	if cfg.HasVisionProvider() {
 		visionClient := visionpkg.NewOpenAIClient(cfg)
 		visionScorer = visionservice.NewService(visionClient)
 	}
-	pledgeRepository := firestorerepo.NewPledgeRepository(app.Firestore)
-	buyerCheckRepository := firestorerepo.NewBuyerCheckRepository(app.Firestore)
-	productRepository := firestorerepo.NewProductRepository(app.Firestore)
-	productFreshnessReportRepository := firestorerepo.NewProductFreshnessReportRepository(app.Firestore)
-	shopRepository := firestorerepo.NewShopRepository(app.Firestore)
-	shopReviewRepository := firestorerepo.NewShopReviewRepository(app.Firestore)
-	userRepository := firestorerepo.NewUserRepository(app.Firestore)
-	authUserRepository := firestorerepo.NewAuthUserRepository(app.Firestore)
-	refreshTokenRepository := firestorerepo.NewRefreshTokenRepository(app.Firestore)
-	passwordResetTokenRepository := firestorerepo.NewPasswordResetTokenRepository(app.Firestore)
-	eventLogRepository := firestorerepo.NewEventLogRepository(app.Firestore)
-	metrics := middleware.NewMetrics()
 	var rateLimitStore middleware.RateLimitStore
-	if cfg.RateLimitBackend == "firestore" {
-		rateLimitStore = middleware.NewFirestoreRateLimitStore(app.Firestore, cfg.RateLimitCollection)
-	} else {
+	var pledgeRepository repository.PledgeRepository
+	var buyerCheckRepository repository.BuyerCheckRepository
+	var productRepository repository.ProductRepository
+	var productFreshnessReportRepository repository.ProductFreshnessReportRepository
+	var shopRepository repository.ShopRepository
+	var shopReviewRepository repository.ShopReviewRepository
+	var userRepository repository.UserRepository
+	var authUserRepository repository.AuthUserRepository
+	var refreshTokenRepository repository.RefreshTokenRepository
+	var passwordResetTokenRepository repository.PasswordResetTokenRepository
+	var eventLogRepository repository.EventLogRepository
+	var firebaseApp *firebasepkg.App
+	var mongoApp *mongopkg.App
+
+	if cfg.UseMongo() {
+		mongoApp, err = mongopkg.NewApp(cfg)
+		if err != nil {
+			log.Fatalf("failed to initialize MongoDB: %v", err)
+		}
+		defer func() {
+			if closeErr := mongoApp.Close(); closeErr != nil {
+				log.Printf("failed to close MongoDB resources: %v", closeErr)
+			}
+		}()
+
+		pledgeRepository = mongorepo.NewPledgeRepository(mongoApp.Database)
+		buyerCheckRepository = mongorepo.NewBuyerCheckRepository(mongoApp.Database)
+		productRepository = mongorepo.NewProductRepository(mongoApp.Database)
+		productFreshnessReportRepository = mongorepo.NewProductFreshnessReportRepository(mongoApp.Database)
+		shopRepository = mongorepo.NewShopRepository(mongoApp.Database)
+		shopReviewRepository = mongorepo.NewShopReviewRepository(mongoApp.Database)
+		userRepository = mongorepo.NewUserRepository(mongoApp.Database)
+		authUserRepository = mongorepo.NewAuthUserRepository(mongoApp.Database)
+		refreshTokenRepository = mongorepo.NewRefreshTokenRepository(mongoApp.Database)
+		passwordResetTokenRepository = mongorepo.NewPasswordResetTokenRepository(mongoApp.Database)
+		eventLogRepository = mongorepo.NewEventLogRepository(mongoApp.Database)
 		rateLimitStore = middleware.NewMemoryRateLimitStore()
+		if cfg.RateLimitBackend == "firestore" {
+			log.Printf("RATE_LIMIT_BACKEND=firestore ignored because MongoDB is active; using memory rate limit store")
+		}
+	} else {
+		firebaseApp, err = firebasepkg.NewApp(cfg)
+		if err != nil {
+			log.Fatalf("failed to initialize Firebase: %v", err)
+		}
+		defer func() {
+			if closeErr := firebaseApp.Close(); closeErr != nil {
+				log.Printf("failed to close Firebase resources: %v", closeErr)
+			}
+		}()
+
+		pledgeRepository = firestorerepo.NewPledgeRepository(firebaseApp.Firestore)
+		buyerCheckRepository = firestorerepo.NewBuyerCheckRepository(firebaseApp.Firestore)
+		productRepository = firestorerepo.NewProductRepository(firebaseApp.Firestore)
+		productFreshnessReportRepository = firestorerepo.NewProductFreshnessReportRepository(firebaseApp.Firestore)
+		shopRepository = firestorerepo.NewShopRepository(firebaseApp.Firestore)
+		shopReviewRepository = firestorerepo.NewShopReviewRepository(firebaseApp.Firestore)
+		userRepository = firestorerepo.NewUserRepository(firebaseApp.Firestore)
+		authUserRepository = firestorerepo.NewAuthUserRepository(firebaseApp.Firestore)
+		refreshTokenRepository = firestorerepo.NewRefreshTokenRepository(firebaseApp.Firestore)
+		passwordResetTokenRepository = firestorerepo.NewPasswordResetTokenRepository(firebaseApp.Firestore)
+		eventLogRepository = firestorerepo.NewEventLogRepository(firebaseApp.Firestore)
+		if cfg.RateLimitBackend == "firestore" {
+			rateLimitStore = middleware.NewFirestoreRateLimitStore(firebaseApp.Firestore, cfg.RateLimitCollection)
+		} else {
+			rateLimitStore = middleware.NewMemoryRateLimitStore()
+		}
 	}
+	metrics := middleware.NewMetrics()
 	var accountKeys authservice.AccountKeyStore
 	var auditSigner auditservice.Signer
 	var integrityManager *integrityservice.Service

@@ -13,7 +13,8 @@ Hệ thống lưu audit trail, proof, image CID, và integrity anchor để tăn
 
 ## Stack
 - `Go`: API, worker, business logic
-- `Firestore`: source of truth
+- `MongoDB`: backend mặc định
+- `Firestore`: backend tùy chọn khi tắt MongoDB
 - `Vault`: lưu private key account
 - `Besu QBFT`: anchor integrity hash
 - `Kubo IPFS`: lưu image CID
@@ -35,7 +36,23 @@ Hệ thống lưu audit trail, proof, image CID, và integrity anchor để tăn
 cp .env.example .env
 ```
 
-2. Điền Firebase credentials, `JWT_SECRET`, `OPENAI_API_KEY`
+2. Điền `JWT_SECRET`, `OPENAI_API_KEY`, và chọn storage backend
+
+MongoDB là mặc định:
+```dotenv
+MONGODB_ENABLED=true
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DATABASE=vngrocery
+FIREBASE_ENABLED=false
+```
+
+Chỉ dùng Firestore khi:
+```dotenv
+MONGODB_ENABLED=false
+FIREBASE_ENABLED=true
+FIREBASE_PROJECT_ID=your-project
+FIREBASE_CREDENTIALS_FILE=./secrets/firebase-service-account.json
+```
 
 3. Chạy stack local
 ```bash
@@ -62,6 +79,7 @@ IMAGE_PATH=/abs/path/to/image.jpg ./scripts/e2e-mobile-flow.sh
 
 ## Important Docs
 - setup từ đầu: [docs/setup/00-start-here.md](/home/dora/VNGrocery/server/docs/setup/00-start-here.md)
+- setup MongoDB: [docs/setup/02a-mongodb-or-firestore.md](/home/dora/VNGrocery/server/docs/setup/02a-mongodb-or-firestore.md)
 - vận hành: [docs/operations.md](/home/dora/VNGrocery/server/docs/operations.md)
 - mobile API handoff: [docs/mobile-api-playbook.md](/home/dora/VNGrocery/server/docs/mobile-api-playbook.md)
 - mobile design handoff: [tmp/mobile-design-handoff/00-start-here.md](/home/dora/VNGrocery/server/tmp/mobile-design-handoff/00-start-here.md)

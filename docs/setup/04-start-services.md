@@ -58,6 +58,26 @@ BESU_RPC_URL=http://besu-validator1:8545
 BESU_CHAIN_ID=1337
 ```
 
+## Nếu dùng MongoDB local
+Điền thêm:
+
+```dotenv
+MONGODB_ENABLED=true
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DATABASE=vngrocery
+FIREBASE_ENABLED=false
+```
+
+## Nếu dùng Firestore
+Điền:
+
+```dotenv
+MONGODB_ENABLED=false
+FIREBASE_ENABLED=true
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CREDENTIALS_FILE=./secrets/firebase-service-account.json
+```
+
 ## Chọn IP hoặc URL đúng theo cách bạn chạy
 
 ### Trường hợp 1: mọi thứ chạy cùng trong Docker Compose

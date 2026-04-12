@@ -11,12 +11,12 @@ cd VNGrocery/server
 cp .env.example .env
 ```
 
-## Tạo thư mục chứa Firebase credentials
+## Tạo thư mục chứa credentials
 ```bash
 mkdir -p secrets
 ```
 
-Đặt file Firebase vào:
+Nếu bạn dùng Firestore, đặt file Firebase vào:
 
 ```text
 secrets/firebase-service-account.json
@@ -24,12 +24,17 @@ secrets/firebase-service-account.json
 
 ## Những dòng cần sửa ngay trong `.env`
 ```dotenv
-FIREBASE_PROJECT_ID=your-firebase-project-id
-FIREBASE_CREDENTIALS_FILE=./secrets/firebase-service-account.json
+MONGODB_ENABLED=true
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DATABASE=vngrocery
 JWT_SECRET=replace-with-a-long-random-secret
 OPENAI_API_KEY=your-openai-api-key
 BOOTSTRAP_ADMIN_EMAILS=admin@example.com
 ```
+
+Nếu bạn muốn dùng Firestore thay vì MongoDB, đọc tiếp:
+
+- [02a-mongodb-or-firestore.md](/home/dora/VNGrocery/server/docs/setup/02a-mongodb-or-firestore.md)
 
 ## Chưa cần sửa ngay lúc này
 Các biến sau sẽ được điền ở bước sau:

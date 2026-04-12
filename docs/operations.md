@@ -76,6 +76,34 @@ With `BESU_ENABLED=true`, it also attempts to anchor pending legacy pledges onto
 
 Keep `firestore.indexes.json` in sync with query patterns before production import. Deploy indexes with Firebase tooling for the target project.
 
+## MongoDB vs Firestore
+
+Runtime selection rule:
+- `MONGODB_ENABLED=true` => use MongoDB
+- `MONGODB_ENABLED=false` => use Firestore
+- if both MongoDB and Firebase flags are true, MongoDB still wins
+- default local path is MongoDB
+
+MongoDB env:
+
+```bash
+MONGODB_ENABLED=true
+MONGODB_URI=mongodb://127.0.0.1:27017
+MONGODB_DATABASE=vngrocery
+```
+
+Firestore env:
+
+```bash
+MONGODB_ENABLED=false
+FIREBASE_ENABLED=true
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CREDENTIALS_FILE=./secrets/firebase-service-account.json
+```
+
+Current limitation:
+- `cmd/backfill-integrity` still supports Firestore only
+
 ## CI/CD
 
 The baseline CI runs `go test ./...` on push and pull request. Add deploy jobs only after secrets and target environments are finalized.

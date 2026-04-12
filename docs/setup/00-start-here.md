@@ -14,23 +14,25 @@ Bạn sẽ làm được 5 việc:
 ## Thứ tự đọc
 1. [01-prepare-machine.md](/home/dora/VNGrocery/server/docs/setup/01-prepare-machine.md)
 2. [02-clone-and-env.md](/home/dora/VNGrocery/server/docs/setup/02-clone-and-env.md)
-3. [03-secrets-and-keys.md](/home/dora/VNGrocery/server/docs/setup/03-secrets-and-keys.md)
-4. [04-start-services.md](/home/dora/VNGrocery/server/docs/setup/04-start-services.md)
-5. [05-deploy-contract.md](/home/dora/VNGrocery/server/docs/setup/05-deploy-contract.md)
-6. [06-run-and-test.md](/home/dora/VNGrocery/server/docs/setup/06-run-and-test.md)
-7. [07-troubleshooting.md](/home/dora/VNGrocery/server/docs/setup/07-troubleshooting.md)
+3. [02a-mongodb-or-firestore.md](/home/dora/VNGrocery/server/docs/setup/02a-mongodb-or-firestore.md)
+4. [03-secrets-and-keys.md](/home/dora/VNGrocery/server/docs/setup/03-secrets-and-keys.md)
+5. [04-start-services.md](/home/dora/VNGrocery/server/docs/setup/04-start-services.md)
+6. [05-deploy-contract.md](/home/dora/VNGrocery/server/docs/setup/05-deploy-contract.md)
+7. [06-run-and-test.md](/home/dora/VNGrocery/server/docs/setup/06-run-and-test.md)
+8. [07-troubleshooting.md](/home/dora/VNGrocery/server/docs/setup/07-troubleshooting.md)
 
 ## Nếu bạn chỉ muốn chạy nhanh
 Làm lần lượt:
 
 1. copy `.env.example` thành `.env`
-2. điền Firebase và OpenAI key
-3. chạy `make run-all`
-4. init và unseal Vault theo hướng dẫn script in ra
-5. deploy contract Besu
-6. cập nhật `BESU_CONTRACT_ADDRESS` và `VAULT_TOKEN` trong `.env`
-7. chạy lại `make run-all`
-8. test bằng `./scripts/e2e-mobile-flow.sh`
+2. chọn MongoDB hoặc Firestore
+3. điền JWT và OpenAI key
+4. chạy `make run-all`
+5. init và unseal Vault theo hướng dẫn script in ra
+6. deploy contract Besu
+7. cập nhật `BESU_CONTRACT_ADDRESS` và `VAULT_TOKEN` trong `.env`
+8. chạy lại `make run-all`
+9. test bằng `./scripts/e2e-mobile-flow.sh`
 
 ## Bạn cần giữ lại những thứ gì
 - `Firebase service account json`

@@ -7,6 +7,19 @@
 - Lưu ở: `secrets/firebase-service-account.json`
 - Dùng để: backend đọc và ghi Firestore
 - Phải giữ kín: `có`
+- Chỉ cần khi: `MONGODB_ENABLED=false`
+
+### 1a. MongoDB URI
+- Dạng: connection string
+- Ví dụ: `mongodb://127.0.0.1:27017`
+- Dùng để: backend kết nối MongoDB
+- Phải giữ kín: `nên giữ kín nếu có user/password`
+
+### 1b. MongoDB database name
+- Dạng: tên database
+- Ví dụ: `vngrocery`
+- Dùng để: chọn database trong MongoDB
+- Phải giữ kín: `không`
 
 ### 2. JWT secret
 - Dạng: chuỗi random dài

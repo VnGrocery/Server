@@ -19,7 +19,8 @@ help:
 	@echo "  make besu-up             # start 4-node Besu QBFT only"
 	@echo "  make stack-up            # start base + persistent vault + besu + staging proxy"
 	@echo "  make deploy-up           # start single-file deploy baseline"
-	@echo "  make run-all            # run deploy baseline with vault readiness checks"
+	@echo "  make build-api           # build api image in deploy compose"
+	@echo "  make run-all             # build api image, then run deploy baseline with vault readiness checks"
 	@echo "  make vault-init          # print/init persistent vault manually"
 	@echo "  make vault-status        # show persistent vault status"
 	@echo "  make deploy-config       # validate deploy compose"
@@ -54,8 +55,12 @@ stack-up:
 deploy-up:
 	./scripts/up-deploy.sh
 
+.PHONY: build-api
+build-api:
+	$(COMPOSE) $(DEPLOY_COMPOSE) build api
+
 .PHONY: run-all
-run-all:
+run-all: build-api
 	./scripts/run-all.sh
 
 .PHONY: vault-init

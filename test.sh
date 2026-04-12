@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="${BASE_URL:-http://localhost:5000}"
+BASE_URL="${BASE_URL:-http://127.0.0.1:5000}"
 
 EMAIL="${EMAIL:-}"
 PASSWORD="${PASSWORD:-Passw0rd!}"
@@ -63,6 +63,12 @@ extract_token() {
 BASE_HEADERS=(-H "Content-Type: application/json")
 
 echo "BASE_URL=$BASE_URL"
+echo "EMAIL=$EMAIL"
+echo "PASSWORD=$PASSWORD"
+echo "DISPLAY_NAME=$DISPLAY_NAME"
+echo "SHOP_NAME=$SHOP_NAME"
+echo "PRODUCT_NAME=$PRODUCT_NAME"
+echo "IMAGE_PATH=${IMAGE_PATH:-<empty>}"
 
 print_step "health"
 curl -sS -D- "$BASE_URL/health" -o /dev/null | sed -n '1,5p'

@@ -26,7 +26,7 @@ func buildOpenAPISpec() gin.H {
 		"info": gin.H{
 			"title":       "VNGrocery API",
 			"version":     "1.0.0",
-			"description": "Backend API for authentication, shop management, trust checks, moderation, and reviews.",
+			"description": "Backend API for authentication, trust and freshness flows, moderation, proof verification, and integrity anchoring.\n\nAPI song ngữ Việt - Anh để frontend, mobile, và ops team dễ đọc và tích hợp.",
 		},
 		"servers": []gin.H{
 			{"url": "/"},
@@ -46,7 +46,7 @@ func buildOpenAPISpec() gin.H {
 }
 
 func buildSchemas() gin.H {
-	return gin.H{
+	schemas := gin.H{
 		"RegisterRequest": gin.H{
 			"type":     "object",
 			"required": []string{"email", "password"},
@@ -687,6 +687,8 @@ func buildSchemas() gin.H {
 			},
 		},
 	}
+
+	return schemas
 }
 
 func buildPaths() gin.H {
@@ -723,7 +725,7 @@ func buildPaths() gin.H {
 		},
 	}
 
-	return gin.H{
+	paths := gin.H{
 		"/health": gin.H{
 			"get": gin.H{
 				"summary":   "Health check",
@@ -1218,6 +1220,262 @@ func buildPaths() gin.H {
 				"responses": mergeResponses(success(http.StatusOK, "BuyerCheckResponse"), errorResponse),
 			},
 		},
+	}
+
+	annotatePathDocs(paths)
+	return paths
+}
+
+func annotatePathDocs(paths gin.H) {
+	type operationDoc struct {
+		summary     string
+		description string
+	}
+
+	docs := map[string]map[string]operationDoc{
+		"/v1/auth/register": {
+			"post": {
+				summary:     "Đăng ký tài khoản | Register account",
+				description: "Tạo tài khoản mới bằng email và mật khẩu.\n\nCreate a new account with email and password. Nếu email nằm trong BOOTSTRAP_ADMIN_EMAILS thì tài khoản mới có thể được gán role admin ngay lúc tạo. Private key không bao giờ trả về cho client.",
+			},
+		},
+		"/v1/auth/login": {
+			"post": {
+				summary:     "Đăng nhập email | Login with email",
+				description: "Đăng nhập bằng email và mật khẩu.\n\nAuthenticate with email and password. Trả về access token, refresh token, và public key nếu tài khoản hợp lệ.",
+			},
+		},
+		"/v1/auth/google": {
+			"post": {
+				summary:     "Đăng nhập Google | Login with Google",
+				description: "Đăng nhập bằng Google ID token.\n\nAuthenticate with Google. Nếu đây là lần đầu của account, backend sẽ tạo user mới và có thể bootstrap admin role theo email whitelist.",
+			},
+		},
+		"/v1/auth/refresh": {
+			"post": {
+				summary:     "Làm mới token | Refresh token",
+				description: "Đổi refresh token lấy access token mới.\n\nExchange a valid refresh token for a new access token and rotated refresh token.",
+			},
+		},
+		"/v1/auth/logout": {
+			"post": {
+				summary:     "Đăng xuất | Logout",
+				description: "Thu hồi refresh token để đăng xuất an toàn.\n\nRevoke the provided refresh token. Access token đã cấp vẫn tồn tại đến khi hết hạn.",
+			},
+		},
+		"/v1/me": {
+			"get": {
+				summary:     "Thông tin tài khoản hiện tại | Current account",
+				description: "Lấy thông tin cơ bản của người dùng đang đăng nhập.\n\nReturn the current authenticated user profile summary.",
+			},
+			"delete": {
+				summary:     "Xóa mềm tài khoản | Soft delete account",
+				description: "Không xóa vật lý dữ liệu, chỉ chuyển trạng thái sang deleted.\n\nSoft-delete the current account. Data is retained for transparency, audit, and future reconciliation.",
+			},
+		},
+		"/v1/events": {
+			"get": {
+				summary:     "Liệt kê event log đã ký | List signed event logs",
+				description: "Trả về danh sách event log đã ký để phục vụ audit và proof.\n\nUse filters like resourceType, resourceId, actorUserId, action, status, sequence, and time range for troubleshooting or admin review.",
+			},
+		},
+		"/v1/events/verify": {
+			"get": {
+				summary:     "Xác minh chuỗi event theo resource | Verify resource event chain",
+				description: "Kiểm tra toàn bộ event của một resource có hợp lệ không.\n\nVerify event content hash, signature, and chain linkage for all events attached to a resource.",
+			},
+		},
+		"/v1/events/{eventId}/verify": {
+			"get": {
+				summary:     "Xác minh một event | Verify single event",
+				description: "Kiểm tra hash, chữ ký, và liên kết previousEventId của một event cụ thể.\n\nUse this when admin or support needs to inspect one event in detail.",
+			},
+		},
+		"/v1/shops": {
+			"get": {
+				summary:     "Danh sách cửa hàng | List shops",
+				description: "Lấy danh sách cửa hàng công khai cho buyer app.\n\nReturns shop cards with trust summary and rating summary. Suitable for discovery screens.",
+			},
+			"post": {
+				summary:     "Tạo cửa hàng | Create shop",
+				description: "Cho phép người dùng đã đăng nhập tạo cửa hàng mới.\n\nCreate a new shop with address and coordinates. Shop state is tracked with status and version instead of hard delete.",
+			},
+		},
+		"/v1/shops/{shopId}": {
+			"get": {
+				summary:     "Chi tiết cửa hàng | Shop detail",
+				description: "Trả về thông tin đầy đủ của cửa hàng, trust score, và rating summary.\n\nFrontend should use this to render shop detail, trust cards, and navigation entry points.",
+			},
+			"put": {
+				summary:     "Cập nhật cửa hàng | Update shop",
+				description: "Cập nhật thông tin cửa hàng với expectedVersion để tránh ghi đè.\n\nOptimistic concurrency is enforced through expectedVersion.",
+			},
+			"delete": {
+				summary:     "Xóa mềm cửa hàng | Soft delete shop",
+				description: "Không xóa vật lý document shop, chỉ đổi status sang deleted.\n\nThe record stays available for audit and blockchain integrity history.",
+			},
+		},
+		"/v1/shops/{shopId}/pledges": {
+			"get": {
+				summary:     "Lịch sử cam kết | Pledge history",
+				description: "Danh sách các cam kết của seller theo shop, có thể lọc theo productId hoặc category.\n\nBuyer UI should use this to show commitment history and trust timeline.",
+			},
+		},
+		"/v1/shops/{shopId}/pledges/{pledgeId}/integrity": {
+			"get": {
+				summary:     "Tình trạng integrity | Integrity status",
+				description: "Trả về tình trạng neo hash lên chain và kết quả đối chiếu giữa DB và on-chain.\n\nTechnical endpoint for admin, support, and integrity debugging.",
+			},
+		},
+		"/v1/shops/{shopId}/pledges/{pledgeId}/proof": {
+			"get": {
+				summary:     "Proof thân thiện với người dùng | Buyer-friendly proof",
+				description: "Trả về gói proof để frontend hiển thị theo ngôn ngữ dễ hiểu.\n\nPrefer proofStatus, proofHeadline, proofSummary, and recommendedActions instead of low-level blockchain wording.",
+			},
+		},
+		"/v1/media/images": {
+			"post": {
+				summary:     "Upload ảnh dùng lại được | Upload reusable image",
+				description: "Upload ảnh và nhận imageHash, imageCid, gatewayUrl, contentType, sizeBytes.\n\nMobile should call this first for retryable media flows before seller commit or buyer check.",
+			},
+		},
+		"/v1/shops/{shopId}/products": {
+			"get": {
+				summary:     "Danh sách sản phẩm | List products",
+				description: "Lấy danh sách sản phẩm của shop.\n\nSupports buyer-facing browse screens with category, tag, and sort filters.",
+			},
+			"post": {
+				summary:     "Tạo sản phẩm | Create product",
+				description: "Seller tạo sản phẩm mới trong shop của mình.\n\nProduct lifecycle uses status and version so changes remain auditable.",
+			},
+		},
+		"/v1/shops/{shopId}/products/{productId}": {
+			"get": {
+				summary:     "Chi tiết sản phẩm | Product detail",
+				description: "Trả về dữ liệu đầy đủ của sản phẩm, phù hợp cho màn hình product detail.\n\nIncludes freshness metadata and publication status.",
+			},
+			"put": {
+				summary:     "Cập nhật sản phẩm | Update product",
+				description: "Cập nhật sản phẩm với expectedVersion.\n\nUse this for seller edit flows and lifecycle changes.",
+			},
+			"delete": {
+				summary:     "Xóa mềm sản phẩm | Soft delete product",
+				description: "Không xóa vật lý sản phẩm. Backend chỉ đổi status sang deleted.\n\nThe historical record remains available for proof and audit.",
+			},
+		},
+		"/v1/shops/{shopId}/products/{productId}/freshness-reports": {
+			"get": {
+				summary:     "Danh sách báo cáo độ tươi | List freshness reports",
+				description: "Trả về các báo cáo độ tươi của product.\n\nUseful for buyer context and seller product quality history.",
+			},
+			"post": {
+				summary:     "Tạo báo cáo độ tươi | Create freshness report",
+				description: "Buyer gửi báo cáo độ tươi cho một sản phẩm.\n\nThis is user-generated evidence and may later be moderated or weighted into trust logic.",
+			},
+		},
+		"/v1/shops/{shopId}/reviews": {
+			"get": {
+				summary:     "Danh sách review cửa hàng | List shop reviews",
+				description: "Lấy review hiện có của cửa hàng.\n\nBuyer-facing endpoint for public review display.",
+			},
+			"post": {
+				summary:     "Tạo hoặc sửa review | Create or update review",
+				description: "Người dùng đăng nhập tạo hoặc cập nhật review của mình cho shop.\n\nReview records also use soft lifecycle instead of hard delete.",
+			},
+		},
+		"/v1/admin/shops": {
+			"get": {
+				summary:     "Admin xem tất cả cửa hàng | Admin list shops",
+				description: "Danh sách cửa hàng cho moderation và kiểm tra nội bộ.\n\nAdmin can filter by owner and status.",
+			},
+		},
+		"/v1/admin/shops/{shopId}/moderation": {
+			"patch": {
+				summary:     "Admin duyệt cửa hàng | Moderate shop",
+				description: "Admin cập nhật moderation status của cửa hàng.\n\nThis endpoint should be used for approve, reject, or archive style moderation workflows.",
+			},
+		},
+		"/v1/admin/product-freshness-reports/{reportId}/moderation": {
+			"patch": {
+				summary:     "Admin duyệt báo cáo độ tươi | Moderate freshness report",
+				description: "Admin đánh dấu report là accepted, flagged, hoặc rejected theo policy.\n\nUse when the team needs to separate trusted reports from noise or abuse.",
+			},
+		},
+		"/v1/admin/buyer-checks/{checkId}/moderation": {
+			"patch": {
+				summary:     "Admin duyệt buyer check | Moderate buyer check",
+				description: "Admin cập nhật moderation state của buyer check.\n\nUseful for abuse handling, dispute review, and trust-score hygiene.",
+			},
+		},
+		"/v1/admin/users": {
+			"get": {
+				summary:     "Admin xem danh sách user | Admin list users",
+				description: "Danh sách user cho moderation và quản trị role.\n\nSupports filtering by status and role.",
+			},
+		},
+		"/v1/admin/users/{userId}/role": {
+			"patch": {
+				summary:     "Admin đổi role user | Update user role",
+				description: "Admin cập nhật role của user, ví dụ từ user sang admin.\n\nThis should be the main long-term role management mechanism, not environment bootstrap.",
+			},
+		},
+		"/v1/admin/users/{userId}/status": {
+			"patch": {
+				summary:     "Admin đổi trạng thái user | Moderate user status",
+				description: "Admin cập nhật status của user như active, suspended, hoặc deleted.\n\nUse expectedVersion to avoid overwriting concurrent state changes.",
+			},
+		},
+		"/v1/admin/users/{userId}/keys/rotate": {
+			"post": {
+				summary:     "Admin đổi khóa tài khoản | Rotate account key",
+				description: "Tạo cặp khóa mới cho account và cập nhật metadata không nhạy cảm.\n\nPrivate key stays in Vault and is never returned to the client.",
+			},
+		},
+		"/v1/admin/users/{userId}/keys/recover": {
+			"post": {
+				summary:     "Admin khôi phục khóa | Recover account key",
+				description: "Khôi phục metadata key hoặc secret khi Firestore và Vault bị lệch nhau.\n\nUse for operational recovery, not for regular user flows.",
+			},
+		},
+		"/v1/admin/users/{userId}/keys/backfill": {
+			"post": {
+				summary:     "Admin bổ sung metadata key | Backfill account key",
+				description: "Bổ sung metadata key cho account cũ thiếu thông tin key management.\n\nUseful during migration or legacy account repair.",
+			},
+		},
+		"/v1/seller/score": {
+			"post": {
+				summary:     "AI chấm điểm ảnh seller | Score seller image",
+				description: "Nhận ảnh từ seller và trả về score, category, confidence.\n\nUse this before seller commit. If IPFS is enabled, imageCid can also be returned.",
+			},
+		},
+		"/v1/seller/commit": {
+			"post": {
+				summary:     "Seller tạo cam kết | Commit seller pledge",
+				description: "Seller xác nhận cam kết chất lượng cho shop hoặc product.\n\nDepending on runtime config, this may also prepare integrity hash, upload media metadata, and anchor proof on Besu.",
+			},
+		},
+		"/v1/buyer/check": {
+			"post": {
+				summary:     "Buyer kiểm tra bằng ảnh | Buyer image check",
+				description: "Buyer upload ảnh để kiểm tra chất lượng hiện tại.\n\nIf pledgeId is provided, the system compares against the seller pledge. Without pledgeId, this is still valid as a standalone quality check.",
+			},
+		},
+	}
+
+	for path, methods := range docs {
+		pathItem, ok := paths[path].(gin.H)
+		if !ok {
+			continue
+		}
+		for method, doc := range methods {
+			op, ok := pathItem[method].(gin.H)
+			if !ok {
+				continue
+			}
+			op["summary"] = doc.summary
+			op["description"] = doc.description
+		}
 	}
 }
 

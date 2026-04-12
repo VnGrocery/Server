@@ -27,13 +27,15 @@ services:
         max-size: "10m"
         max-file: "5"
     networks:
-      default:
+      vngrocery_app:
       besu_qbft:
 
   proxy:
     extends:
       file: docker-compose.prod.yml
       service: proxy
+    networks:
+      - vngrocery_app
 
   vault:
     extends:
@@ -89,6 +91,8 @@ volumes:
   ipfs-data:
 
 networks:
+  vngrocery_app:
+    name: vngrocery_app
   besu_qbft:
     driver: bridge
     driver_opts:

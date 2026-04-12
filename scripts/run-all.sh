@@ -17,14 +17,26 @@ echo "Starting Vault first..."
 run_compose up -d vault
 
 echo "Waiting for Vault status..."
+vault_reachable=0
 for _ in $(seq 1 30); do
-  if run_compose exec -T vault vault status -address="$VAULT_HTTP_ADDR" >"$TMP_STATUS_FILE" 2>/dev/null; then
-    break
+  if run_compose exec -T vault sh -lc "vault status -address='$VAULT_HTTP_ADDR' || true" >"$TMP_STATUS_FILE" 2>/dev/null; then
+    if grep -Eq "Initialized|Sealed|Storage Type|HA Enabled" "$TMP_STATUS_FILE"; then
+      vault_reachable=1
+      break
+    fi
   fi
   sleep 2
 done
 
-if ! run_compose exec -T vault vault status -address="$VAULT_HTTP_ADDR" >"$TMP_STATUS_FILE" 2>/dev/null; then
+if [[ "$vault_reachable" -ne 1 ]]; then
+  if run_compose exec -T vault sh -lc "vault status -address='$VAULT_HTTP_ADDR' || true" >"$TMP_STATUS_FILE" 2>/dev/null; then
+    if grep -Eq "Initialized|Sealed|Storage Type|HA Enabled" "$TMP_STATUS_FILE"; then
+      vault_reachable=1
+    fi
+  fi
+fi
+
+if [[ "$vault_reachable" -ne 1 ]]; then
   echo "Vault is not reachable yet."
   echo "Check:"
   echo "  docker compose -f $COMPOSE_FILE logs vault"

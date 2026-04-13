@@ -42,5 +42,6 @@ type AuthTokenResponse struct {
 	RefreshToken string `json:"refreshToken,omitempty"`
 	UserID       string `json:"userId"`
 	Email        string `json:"email,omitempty"`
+	Role         string `json:"role,omitempty"`
 	PublicKey    string `json:"publicKey,omitempty"`
 }

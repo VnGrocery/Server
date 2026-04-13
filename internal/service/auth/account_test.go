@@ -423,7 +423,11 @@ func TestAccountServiceLoginReturnsStoredPublicKey(t *testing.T) {
 				}, nil
 			},
 		},
-		userRepoStub{},
+		userRepoStub{
+			getByID: func(ctx context.Context, userID string) (domain.User, error) {
+				return domain.User{UserID: userID, Role: "admin", Status: AccountStatusActive}, nil
+			},
+		},
 		&refreshTokenRepoStub{},
 		&passwordResetTokenRepoStub{},
 		nil,
@@ -441,6 +445,9 @@ func TestAccountServiceLoginReturnsStoredPublicKey(t *testing.T) {
 	}
 	if result.AccessToken != "token-for-user-1" || result.RefreshToken == "" || result.Principal.UserID != "user-1" || result.PublicKey != "pub-key" {
 		t.Fatalf("unexpected login response: %#v", result)
+	}
+	if result.Principal.Role != "admin" {
+		t.Fatalf("unexpected principal role: %s", result.Principal.Role)
 	}
 }
 
@@ -462,7 +469,11 @@ func TestAccountServiceGoogleLoginCreatesVaultKeyForNewUser(t *testing.T) {
 				return domain.AuthUser{}, errors.New("not found")
 			},
 		},
-		userRepoStub{},
+		userRepoStub{
+			getByID: func(ctx context.Context, userID string) (domain.User, error) {
+				return domain.User{UserID: userID, Role: "user", Status: AccountStatusActive}, nil
+			},
+		},
 		&refreshTokenRepoStub{},
 		&passwordResetTokenRepoStub{},
 		keys,
@@ -484,6 +495,9 @@ func TestAccountServiceGoogleLoginCreatesVaultKeyForNewUser(t *testing.T) {
 	}
 	if result.AccessToken != "token-for-user-2" || result.RefreshToken == "" || result.Principal.UserID != "user-2" || result.PublicKey != "pub-key" {
 		t.Fatalf("unexpected google login response: %#v", result)
+	}
+	if result.Principal.Role != "user" {
+		t.Fatalf("unexpected principal role: %s", result.Principal.Role)
 	}
 	if keys.createHits != 1 {
 		t.Fatalf("expected key generation once, got %d", keys.createHits)
@@ -510,6 +524,9 @@ func TestAccountServiceGoogleLoginBootstrapsAdminRoleByEmail(t *testing.T) {
 			},
 		},
 		userRepoStub{
+			getByID: func(ctx context.Context, userID string) (domain.User, error) {
+				return domain.User{UserID: userID, Role: "admin", Status: AccountStatusActive}, nil
+			},
 			save: func(ctx context.Context, user domain.User) error {
 				savedUser = user
 				return nil
@@ -552,7 +569,11 @@ func TestAccountServiceGoogleLoginDoesNotRecreateKeyForExistingUser(t *testing.T
 				}, nil
 			},
 		},
-		userRepoStub{},
+		userRepoStub{
+			getByID: func(ctx context.Context, userID string) (domain.User, error) {
+				return domain.User{UserID: userID, Role: "user", Status: AccountStatusActive}, nil
+			},
+		},
 		&refreshTokenRepoStub{},
 		&passwordResetTokenRepoStub{},
 		keys,

@@ -115,6 +115,7 @@ func buildSchemas() gin.H {
 				"refreshToken": gin.H{"type": "string"},
 				"userId":       gin.H{"type": "string"},
 				"email":        gin.H{"type": "string"},
+				"role":         gin.H{"type": "string"},
 				"publicKey":    gin.H{"type": "string"},
 			},
 		},
@@ -197,6 +198,7 @@ func buildSchemas() gin.H {
 			"properties": gin.H{
 				"userId": gin.H{"type": "string"},
 				"email":  gin.H{"type": "string"},
+				"role":   gin.H{"type": "string"},
 			},
 		},
 		"DeleteResponse": gin.H{

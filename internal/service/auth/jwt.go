@@ -14,6 +14,7 @@ var ErrUnauthorized = errors.New("missing or invalid authentication token")
 type Principal struct {
 	UserID string `json:"userId"`
 	Email  string `json:"email,omitempty"`
+	Role   string `json:"role,omitempty"`
 }
 
 type Verifier interface {
@@ -59,11 +60,12 @@ func (s *JWTService) Verify(ctx context.Context, token string) (Principal, error
 
 	userID, _ := claims["sub"].(string)
 	email, _ := claims["email"].(string)
+	role, _ := claims["role"].(string)
 	if userID == "" {
 		return Principal{}, ErrUnauthorized
 	}
 
-	return Principal{UserID: userID, Email: email}, nil
+	return Principal{UserID: userID, Email: email, Role: role}, nil
 }
 
 func (s *JWTService) IssueToken(principal Principal, ttl time.Duration) (string, error) {
@@ -79,6 +81,7 @@ func (s *JWTService) IssueToken(principal Principal, ttl time.Duration) (string,
 		"iss":   s.issuer,
 		"sub":   principal.UserID,
 		"email": principal.Email,
+		"role":  principal.Role,
 		"iat":   now.Unix(),
 		"exp":   now.Add(ttl).Unix(),
 	}

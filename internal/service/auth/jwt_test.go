@@ -8,7 +8,7 @@ import (
 func TestJWTServiceIssuesAndVerifiesToken(t *testing.T) {
 	service := NewJWTService("test-secret", "vngrocery")
 
-	token, err := service.IssueToken(Principal{UserID: "user-1", Email: "u@example.com"}, 2*time.Hour)
+	token, err := service.IssueToken(Principal{UserID: "user-1", Email: "u@example.com", Role: "admin"}, 2*time.Hour)
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
@@ -22,6 +22,9 @@ func TestJWTServiceIssuesAndVerifiesToken(t *testing.T) {
 	}
 	if principal.Email != "u@example.com" {
 		t.Fatalf("unexpected email: %s", principal.Email)
+	}
+	if principal.Role != "admin" {
+		t.Fatalf("unexpected role: %s", principal.Role)
 	}
 }
 

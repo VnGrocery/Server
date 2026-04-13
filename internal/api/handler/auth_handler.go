@@ -44,6 +44,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.MeResponse{
 		UserID: principal.UserID,
 		Email:  principal.Email,
+		Role:   principal.Role,
 	})
 }
 
@@ -245,6 +246,7 @@ func toAuthTokenResponse(result authservice.AuthResult) dto.AuthTokenResponse {
 		RefreshToken: result.RefreshToken,
 		UserID:       result.Principal.UserID,
 		Email:        result.Principal.Email,
+		Role:         result.Principal.Role,
 		PublicKey:    result.PublicKey,
 	}
 }

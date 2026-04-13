@@ -200,7 +200,7 @@ func (s *AccountService) Register(ctx context.Context, email, password, displayN
 		return AuthResult{}, err
 	}
 
-	principal := Principal{UserID: userID, Email: emailLower}
+	principal := Principal{UserID: userID, Email: emailLower, Role: role}
 	return s.issueAuthResult(ctx, principal, key.PublicKey)
 }
 
@@ -209,7 +209,7 @@ func (s *AccountService) Login(ctx context.Context, email, password string) (Aut
 	if emailLower == "" || password == "" {
 		return AuthResult{}, ErrInvalidCredentials
 	}
-	if s.authUsers == nil || s.refreshTokens == nil || s.jwt == nil {
+	if s.authUsers == nil || s.users == nil || s.refreshTokens == nil || s.jwt == nil {
 		return AuthResult{}, fmt.Errorf("auth service is not configured")
 	}
 
@@ -228,7 +228,15 @@ func (s *AccountService) Login(ctx context.Context, email, password string) (Aut
 		return AuthResult{}, ErrInvalidCredentials
 	}
 
-	principal := Principal{UserID: authUser.UserID, Email: emailLower}
+	user, err := s.users.GetByID(ctx, authUser.UserID)
+	if err != nil || user.UserID == "" {
+		return AuthResult{}, ErrInvalidCredentials
+	}
+	if user.Status != AccountStatusActive {
+		return AuthResult{}, ErrAccountDeleted
+	}
+
+	principal := Principal{UserID: authUser.UserID, Email: emailLower, Role: user.Role}
 	return s.issueAuthResult(ctx, principal, authUser.PublicKey)
 }
 
@@ -302,7 +310,15 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 		return AuthResult{}, ErrAccountDeleted
 	}
 
-	principal := Principal{UserID: authUser.UserID, Email: emailLower}
+	user, err := s.users.GetByID(ctx, authUser.UserID)
+	if err != nil || user.UserID == "" {
+		return AuthResult{}, ErrInvalidCredentials
+	}
+	if user.Status != AccountStatusActive {
+		return AuthResult{}, ErrAccountDeleted
+	}
+
+	principal := Principal{UserID: authUser.UserID, Email: emailLower, Role: user.Role}
 	return s.issueAuthResult(ctx, principal, authUser.PublicKey)
 }
 
@@ -339,7 +355,7 @@ func (s *AccountService) Refresh(ctx context.Context, refreshToken string) (Auth
 	if refreshToken == "" {
 		return AuthResult{}, ErrInvalidRefreshToken
 	}
-	if s.authUsers == nil || s.refreshTokens == nil || s.jwt == nil {
+	if s.authUsers == nil || s.users == nil || s.refreshTokens == nil || s.jwt == nil {
 		return AuthResult{}, fmt.Errorf("auth service is not configured")
 	}
 
@@ -357,8 +373,15 @@ func (s *AccountService) Refresh(ctx context.Context, refreshToken string) (Auth
 	if authUser.Status != AccountStatusActive {
 		return AuthResult{}, ErrAccountDeleted
 	}
+	user, err := s.users.GetByID(ctx, stored.UserID)
+	if err != nil || user.UserID == "" {
+		return AuthResult{}, ErrInvalidRefreshToken
+	}
+	if user.Status != AccountStatusActive {
+		return AuthResult{}, ErrAccountDeleted
+	}
 
-	return s.issueAuthResult(ctx, Principal{UserID: authUser.UserID, Email: authUser.EmailLower}, authUser.PublicKey)
+	return s.issueAuthResult(ctx, Principal{UserID: authUser.UserID, Email: authUser.EmailLower, Role: user.Role}, authUser.PublicKey)
 }
 
 func (s *AccountService) Logout(ctx context.Context, refreshToken string) error {

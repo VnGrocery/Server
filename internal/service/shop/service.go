@@ -748,24 +748,14 @@ func (s *Service) ListPledges(ctx context.Context, input PledgeHistoryInput) ([]
 }
 
 func (s *Service) GetPledgeIntegrity(ctx context.Context, input PledgeIntegrityInput) (PledgeIntegrityView, error) {
-	if strings.TrimSpace(input.ShopID) == "" {
-		return PledgeIntegrityView{}, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
-	}
-	if strings.TrimSpace(input.PledgeID) == "" {
-		return PledgeIntegrityView{}, fmt.Errorf("%w: pledgeId is required", ErrInvalidShop)
-	}
-	if s.pledges == nil {
-		return PledgeIntegrityView{}, fmt.Errorf("pledge repository is not configured")
-	}
-
-	pledge, err := s.pledges.GetByID(ctx, strings.TrimSpace(input.PledgeID))
+	pledge, err := s.loadPledgeForIntegrity(ctx, input)
 	if err != nil {
-		return PledgeIntegrityView{}, fmt.Errorf("%w: %v", ErrNotFound, err)
+		return PledgeIntegrityView{}, err
 	}
-	if pledge.PledgeID == "" || pledge.ShopID != strings.TrimSpace(input.ShopID) {
-		return PledgeIntegrityView{}, ErrNotFound
-	}
+	return s.getPledgeIntegrityForPledge(ctx, pledge, input.DataHash)
+}
 
+func (s *Service) getPledgeIntegrityForPledge(ctx context.Context, pledge domain.Pledge, providedDataHash string) (PledgeIntegrityView, error) {
 	view := PledgeIntegrityView{
 		PledgeID:          pledge.PledgeID,
 		ShopID:            pledge.ShopID,
@@ -779,32 +769,40 @@ func (s *Service) GetPledgeIntegrity(ctx context.Context, input PledgeIntegrityI
 	if s.integrity == nil {
 		return view, nil
 	}
-	if strings.TrimSpace(input.DataHash) != "" {
-		return s.integrity.VerifyPledgeHash(ctx, pledge, input.DataHash)
+	if strings.TrimSpace(providedDataHash) != "" {
+		return s.integrity.VerifyPledgeHash(ctx, pledge, providedDataHash)
 	}
 	return s.integrity.GetPledgeIntegrity(ctx, pledge)
 }
 
-func (s *Service) GetPledgeProof(ctx context.Context, input PledgeIntegrityInput) (PledgeProofBundle, error) {
+func (s *Service) loadPledgeForIntegrity(ctx context.Context, input PledgeIntegrityInput) (domain.Pledge, error) {
 	if strings.TrimSpace(input.ShopID) == "" {
-		return PledgeProofBundle{}, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
+		return domain.Pledge{}, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
 	}
 	if strings.TrimSpace(input.PledgeID) == "" {
-		return PledgeProofBundle{}, fmt.Errorf("%w: pledgeId is required", ErrInvalidShop)
+		return domain.Pledge{}, fmt.Errorf("%w: pledgeId is required", ErrInvalidShop)
 	}
 	if s.pledges == nil {
-		return PledgeProofBundle{}, fmt.Errorf("pledge repository is not configured")
+		return domain.Pledge{}, fmt.Errorf("pledge repository is not configured")
 	}
 
 	pledge, err := s.pledges.GetByID(ctx, strings.TrimSpace(input.PledgeID))
 	if err != nil {
-		return PledgeProofBundle{}, fmt.Errorf("%w: %v", ErrNotFound, err)
+		return domain.Pledge{}, fmt.Errorf("%w: %v", ErrNotFound, err)
 	}
 	if pledge.PledgeID == "" || pledge.ShopID != strings.TrimSpace(input.ShopID) {
-		return PledgeProofBundle{}, ErrNotFound
+		return domain.Pledge{}, ErrNotFound
+	}
+	return pledge, nil
+}
+
+func (s *Service) GetPledgeProof(ctx context.Context, input PledgeIntegrityInput) (PledgeProofBundle, error) {
+	pledge, err := s.loadPledgeForIntegrity(ctx, input)
+	if err != nil {
+		return PledgeProofBundle{}, err
 	}
 
-	integrityView, err := s.GetPledgeIntegrity(ctx, input)
+	integrityView, err := s.getPledgeIntegrityForPledge(ctx, pledge, input.DataHash)
 	if err != nil {
 		return PledgeProofBundle{}, err
 	}

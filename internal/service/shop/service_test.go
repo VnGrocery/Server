@@ -595,3 +595,45 @@ func TestCreateShopWritesAuditLog(t *testing.T) {
 		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
 	}
 }
+
+func TestGetPledgeProofLoadsPledgeOnce(t *testing.T) {
+	getByIDHits := 0
+	service := NewService(shopRepositoryStub{}, pledgeRepositoryStub{
+		getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+			getByIDHits++
+			return domain.Pledge{
+				PledgeID:          pledgeID,
+				ShopID:            "shop-1",
+				ProductID:         "product-1",
+				Score:             8.9,
+				Category:          "fresh_produce",
+				Confidence:        0.93,
+				ImageHash:         "hash-1",
+				ImageCID:          "cid-1",
+				DataHash:          "data-hash",
+				ChainAnchorStatus: "anchored",
+				IntegrityStatus:   "anchored",
+			}, nil
+		},
+	}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
+	service.SetPledgeIntegrityReader(integrityReaderStub{
+		get: func(ctx context.Context, pledge domain.Pledge) (PledgeIntegrityView, error) {
+			return PledgeIntegrityView{
+				PledgeID:          pledge.PledgeID,
+				ShopID:            pledge.ShopID,
+				DataHash:          pledge.DataHash,
+				ChainAnchorStatus: pledge.ChainAnchorStatus,
+				IntegrityStatus:   pledge.IntegrityStatus,
+				OnChainMatch:      true,
+			}, nil
+		},
+	})
+
+	_, err := service.GetPledgeProof(context.Background(), PledgeIntegrityInput{ShopID: "shop-1", PledgeID: "pledge-1"})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if getByIDHits != 1 {
+		t.Fatalf("expected pledge to be loaded once, got %d", getByIDHits)
+	}
+}

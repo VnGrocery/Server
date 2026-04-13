@@ -331,8 +331,8 @@ func (s *Service) VerifyPledgeHash(ctx context.Context, pledge domain.Pledge, da
 	}
 	view.ProvidedDataHash = strings.TrimSpace(strings.TrimPrefix(dataHash, "0x"))
 	if view.ProvidedDataHash != "" {
-		view.ProvidedHashMatch = strings.EqualFold(view.ProvidedDataHash, view.OnChainDataHash)
-		if view.OnChainPresent && !view.ProvidedHashMatch && view.MismatchReason == "" {
+		view.ProvidedHashMatch = strings.EqualFold(view.ProvidedDataHash, strings.TrimSpace(strings.TrimPrefix(pledge.DataHash, "0x")))
+		if !view.ProvidedHashMatch && view.MismatchReason == "" {
 			view.MismatchReason = "provided_hash_mismatch"
 		}
 	}
@@ -365,17 +365,17 @@ func HashPledge(pledge domain.Pledge) (string, error) {
 }
 
 func (s *Service) verifyPledge(ctx context.Context, pledge domain.Pledge) (bool, LatestRecord, error) {
-	ok, err := s.chain.Verify(ctx, pledge.PledgeID, pledge.DataHash)
+	latest, err := s.chain.GetLatest(ctx, pledge.PledgeID)
 	if err != nil {
 		return false, LatestRecord{}, err
 	}
-	latest, err := s.chain.GetLatest(ctx, pledge.PledgeID)
-	if err != nil {
-		return ok, LatestRecord{}, err
-	}
-	if latest.IsPresent && latest.IsRevoked {
+	if !latest.IsPresent {
 		return false, latest, nil
 	}
+	if latest.IsRevoked {
+		return false, latest, nil
+	}
+	ok := strings.EqualFold(strings.TrimSpace(strings.TrimPrefix(pledge.DataHash, "0x")), strings.TrimSpace(strings.TrimPrefix(latest.DataHash, "0x")))
 	return ok, latest, nil
 }
 

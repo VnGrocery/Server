@@ -239,3 +239,50 @@ func TestRevokePledgeUpdatesIntegrityStatus(t *testing.T) {
 		t.Fatalf("unexpected revoked pledge: %#v", pledge)
 	}
 }
+
+func TestVerifyPledgeHashMatchesCurrentPledgeHash(t *testing.T) {
+	service := NewService(nil, chainStub{
+		latest: func(ctx context.Context, recordID string) (LatestRecord, error) {
+			return LatestRecord{DataHash: "bbbb", Version: 2, IsPresent: true}, nil
+		},
+	}, nil)
+
+	view, err := service.VerifyPledgeHash(context.Background(), domain.Pledge{
+		PledgeID:  "pledge-1",
+		ShopID:    "shop-1",
+		DataHash:  "aaaa",
+		UpdatedAt: time.Now().UTC(),
+	}, "aaaa")
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if !view.ProvidedHashMatch {
+		t.Fatalf("expected provided hash to match current pledge hash: %#v", view)
+	}
+	if view.OnChainMatch {
+		t.Fatalf("expected on-chain mismatch to remain false: %#v", view)
+	}
+}
+
+func TestGetPledgeIntegrityUsesLatestWithoutVerifyCall(t *testing.T) {
+	service := NewService(nil, chainStub{
+		latest: func(ctx context.Context, recordID string) (LatestRecord, error) {
+			return LatestRecord{DataHash: "aaaa", Version: 1, IsPresent: true}, nil
+		},
+	}, nil)
+
+	view, err := service.GetPledgeIntegrity(context.Background(), domain.Pledge{
+		PledgeID:          "pledge-1",
+		ShopID:            "shop-1",
+		DataHash:          "aaaa",
+		ChainAnchorStatus: ChainAnchorStatusAnchored,
+		IntegrityStatus:   IntegrityStatusAnchored,
+		UpdatedAt:         time.Now().UTC(),
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if !view.OnChainMatch {
+		t.Fatalf("expected on-chain match, got %#v", view)
+	}
+}

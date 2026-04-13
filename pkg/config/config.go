@@ -11,116 +11,120 @@ import (
 const defaultPort = "8080"
 
 type Config struct {
-	Port                    string
-	FirebaseEnabled         bool
-	FirebaseProjectID       string
-	FirebaseCredentialsFile string
-	MongoEnabled            bool
-	MongoURI                string
-	MongoDatabase           string
-	JWTSecret               string
-	GoogleClientID          string
-	BootstrapAdminEmails    string
-	VaultEnabled            bool
-	VaultAddr               string
-	VaultToken              string
-	VaultKVMount            string
-	VaultKeysPathPrefix     string
-	BesuEnabled             bool
-	BesuRPCURL              string
-	BesuChainID             string
-	BesuContractAddress     string
-	BesuFromAddress         string
-	BesuPrivateKey          string
-	BesuGasLimit            string
-	BesuReceiptTimeoutSec   string
-	BesuPendingIntervalSec  string
-	BesuVerifyIntervalSec   string
-	BesuPendingBatchSize    string
-	BesuVerifyBatchSize     string
-	AlertWebhookURL         string
-	AlertSlackWebhookURL    string
-	AlertTelegramBotToken   string
-	AlertTelegramChatID     string
-	AlertSMTPHost           string
-	AlertSMTPPort           string
-	AlertSMTPUsername       string
-	AlertSMTPPassword       string
-	AlertSMTPFrom           string
-	AlertSMTPTo             string
-	AlertTimeoutSec         string
-	IPFSEnabled             bool
-	IPFSAPIURL              string
-	IPFSGatewayURL          string
-	MediaMaxImageBytes      string
-	MediaAllowedTypes       string
-	RateLimitBackend        string
-	RateLimitCollection     string
-	RateLimitMaxRequests    string
-	RateLimitWindowSec      string
-	AIProvider              string
-	OpenAIAPIKey            string
-	OpenAIBaseURL           string
-	OpenAIModel             string
-	VisionPromptVersion     string
+	Port                      string
+	FirebaseEnabled           bool
+	FirebaseProjectID         string
+	FirebaseCredentialsFile   string
+	MongoEnabled              bool
+	MongoURI                  string
+	MongoDatabase             string
+	JWTSecret                 string
+	GoogleClientID            string
+	BootstrapAdminEmails      string
+	VaultEnabled              bool
+	VaultAddr                 string
+	VaultToken                string
+	VaultKVMount              string
+	VaultKeysPathPrefix       string
+	BesuEnabled               bool
+	BesuRPCURL                string
+	BesuChainID               string
+	BesuContractAddress       string
+	BesuFromAddress           string
+	BesuPrivateKey            string
+	BesuGasLimit              string
+	BesuReceiptTimeoutSec     string
+	BesuPendingIntervalSec    string
+	BesuVerifyIntervalSec     string
+	BesuPendingBatchSize      string
+	BesuVerifyBatchSize       string
+	AlertWebhookURL           string
+	AlertSlackWebhookURL      string
+	AlertTelegramBotToken     string
+	AlertTelegramChatID       string
+	AlertSMTPHost             string
+	AlertSMTPPort             string
+	AlertSMTPUsername         string
+	AlertSMTPPassword         string
+	AlertSMTPFrom             string
+	AlertSMTPTo               string
+	AlertTimeoutSec           string
+	IPFSEnabled               bool
+	IPFSAPIURL                string
+	IPFSGatewayURL            string
+	MediaMaxImageBytes        string
+	MediaAllowedTypes         string
+	RateLimitBackend          string
+	RateLimitCollection       string
+	RateLimitMaxRequests      string
+	RateLimitWindowSec        string
+	AdminRateLimitMaxRequests string
+	AdminRateLimitWindowSec   string
+	AIProvider                string
+	OpenAIAPIKey              string
+	OpenAIBaseURL             string
+	OpenAIModel               string
+	VisionPromptVersion       string
 }
 
 func Load() (Config, error) {
 	loadDotEnvIfPresent()
 
 	cfg := Config{
-		Port:                    getEnvOrDefault("PORT", defaultPort),
-		FirebaseEnabled:         os.Getenv("FIREBASE_ENABLED") == "true",
-		FirebaseProjectID:       os.Getenv("FIREBASE_PROJECT_ID"),
-		FirebaseCredentialsFile: os.Getenv("FIREBASE_CREDENTIALS_FILE"),
-		MongoEnabled:            getEnvOrDefault("MONGODB_ENABLED", "true") == "true",
-		MongoURI:                getEnvOrDefault("MONGODB_URI", "mongodb://127.0.0.1:27017"),
-		MongoDatabase:           getEnvOrDefault("MONGODB_DATABASE", "vngrocery"),
-		JWTSecret:               os.Getenv("JWT_SECRET"),
-		GoogleClientID:          os.Getenv("GOOGLE_CLIENT_ID"),
-		BootstrapAdminEmails:    os.Getenv("BOOTSTRAP_ADMIN_EMAILS"),
-		VaultEnabled:            os.Getenv("VAULT_ENABLED") == "true",
-		VaultAddr:               os.Getenv("VAULT_ADDR"),
-		VaultToken:              os.Getenv("VAULT_TOKEN"),
-		VaultKVMount:            getEnvOrDefault("VAULT_KV_MOUNT", "secret"),
-		VaultKeysPathPrefix:     getEnvOrDefault("VAULT_KEYS_PATH_PREFIX", "account-keys"),
-		BesuEnabled:             os.Getenv("BESU_ENABLED") == "true",
-		BesuRPCURL:              os.Getenv("BESU_RPC_URL"),
-		BesuChainID:             os.Getenv("BESU_CHAIN_ID"),
-		BesuContractAddress:     os.Getenv("BESU_CONTRACT_ADDRESS"),
-		BesuFromAddress:         os.Getenv("BESU_FROM_ADDRESS"),
-		BesuPrivateKey:          os.Getenv("BESU_PRIVATE_KEY"),
-		BesuGasLimit:            getEnvOrDefault("BESU_GAS_LIMIT", "250000"),
-		BesuReceiptTimeoutSec:   getEnvOrDefault("BESU_RECEIPT_TIMEOUT_SEC", "15"),
-		BesuPendingIntervalSec:  getEnvOrDefault("BESU_PENDING_INTERVAL_SEC", "10"),
-		BesuVerifyIntervalSec:   getEnvOrDefault("BESU_VERIFY_INTERVAL_SEC", "60"),
-		BesuPendingBatchSize:    getEnvOrDefault("BESU_PENDING_BATCH_SIZE", "25"),
-		BesuVerifyBatchSize:     getEnvOrDefault("BESU_VERIFY_BATCH_SIZE", "50"),
-		AlertWebhookURL:         os.Getenv("ALERT_WEBHOOK_URL"),
-		AlertSlackWebhookURL:    os.Getenv("ALERT_SLACK_WEBHOOK_URL"),
-		AlertTelegramBotToken:   os.Getenv("ALERT_TELEGRAM_BOT_TOKEN"),
-		AlertTelegramChatID:     os.Getenv("ALERT_TELEGRAM_CHAT_ID"),
-		AlertSMTPHost:           os.Getenv("ALERT_SMTP_HOST"),
-		AlertSMTPPort:           getEnvOrDefault("ALERT_SMTP_PORT", "587"),
-		AlertSMTPUsername:       os.Getenv("ALERT_SMTP_USERNAME"),
-		AlertSMTPPassword:       os.Getenv("ALERT_SMTP_PASSWORD"),
-		AlertSMTPFrom:           os.Getenv("ALERT_SMTP_FROM"),
-		AlertSMTPTo:             os.Getenv("ALERT_SMTP_TO"),
-		AlertTimeoutSec:         getEnvOrDefault("ALERT_TIMEOUT_SEC", "5"),
-		IPFSEnabled:             os.Getenv("IPFS_ENABLED") == "true",
-		IPFSAPIURL:              os.Getenv("IPFS_API_URL"),
-		IPFSGatewayURL:          getEnvOrDefault("IPFS_GATEWAY_URL", "http://127.0.0.1:8080"),
-		MediaMaxImageBytes:      getEnvOrDefault("MEDIA_MAX_IMAGE_BYTES", "10485760"),
-		MediaAllowedTypes:       getEnvOrDefault("MEDIA_ALLOWED_TYPES", "image/jpeg,image/png,image/webp"),
-		RateLimitBackend:        getEnvOrDefault("RATE_LIMIT_BACKEND", "memory"),
-		RateLimitCollection:     getEnvOrDefault("RATE_LIMIT_COLLECTION", "rate_limits"),
-		RateLimitMaxRequests:    getEnvOrDefault("RATE_LIMIT_MAX_REQUESTS", "120"),
-		RateLimitWindowSec:      getEnvOrDefault("RATE_LIMIT_WINDOW_SEC", "60"),
-		AIProvider:              getEnvOrDefault("AI_PROVIDER", "openai"),
-		OpenAIAPIKey:            os.Getenv("OPENAI_API_KEY"),
-		OpenAIBaseURL:           getEnvOrDefault("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-		OpenAIModel:             getEnvOrDefault("OPENAI_MODEL", "gpt-4o-mini"),
-		VisionPromptVersion:     getEnvOrDefault("VISION_PROMPT_VERSION", "v1"),
+		Port:                      getEnvOrDefault("PORT", defaultPort),
+		FirebaseEnabled:           os.Getenv("FIREBASE_ENABLED") == "true",
+		FirebaseProjectID:         os.Getenv("FIREBASE_PROJECT_ID"),
+		FirebaseCredentialsFile:   os.Getenv("FIREBASE_CREDENTIALS_FILE"),
+		MongoEnabled:              getEnvOrDefault("MONGODB_ENABLED", "true") == "true",
+		MongoURI:                  getEnvOrDefault("MONGODB_URI", "mongodb://127.0.0.1:27017"),
+		MongoDatabase:             getEnvOrDefault("MONGODB_DATABASE", "vngrocery"),
+		JWTSecret:                 os.Getenv("JWT_SECRET"),
+		GoogleClientID:            os.Getenv("GOOGLE_CLIENT_ID"),
+		BootstrapAdminEmails:      os.Getenv("BOOTSTRAP_ADMIN_EMAILS"),
+		VaultEnabled:              os.Getenv("VAULT_ENABLED") == "true",
+		VaultAddr:                 os.Getenv("VAULT_ADDR"),
+		VaultToken:                os.Getenv("VAULT_TOKEN"),
+		VaultKVMount:              getEnvOrDefault("VAULT_KV_MOUNT", "secret"),
+		VaultKeysPathPrefix:       getEnvOrDefault("VAULT_KEYS_PATH_PREFIX", "account-keys"),
+		BesuEnabled:               os.Getenv("BESU_ENABLED") == "true",
+		BesuRPCURL:                os.Getenv("BESU_RPC_URL"),
+		BesuChainID:               os.Getenv("BESU_CHAIN_ID"),
+		BesuContractAddress:       os.Getenv("BESU_CONTRACT_ADDRESS"),
+		BesuFromAddress:           os.Getenv("BESU_FROM_ADDRESS"),
+		BesuPrivateKey:            os.Getenv("BESU_PRIVATE_KEY"),
+		BesuGasLimit:              getEnvOrDefault("BESU_GAS_LIMIT", "250000"),
+		BesuReceiptTimeoutSec:     getEnvOrDefault("BESU_RECEIPT_TIMEOUT_SEC", "15"),
+		BesuPendingIntervalSec:    getEnvOrDefault("BESU_PENDING_INTERVAL_SEC", "10"),
+		BesuVerifyIntervalSec:     getEnvOrDefault("BESU_VERIFY_INTERVAL_SEC", "60"),
+		BesuPendingBatchSize:      getEnvOrDefault("BESU_PENDING_BATCH_SIZE", "25"),
+		BesuVerifyBatchSize:       getEnvOrDefault("BESU_VERIFY_BATCH_SIZE", "50"),
+		AlertWebhookURL:           os.Getenv("ALERT_WEBHOOK_URL"),
+		AlertSlackWebhookURL:      os.Getenv("ALERT_SLACK_WEBHOOK_URL"),
+		AlertTelegramBotToken:     os.Getenv("ALERT_TELEGRAM_BOT_TOKEN"),
+		AlertTelegramChatID:       os.Getenv("ALERT_TELEGRAM_CHAT_ID"),
+		AlertSMTPHost:             os.Getenv("ALERT_SMTP_HOST"),
+		AlertSMTPPort:             getEnvOrDefault("ALERT_SMTP_PORT", "587"),
+		AlertSMTPUsername:         os.Getenv("ALERT_SMTP_USERNAME"),
+		AlertSMTPPassword:         os.Getenv("ALERT_SMTP_PASSWORD"),
+		AlertSMTPFrom:             os.Getenv("ALERT_SMTP_FROM"),
+		AlertSMTPTo:               os.Getenv("ALERT_SMTP_TO"),
+		AlertTimeoutSec:           getEnvOrDefault("ALERT_TIMEOUT_SEC", "5"),
+		IPFSEnabled:               os.Getenv("IPFS_ENABLED") == "true",
+		IPFSAPIURL:                os.Getenv("IPFS_API_URL"),
+		IPFSGatewayURL:            getEnvOrDefault("IPFS_GATEWAY_URL", "http://127.0.0.1:8080"),
+		MediaMaxImageBytes:        getEnvOrDefault("MEDIA_MAX_IMAGE_BYTES", "10485760"),
+		MediaAllowedTypes:         getEnvOrDefault("MEDIA_ALLOWED_TYPES", "image/jpeg,image/png,image/webp"),
+		RateLimitBackend:          getEnvOrDefault("RATE_LIMIT_BACKEND", "memory"),
+		RateLimitCollection:       getEnvOrDefault("RATE_LIMIT_COLLECTION", "rate_limits"),
+		RateLimitMaxRequests:      getEnvOrDefault("RATE_LIMIT_MAX_REQUESTS", "120"),
+		RateLimitWindowSec:        getEnvOrDefault("RATE_LIMIT_WINDOW_SEC", "60"),
+		AdminRateLimitMaxRequests: getEnvOrDefault("ADMIN_RATE_LIMIT_MAX_REQUESTS", "30"),
+		AdminRateLimitWindowSec:   getEnvOrDefault("ADMIN_RATE_LIMIT_WINDOW_SEC", "60"),
+		AIProvider:                getEnvOrDefault("AI_PROVIDER", "openai"),
+		OpenAIAPIKey:              os.Getenv("OPENAI_API_KEY"),
+		OpenAIBaseURL:             getEnvOrDefault("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+		OpenAIModel:               getEnvOrDefault("OPENAI_MODEL", "gpt-4o-mini"),
+		VisionPromptVersion:       getEnvOrDefault("VISION_PROMPT_VERSION", "v1"),
 	}
 
 	return cfg, cfg.Validate()
@@ -145,6 +149,9 @@ func (c Config) Validate() error {
 	}
 	if c.JWTSecret == "" {
 		return errors.New("JWT_SECRET is required")
+	}
+	if c.JWTSecret == "replace-with-a-long-random-secret" {
+		return errors.New("JWT_SECRET must be changed from the default placeholder")
 	}
 	if c.UseMongo() {
 		if c.MongoURI == "" {

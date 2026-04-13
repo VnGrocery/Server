@@ -212,3 +212,17 @@ func TestUseMongoDefaultsToTrue(t *testing.T) {
 		t.Fatal("expected MongoDB to be active")
 	}
 }
+
+func TestValidateRejectsPlaceholderJWTSecret(t *testing.T) {
+	cfg := Config{
+		Port:          "8080",
+		MongoEnabled:  true,
+		MongoURI:      "mongodb://127.0.0.1:27017",
+		MongoDatabase: "vngrocery",
+		JWTSecret:     "replace-with-a-long-random-secret",
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}

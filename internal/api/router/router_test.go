@@ -14,6 +14,7 @@ import (
 	"vngrocery/internal/api/handler"
 	"vngrocery/internal/api/middleware"
 	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 	auditservice "vngrocery/internal/service/audit"
 	authservice "vngrocery/internal/service/auth"
 	buyerservice "vngrocery/internal/service/buyer"
@@ -36,7 +37,22 @@ func newTestDependencies(verifier testVerifier) Dependencies {
 		BuyerHandler:     handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		ShopHandler:      handler.NewShopHandler(shopHandlerStub{}),
 		AuthMiddleware:   middleware.NewAuthRequired(verifier),
+		AdminMiddleware:  middleware.NewAdminRequired(routerUserRepoStub{}),
 	}
+}
+
+type routerUserRepoStub struct{}
+
+func (routerUserRepoStub) Save(ctx context.Context, user domain.User) error {
+	return nil
+}
+
+func (routerUserRepoStub) GetByID(ctx context.Context, userID string) (domain.User, error) {
+	return domain.User{UserID: userID, Role: "admin", Status: "active"}, nil
+}
+
+func (routerUserRepoStub) List(ctx context.Context, filter repository.UserListFilter) ([]domain.User, error) {
+	return nil, nil
 }
 
 type testVerifier struct {

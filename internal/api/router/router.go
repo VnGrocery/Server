@@ -10,21 +10,24 @@ import (
 )
 
 type Dependencies struct {
-	HealthHandler        *handler.HealthHandler
-	DocsHandler          *handler.DocsHandler
-	AuthHandler          *handler.AuthHandler
-	AdminUserHandler     *handler.AdminUserHandler
-	EventLogHandler      *handler.EventLogHandler
-	MediaHandler         *handler.MediaHandler
-	ProductHandler       *handler.ProductHandler
-	SellerHandler        *handler.SellerHandler
-	BuyerHandler         *handler.BuyerHandler
-	ShopHandler          *handler.ShopHandler
-	AuthMiddleware       *middleware.AuthRequired
-	Metrics              *middleware.Metrics
-	RateLimitStore       middleware.RateLimitStore
-	RateLimitMaxRequests int
-	RateLimitWindow      time.Duration
+	HealthHandler             *handler.HealthHandler
+	DocsHandler               *handler.DocsHandler
+	AuthHandler               *handler.AuthHandler
+	AdminUserHandler          *handler.AdminUserHandler
+	EventLogHandler           *handler.EventLogHandler
+	MediaHandler              *handler.MediaHandler
+	ProductHandler            *handler.ProductHandler
+	SellerHandler             *handler.SellerHandler
+	BuyerHandler              *handler.BuyerHandler
+	ShopHandler               *handler.ShopHandler
+	AuthMiddleware            *middleware.AuthRequired
+	AdminMiddleware           *middleware.AdminRequired
+	Metrics                   *middleware.Metrics
+	RateLimitStore            middleware.RateLimitStore
+	RateLimitMaxRequests      int
+	RateLimitWindow           time.Duration
+	AdminRateLimitMaxRequests int
+	AdminRateLimitWindow      time.Duration
 }
 
 func New(deps Dependencies) *gin.Engine {
@@ -38,10 +41,19 @@ func New(deps Dependencies) *gin.Engine {
 		maxRequests = 120
 	}
 	window := deps.RateLimitWindow
+	adminMaxRequests := deps.AdminRateLimitMaxRequests
+	if adminMaxRequests <= 0 {
+		adminMaxRequests = 30
+	}
+	adminWindow := deps.AdminRateLimitWindow
+	if adminWindow <= 0 {
+		adminWindow = time.Minute
+	}
 	if window <= 0 {
 		window = time.Minute
 	}
 	engine.Use(gin.Recovery(), middleware.StructuredLogger(metrics), middleware.RateLimitWithStore(deps.RateLimitStore, maxRequests, window, metrics))
+	adminRateLimit := middleware.RateLimitWithStore(deps.RateLimitStore, adminMaxRequests, adminWindow, metrics)
 	engine.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, Origin, X-Requested-With")
@@ -94,21 +106,21 @@ func New(deps Dependencies) *gin.Engine {
 		v1.DELETE("/shops/:shopId/products/:productId", deps.AuthMiddleware.Handle(), deps.ProductHandler.Delete)
 		v1.POST("/shops/:shopId/reviews", deps.AuthMiddleware.Handle(), deps.ShopHandler.CreateReview)
 		v1.DELETE("/shops/:shopId/reviews/me", deps.AuthMiddleware.Handle(), deps.ShopHandler.DeleteReview)
-		v1.GET("/admin/shops", deps.AuthMiddleware.Handle(), deps.ShopHandler.AdminList)
-		v1.PATCH("/admin/shops/:shopId/moderation", deps.AuthMiddleware.Handle(), deps.ShopHandler.Moderate)
-		v1.POST("/admin/shops/:shopId/pledges/:pledgeId/reanchor", deps.AuthMiddleware.Handle(), deps.ShopHandler.ReanchorPledgeIntegrity)
-		v1.POST("/admin/shops/:shopId/pledges/:pledgeId/revoke", deps.AuthMiddleware.Handle(), deps.ShopHandler.RevokePledgeIntegrity)
-		v1.PATCH("/admin/products/:productId/moderation", deps.AuthMiddleware.Handle(), deps.ProductHandler.Moderate)
-		v1.PATCH("/admin/product-freshness-reports/:reportId/moderation", deps.AuthMiddleware.Handle(), deps.ProductHandler.ModerateFreshnessReport)
-		v1.PATCH("/admin/buyer-checks/:checkId/moderation", deps.AuthMiddleware.Handle(), deps.BuyerHandler.Moderate)
-		v1.GET("/admin/buyer-checks", deps.AuthMiddleware.Handle(), deps.BuyerHandler.ListAdmin)
-		v1.GET("/admin/product-freshness-reports", deps.AuthMiddleware.Handle(), deps.ProductHandler.ListFreshnessReportsAdmin)
-		v1.GET("/admin/users", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.List)
-		v1.PATCH("/admin/users/:userId/role", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.UpdateRole)
-		v1.PATCH("/admin/users/:userId/status", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.UpdateStatus)
-		v1.POST("/admin/users/:userId/keys/rotate", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.RotateAccountKey)
-		v1.POST("/admin/users/:userId/keys/recover", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.RecoverAccountKey)
-		v1.POST("/admin/users/:userId/keys/backfill", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.BackfillAccountKey)
+		v1.GET("/admin/shops", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.ShopHandler.AdminList)
+		v1.PATCH("/admin/shops/:shopId/moderation", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.ShopHandler.Moderate)
+		v1.POST("/admin/shops/:shopId/pledges/:pledgeId/reanchor", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.ShopHandler.ReanchorPledgeIntegrity)
+		v1.POST("/admin/shops/:shopId/pledges/:pledgeId/revoke", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.ShopHandler.RevokePledgeIntegrity)
+		v1.PATCH("/admin/products/:productId/moderation", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.ProductHandler.Moderate)
+		v1.PATCH("/admin/product-freshness-reports/:reportId/moderation", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.ProductHandler.ModerateFreshnessReport)
+		v1.PATCH("/admin/buyer-checks/:checkId/moderation", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.BuyerHandler.Moderate)
+		v1.GET("/admin/buyer-checks", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.BuyerHandler.ListAdmin)
+		v1.GET("/admin/product-freshness-reports", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.ProductHandler.ListFreshnessReportsAdmin)
+		v1.GET("/admin/users", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.AdminUserHandler.List)
+		v1.PATCH("/admin/users/:userId/role", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.AdminUserHandler.UpdateRole)
+		v1.PATCH("/admin/users/:userId/status", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.AdminUserHandler.UpdateStatus)
+		v1.POST("/admin/users/:userId/keys/rotate", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.AdminUserHandler.RotateAccountKey)
+		v1.POST("/admin/users/:userId/keys/recover", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.AdminUserHandler.RecoverAccountKey)
+		v1.POST("/admin/users/:userId/keys/backfill", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), adminRateLimit, deps.AdminUserHandler.BackfillAccountKey)
 		v1.POST("/seller/score", deps.AuthMiddleware.Handle(), deps.SellerHandler.Score)
 		v1.POST("/seller/commit", deps.AuthMiddleware.Handle(), deps.SellerHandler.Commit)
 		v1.POST("/buyer/check", deps.AuthMiddleware.Handle(), deps.BuyerHandler.Check)

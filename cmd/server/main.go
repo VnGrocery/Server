@@ -211,6 +211,7 @@ func main() {
 	sellerCommitService.SetIntegrityManager(integrityManager)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, buyerCheckRepository, userRepository, visionScorer, auditLogger)
 	authMiddleware := middleware.NewAuthRequired(jwtService)
+	adminMiddleware := middleware.NewAdminRequired(userRepository)
 	healthHandler := handler.NewHealthHandler()
 	docsHandler := handler.NewDocsHandler()
 	authHandler := handler.NewAuthHandler(accountService)
@@ -234,21 +235,24 @@ func main() {
 	shopHandler := handler.NewShopHandler(shopManager)
 
 	engine := router.New(router.Dependencies{
-		HealthHandler:        healthHandler,
-		DocsHandler:          docsHandler,
-		AuthHandler:          authHandler,
-		AdminUserHandler:     adminUserHandler,
-		EventLogHandler:      eventLogHandler,
-		MediaHandler:         mediaHandler,
-		ProductHandler:       productHandler,
-		SellerHandler:        sellerHandler,
-		BuyerHandler:         buyerHandler,
-		ShopHandler:          shopHandler,
-		AuthMiddleware:       authMiddleware,
-		Metrics:              metrics,
-		RateLimitStore:       rateLimitStore,
-		RateLimitMaxRequests: mustParseInt(cfg.RateLimitMaxRequests, 120),
-		RateLimitWindow:      time.Duration(mustParseInt(cfg.RateLimitWindowSec, 60)) * time.Second,
+		HealthHandler:             healthHandler,
+		DocsHandler:               docsHandler,
+		AuthHandler:               authHandler,
+		AdminUserHandler:          adminUserHandler,
+		EventLogHandler:           eventLogHandler,
+		MediaHandler:              mediaHandler,
+		ProductHandler:            productHandler,
+		SellerHandler:             sellerHandler,
+		BuyerHandler:              buyerHandler,
+		ShopHandler:               shopHandler,
+		AuthMiddleware:            authMiddleware,
+		AdminMiddleware:           adminMiddleware,
+		Metrics:                   metrics,
+		RateLimitStore:            rateLimitStore,
+		RateLimitMaxRequests:      mustParseInt(cfg.RateLimitMaxRequests, 120),
+		RateLimitWindow:           time.Duration(mustParseInt(cfg.RateLimitWindowSec, 60)) * time.Second,
+		AdminRateLimitMaxRequests: mustParseInt(cfg.AdminRateLimitMaxRequests, 30),
+		AdminRateLimitWindow:      time.Duration(mustParseInt(cfg.AdminRateLimitWindowSec, 60)) * time.Second,
 	})
 
 	if err := engine.Run(":" + cfg.Port); err != nil {

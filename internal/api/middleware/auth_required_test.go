@@ -10,6 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 	authservice "vngrocery/internal/service/auth"
 )
 
@@ -112,5 +114,67 @@ func TestAuthRequiredStoresPrincipal(t *testing.T) {
 
 	if actual != expected {
 		t.Fatalf("expected %+v, got %+v", expected, actual)
+	}
+}
+
+type stubUserRepo struct {
+	getByID func(ctx context.Context, userID string) (domain.User, error)
+}
+
+func (s stubUserRepo) Save(ctx context.Context, user domain.User) error { return nil }
+func (s stubUserRepo) GetByID(ctx context.Context, userID string) (domain.User, error) {
+	return s.getByID(ctx, userID)
+}
+func (s stubUserRepo) List(ctx context.Context, filter repository.UserListFilter) ([]domain.User, error) {
+	return nil, nil
+}
+
+func TestAdminRequiredRejectsNonAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	middleware := NewAdminRequired(stubUserRepo{
+		getByID: func(ctx context.Context, userID string) (domain.User, error) {
+			return domain.User{UserID: userID, Role: "seller"}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/protected", func(c *gin.Context) {
+		c.Set(principalContextKey, authservice.Principal{UserID: "user-1"})
+		middleware.Handle()(c)
+	}, func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rec.Code)
+	}
+}
+
+func TestAdminRequiredAllowsAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	middleware := NewAdminRequired(stubUserRepo{
+		getByID: func(ctx context.Context, userID string) (domain.User, error) {
+			return domain.User{UserID: userID, Role: "admin"}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/protected", func(c *gin.Context) {
+		c.Set(principalContextKey, authservice.Principal{UserID: "user-1"})
+		middleware.Handle()(c)
+	}, func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 }

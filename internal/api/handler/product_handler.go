@@ -24,6 +24,7 @@ type ProductService interface {
 	CreateFreshnessReport(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error)
 	ModerateFreshnessReport(ctx context.Context, input productsvc.ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error)
 	ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error)
+	ListFreshnessReportsAdmin(ctx context.Context, input productsvc.ListFreshnessReportAdminInput) (productsvc.ListFreshnessReportAdminResult, error)
 }
 
 type ProductHandler struct {
@@ -275,6 +276,65 @@ func (h *ProductHandler) ListFreshnessReports(c *gin.Context) {
 		items = append(items, toProductFreshnessReportResponse(report))
 	}
 	c.JSON(http.StatusOK, dto.ProductFreshnessReportListResponse{Items: items})
+}
+
+func (h *ProductHandler) ListFreshnessReportsAdmin(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	page, pageSize, err := parsePagination(c.Query("page"), c.Query("pageSize"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	createdAfter, err := parseOptionalTime(c.Query("createdAfter"), "createdAfter")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	createdBefore, err := parseOptionalTime(c.Query("createdBefore"), "createdBefore")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	result, err := h.products.ListFreshnessReportsAdmin(c.Request.Context(), productsvc.ListFreshnessReportAdminInput{
+		ActorUserID:    principal.UserID,
+		ReportID:       c.Query("reportId"),
+		ShopID:         c.Query("shopId"),
+		ProductID:      c.Query("productId"),
+		ReporterUserID: c.Query("reporterUserId"),
+		Status:         c.Query("status"),
+		CreatedAfter:   createdAfter,
+		CreatedBefore:  createdBefore,
+		Page:           page,
+		PageSize:       pageSize,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+
+	items := make([]dto.ProductFreshnessReportResponse, 0, len(result.Items))
+	for _, report := range result.Items {
+		items = append(items, toProductFreshnessReportResponse(report))
+	}
+	totalPages := 0
+	if result.Total > 0 {
+		totalPages = (result.Total + result.PageSize - 1) / result.PageSize
+	}
+	c.JSON(http.StatusOK, dto.ProductFreshnessReportListResponse{
+		Items: items,
+		Pagination: dto.PaginationResponse{
+			Page:       result.Page,
+			PageSize:   result.PageSize,
+			TotalItems: result.Total,
+			TotalPages: totalPages,
+		},
+	})
 }
 
 func (h *ProductHandler) ModerateFreshnessReport(c *gin.Context) {

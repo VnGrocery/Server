@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	gofirestore "cloud.google.com/go/firestore"
 
 	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 )
 
 type BuyerCheckRepository struct {
@@ -56,6 +58,47 @@ func (r *BuyerCheckRepository) ListByBuyerUserID(ctx context.Context, buyerUserI
 	}
 
 	return decodeBuyerChecks(docs)
+}
+
+func (r *BuyerCheckRepository) List(ctx context.Context, filter repository.BuyerCheckListFilter) ([]domain.BuyerCheck, error) {
+	docs, err := r.client.Collection(BuyerChecksCollection).Documents(ctx).GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list buyer checks: %w", err)
+	}
+	checks, err := decodeBuyerChecks(docs)
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := make([]domain.BuyerCheck, 0, len(checks))
+	for _, check := range checks {
+		if strings.TrimSpace(filter.CheckID) != "" && check.CheckID != strings.TrimSpace(filter.CheckID) {
+			continue
+		}
+		if strings.TrimSpace(filter.ShopID) != "" && check.ShopID != strings.TrimSpace(filter.ShopID) {
+			continue
+		}
+		if strings.TrimSpace(filter.ProductID) != "" && check.ProductID != strings.TrimSpace(filter.ProductID) {
+			continue
+		}
+		if strings.TrimSpace(filter.BuyerUserID) != "" && check.BuyerUserID != strings.TrimSpace(filter.BuyerUserID) {
+			continue
+		}
+		if strings.TrimSpace(filter.Status) != "" && check.Status != strings.TrimSpace(filter.Status) {
+			continue
+		}
+		if strings.TrimSpace(filter.Verdict) != "" && check.Verdict != strings.TrimSpace(filter.Verdict) {
+			continue
+		}
+		if !filter.CreatedAfter.IsZero() && check.CreatedAt.Before(filter.CreatedAfter) {
+			continue
+		}
+		if !filter.CreatedBefore.IsZero() && check.CreatedAt.After(filter.CreatedBefore) {
+			continue
+		}
+		filtered = append(filtered, check)
+	}
+	return filtered, nil
 }
 
 func decodeBuyerChecks(docs []*gofirestore.DocumentSnapshot) ([]domain.BuyerCheck, error) {

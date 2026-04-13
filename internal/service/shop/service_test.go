@@ -59,6 +59,7 @@ type buyerCheckRepositoryStub struct {
 	getByID           func(ctx context.Context, checkID string) (domain.BuyerCheck, error)
 	listByShopID      func(ctx context.Context, shopID string) ([]domain.BuyerCheck, error)
 	listByBuyerUserID func(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error)
+	list              func(ctx context.Context, filter repository.BuyerCheckListFilter) ([]domain.BuyerCheck, error)
 }
 
 func (b buyerCheckRepositoryStub) Save(ctx context.Context, check domain.BuyerCheck) error {
@@ -85,6 +86,13 @@ func (b buyerCheckRepositoryStub) ListByShopID(ctx context.Context, shopID strin
 func (b buyerCheckRepositoryStub) ListByBuyerUserID(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error) {
 	if b.listByBuyerUserID != nil {
 		return b.listByBuyerUserID(ctx, buyerUserID)
+	}
+	return nil, nil
+}
+
+func (b buyerCheckRepositoryStub) List(ctx context.Context, filter repository.BuyerCheckListFilter) ([]domain.BuyerCheck, error) {
+	if b.list != nil {
+		return b.list(ctx, filter)
 	}
 	return nil, nil
 }

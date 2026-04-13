@@ -17,16 +17,17 @@ import (
 )
 
 type productServiceAdapter struct {
-	create                  func(ctx context.Context, input productsvc.CreateInput) (domain.Product, error)
-	update                  func(ctx context.Context, input productsvc.UpdateInput) (domain.Product, error)
-	delete                  func(ctx context.Context, input productsvc.DeleteInput) (domain.Product, error)
-	moderate                func(ctx context.Context, input productsvc.ModerateInput) (domain.Product, error)
-	bulkUpsert              func(ctx context.Context, input productsvc.BulkUpsertInput) ([]domain.Product, error)
-	getByID                 func(ctx context.Context, shopID, productID string) (domain.Product, error)
-	list                    func(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error)
-	createFreshnessReport   func(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error)
-	moderateFreshnessReport func(ctx context.Context, input productsvc.ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error)
-	listFreshnessReports    func(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error)
+	create                    func(ctx context.Context, input productsvc.CreateInput) (domain.Product, error)
+	update                    func(ctx context.Context, input productsvc.UpdateInput) (domain.Product, error)
+	delete                    func(ctx context.Context, input productsvc.DeleteInput) (domain.Product, error)
+	moderate                  func(ctx context.Context, input productsvc.ModerateInput) (domain.Product, error)
+	bulkUpsert                func(ctx context.Context, input productsvc.BulkUpsertInput) ([]domain.Product, error)
+	getByID                   func(ctx context.Context, shopID, productID string) (domain.Product, error)
+	list                      func(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error)
+	createFreshnessReport     func(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error)
+	moderateFreshnessReport   func(ctx context.Context, input productsvc.ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error)
+	listFreshnessReports      func(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error)
+	listFreshnessReportsAdmin func(ctx context.Context, input productsvc.ListFreshnessReportAdminInput) (productsvc.ListFreshnessReportAdminResult, error)
 }
 
 func (s productServiceAdapter) Create(ctx context.Context, input productsvc.CreateInput) (domain.Product, error) {
@@ -67,6 +68,13 @@ func (s productServiceAdapter) ModerateFreshnessReport(ctx context.Context, inpu
 
 func (s productServiceAdapter) ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error) {
 	return s.listFreshnessReports(ctx, shopID, productID)
+}
+
+func (s productServiceAdapter) ListFreshnessReportsAdmin(ctx context.Context, input productsvc.ListFreshnessReportAdminInput) (productsvc.ListFreshnessReportAdminResult, error) {
+	if s.listFreshnessReportsAdmin == nil {
+		return productsvc.ListFreshnessReportAdminResult{}, nil
+	}
+	return s.listFreshnessReportsAdmin(ctx, input)
 }
 
 func TestCreateProduct(t *testing.T) {
@@ -236,5 +244,51 @@ func TestListProductFreshnessReports(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestListFreshnessReportsAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewProductHandler(productServiceAdapter{
+		listFreshnessReportsAdmin: func(ctx context.Context, input productsvc.ListFreshnessReportAdminInput) (productsvc.ListFreshnessReportAdminResult, error) {
+			if input.ActorUserID != "admin-1" || input.Status != "active" {
+				t.Fatalf("unexpected admin list input: %#v", input)
+			}
+			return productsvc.ListFreshnessReportAdminResult{
+				Items: []domain.ProductFreshnessReport{{
+					ReportID:       "report-1",
+					ShopID:         "shop-1",
+					ProductID:      "product-1",
+					ReporterUserID: "buyer-1",
+					Status:         productsvc.FreshnessReportStatusActive,
+					Version:        1,
+				}},
+				Page:     1,
+				PageSize: 20,
+				Total:    1,
+			}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/admin/product-freshness-reports", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "admin-1"})
+		handler.ListFreshnessReportsAdmin(c)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/product-freshness-reports?status=active&page=1&pageSize=20", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	items, ok := payload["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("unexpected payload: %#v", payload)
 	}
 }

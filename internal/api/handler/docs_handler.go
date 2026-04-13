@@ -429,6 +429,7 @@ func buildSchemas() gin.H {
 					"type":  "array",
 					"items": gin.H{"$ref": "#/components/schemas/ProductFreshnessReportResponse"},
 				},
+				"pagination": gin.H{"$ref": "#/components/schemas/PaginationResponse"},
 			},
 		},
 		"SellerCommitRequest": gin.H{
@@ -576,6 +577,7 @@ func buildSchemas() gin.H {
 				"checkId":          gin.H{"type": "string"},
 				"shopId":           gin.H{"type": "string"},
 				"productId":        gin.H{"type": "string"},
+				"buyerUserId":      gin.H{"type": "string"},
 				"status":           gin.H{"type": "string"},
 				"version":          gin.H{"type": "integer"},
 				"hasPledge":        gin.H{"type": "boolean"},
@@ -596,6 +598,21 @@ func buildSchemas() gin.H {
 					"type":  "array",
 					"items": gin.H{"type": "string"},
 				},
+				"moderatedByUserId": gin.H{"type": "string"},
+				"moderationNote":    gin.H{"type": "string"},
+				"moderatedAt":       gin.H{"type": "string", "format": "date-time"},
+				"createdAt":         gin.H{"type": "string", "format": "date-time"},
+				"updatedAt":         gin.H{"type": "string", "format": "date-time"},
+			},
+		},
+		"BuyerCheckListResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"items": gin.H{
+					"type":  "array",
+					"items": gin.H{"$ref": "#/components/schemas/BuyerCheckResponse"},
+				},
+				"pagination": gin.H{"$ref": "#/components/schemas/PaginationResponse"},
 			},
 		},
 		"ModerateBuyerCheckRequest": gin.H{
@@ -1085,6 +1102,24 @@ func buildPaths() gin.H {
 				"responses":   mergeResponses(success(http.StatusOK, "ProductFreshnessReportResponse"), errorResponse),
 			},
 		},
+		"/v1/admin/product-freshness-reports": gin.H{
+			"get": gin.H{
+				"summary":  "Admin list product freshness reports",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					queryParam("reportId", "string"),
+					queryParam("shopId", "string"),
+					queryParam("productId", "string"),
+					queryParam("reporterUserId", "string"),
+					queryParam("status", "string"),
+					queryParam("createdAfter", "string"),
+					queryParam("createdBefore", "string"),
+					queryParam("page", "integer"),
+					queryParam("pageSize", "integer"),
+				},
+				"responses": mergeResponses(success(http.StatusOK, "ProductFreshnessReportListResponse"), errorResponse),
+			},
+		},
 		"/v1/admin/buyer-checks/{checkId}/moderation": gin.H{
 			"patch": gin.H{
 				"summary":     "Moderate buyer check",
@@ -1092,6 +1127,25 @@ func buildPaths() gin.H {
 				"parameters":  []gin.H{pathParam("checkId")},
 				"requestBody": jsonBody("ModerateBuyerCheckRequest"),
 				"responses":   mergeResponses(success(http.StatusOK, "BuyerCheckResponse"), errorResponse),
+			},
+		},
+		"/v1/admin/buyer-checks": gin.H{
+			"get": gin.H{
+				"summary":  "Admin list buyer checks",
+				"security": []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{
+					queryParam("checkId", "string"),
+					queryParam("shopId", "string"),
+					queryParam("productId", "string"),
+					queryParam("buyerUserId", "string"),
+					queryParam("status", "string"),
+					queryParam("verdict", "string"),
+					queryParam("createdAfter", "string"),
+					queryParam("createdBefore", "string"),
+					queryParam("page", "integer"),
+					queryParam("pageSize", "integer"),
+				},
+				"responses": mergeResponses(success(http.StatusOK, "BuyerCheckListResponse"), errorResponse),
 			},
 		},
 		"/v1/admin/shops/{shopId}/moderation": gin.H{
@@ -1401,10 +1455,22 @@ func annotatePathDocs(paths gin.H) {
 				description: "Admin đánh dấu report là accepted, flagged, hoặc rejected theo policy.\n\nUse when the team needs to separate trusted reports from noise or abuse.",
 			},
 		},
+		"/v1/admin/product-freshness-reports": {
+			"get": {
+				summary:     "Admin xem danh sách báo cáo độ tươi | Admin list freshness reports",
+				description: "Danh sách chung báo cáo độ tươi toàn hệ thống cho moderation và kiểm tra chất lượng.\n\nSupports filtering by reportId, shop, product, reporter, status, and time range.",
+			},
+		},
 		"/v1/admin/buyer-checks/{checkId}/moderation": {
 			"patch": {
 				summary:     "Admin duyệt buyer check | Moderate buyer check",
 				description: "Admin cập nhật moderation state của buyer check.\n\nUseful for abuse handling, dispute review, and trust-score hygiene.",
+			},
+		},
+		"/v1/admin/buyer-checks": {
+			"get": {
+				summary:     "Admin xem danh sách buyer check | Admin list buyer checks",
+				description: "Danh sách chung buyer check toàn hệ thống để lọc rủi ro và xử lý theo lô.\n\nSupports filtering by checkId, shop, product, buyer, verdict, status, and time range.",
 			},
 		},
 		"/v1/admin/users": {

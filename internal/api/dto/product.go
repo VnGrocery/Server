@@ -89,5 +89,6 @@ type ProductFreshnessReportResponse struct {
 }
 
 type ProductFreshnessReportListResponse struct {
-	Items []ProductFreshnessReportResponse `json:"items"`
+	Items      []ProductFreshnessReportResponse `json:"items"`
+	Pagination PaginationResponse               `json:"pagination"`
 }

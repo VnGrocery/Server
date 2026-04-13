@@ -784,3 +784,19 @@ func (productHandlerStub) ListFreshnessReports(ctx context.Context, shopID, prod
 		Version:   1,
 	}}, nil
 }
+
+func (productHandlerStub) ListFreshnessReportsAdmin(ctx context.Context, input productservice.ListFreshnessReportAdminInput) (productservice.ListFreshnessReportAdminResult, error) {
+	return productservice.ListFreshnessReportAdminResult{
+		Items: []domain.ProductFreshnessReport{{
+			ReportID:       "report-1",
+			ProductID:      "product-1",
+			ShopID:         "shop-1",
+			ReporterUserID: "buyer-1",
+			Status:         productservice.FreshnessReportStatusActive,
+			Version:        1,
+		}},
+		Page:     input.Page,
+		PageSize: input.PageSize,
+		Total:    1,
+	}, nil
+}

@@ -41,6 +41,7 @@ type buyerCheckRepositoryStub struct {
 	getByID           func(ctx context.Context, checkID string) (domain.BuyerCheck, error)
 	listByShopID      func(ctx context.Context, shopID string) ([]domain.BuyerCheck, error)
 	listByBuyerUserID func(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error)
+	list              func(ctx context.Context, filter repository.BuyerCheckListFilter) ([]domain.BuyerCheck, error)
 }
 
 func (s buyerCheckRepositoryStub) Save(ctx context.Context, check domain.BuyerCheck) error {
@@ -67,6 +68,13 @@ func (s buyerCheckRepositoryStub) ListByShopID(ctx context.Context, shopID strin
 func (s buyerCheckRepositoryStub) ListByBuyerUserID(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error) {
 	if s.listByBuyerUserID != nil {
 		return s.listByBuyerUserID(ctx, buyerUserID)
+	}
+	return nil, nil
+}
+
+func (s buyerCheckRepositoryStub) List(ctx context.Context, filter repository.BuyerCheckListFilter) ([]domain.BuyerCheck, error) {
+	if s.list != nil {
+		return s.list(ctx, filter)
 	}
 	return nil, nil
 }
@@ -376,5 +384,39 @@ func TestCheckRejectsWhenQuotaExceeded(t *testing.T) {
 	})
 	if !errors.Is(err, ErrRateLimited) {
 		t.Fatalf("expected rate limit error, got %v", err)
+	}
+}
+
+func TestListBuyerChecksForAdmin(t *testing.T) {
+	service := NewService(
+		pledgeRepositoryStub{},
+		buyerCheckRepositoryStub{
+			list: func(ctx context.Context, filter repository.BuyerCheckListFilter) ([]domain.BuyerCheck, error) {
+				if filter.ShopID != "shop-1" || filter.Status != "completed" {
+					t.Fatalf("unexpected filter: %#v", filter)
+				}
+				return []domain.BuyerCheck{
+					{CheckID: "check-1", Status: "completed"},
+					{CheckID: "check-2", Status: "completed"},
+				}, nil
+			},
+		},
+		userRepositoryStub{},
+		nil,
+		nil,
+	)
+
+	result, err := service.List(context.Background(), ListInput{
+		ActorUserID: "admin-1",
+		ShopID:      "shop-1",
+		Status:      "completed",
+		Page:        1,
+		PageSize:    1,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.Total != 2 || len(result.Items) != 1 || result.Items[0].CheckID != "check-1" {
+		t.Fatalf("unexpected list result: %#v", result)
 	}
 }

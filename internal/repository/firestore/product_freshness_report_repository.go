@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 
 	gofirestore "cloud.google.com/go/firestore"
 
 	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 )
 
 type ProductFreshnessReportRepository struct {
@@ -54,6 +56,44 @@ func (r *ProductFreshnessReportRepository) ListByReporterUserID(ctx context.Cont
 		return nil, fmt.Errorf("failed to list product freshness reports by user: %w", err)
 	}
 	return decodeFreshnessReports(docs)
+}
+
+func (r *ProductFreshnessReportRepository) List(ctx context.Context, filter repository.ProductFreshnessReportListFilter) ([]domain.ProductFreshnessReport, error) {
+	docs, err := r.client.Collection(ProductFreshnessReportsCollection).Documents(ctx).GetAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list product freshness reports: %w", err)
+	}
+	reports, err := decodeFreshnessReports(docs)
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := make([]domain.ProductFreshnessReport, 0, len(reports))
+	for _, report := range reports {
+		if strings.TrimSpace(filter.ReportID) != "" && report.ReportID != strings.TrimSpace(filter.ReportID) {
+			continue
+		}
+		if strings.TrimSpace(filter.ShopID) != "" && report.ShopID != strings.TrimSpace(filter.ShopID) {
+			continue
+		}
+		if strings.TrimSpace(filter.ProductID) != "" && report.ProductID != strings.TrimSpace(filter.ProductID) {
+			continue
+		}
+		if strings.TrimSpace(filter.ReporterUserID) != "" && report.ReporterUserID != strings.TrimSpace(filter.ReporterUserID) {
+			continue
+		}
+		if strings.TrimSpace(filter.Status) != "" && report.Status != strings.TrimSpace(filter.Status) {
+			continue
+		}
+		if !filter.CreatedAfter.IsZero() && report.CreatedAt.Before(filter.CreatedAfter) {
+			continue
+		}
+		if !filter.CreatedBefore.IsZero() && report.CreatedAt.After(filter.CreatedBefore) {
+			continue
+		}
+		filtered = append(filtered, report)
+	}
+	return filtered, nil
 }
 
 func decodeFreshnessReports(docs []*gofirestore.DocumentSnapshot) ([]domain.ProductFreshnessReport, error) {

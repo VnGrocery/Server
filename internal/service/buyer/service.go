@@ -41,6 +41,27 @@ type ModerateInput struct {
 	ModerationNote  string
 }
 
+type ListInput struct {
+	ActorUserID   string
+	CheckID       string
+	ShopID        string
+	ProductID     string
+	BuyerUserID   string
+	Status        string
+	Verdict       string
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
+	Page          int
+	PageSize      int
+}
+
+type ListResult struct {
+	Items    []domain.BuyerCheck
+	Page     int
+	PageSize int
+	Total    int
+}
+
 type CheckResult struct {
 	CheckID          string
 	ShopID           string
@@ -199,6 +220,57 @@ func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.Buy
 	}
 
 	return check, nil
+}
+
+func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error) {
+	if strings.TrimSpace(input.ActorUserID) == "" {
+		return ListResult{}, fmt.Errorf("%w: actorUserId is required", ErrInvalidCheck)
+	}
+	if s.checks == nil || s.users == nil {
+		return ListResult{}, fmt.Errorf("buyer check list dependencies are not configured")
+	}
+	if err := s.ensureAdmin(ctx, input.ActorUserID); err != nil {
+		return ListResult{}, err
+	}
+
+	page := input.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := input.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+
+	items, err := s.checks.List(ctx, repository.BuyerCheckListFilter{
+		CheckID:       strings.TrimSpace(input.CheckID),
+		ShopID:        strings.TrimSpace(input.ShopID),
+		ProductID:     strings.TrimSpace(input.ProductID),
+		BuyerUserID:   strings.TrimSpace(input.BuyerUserID),
+		Status:        strings.TrimSpace(input.Status),
+		Verdict:       strings.TrimSpace(input.Verdict),
+		CreatedAfter:  input.CreatedAfter,
+		CreatedBefore: input.CreatedBefore,
+	})
+	if err != nil {
+		return ListResult{}, err
+	}
+
+	total := len(items)
+	start := (page - 1) * pageSize
+	if start >= total {
+		return ListResult{Items: []domain.BuyerCheck{}, Page: page, PageSize: pageSize, Total: total}, nil
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	return ListResult{
+		Items:    items[start:end],
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+	}, nil
 }
 
 const (

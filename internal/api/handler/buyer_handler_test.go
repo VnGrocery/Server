@@ -12,16 +12,25 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"vngrocery/internal/domain"
 	authservice "vngrocery/internal/service/auth"
 	buyerservice "vngrocery/internal/service/buyer"
 )
 
 type buyerCheckStub struct {
 	check func(ctx context.Context, input buyerservice.CheckInput) (buyerservice.CheckResult, error)
+	list  func(ctx context.Context, input buyerservice.ListInput) (buyerservice.ListResult, error)
 }
 
 func (s buyerCheckStub) Check(ctx context.Context, input buyerservice.CheckInput) (buyerservice.CheckResult, error) {
 	return s.check(ctx, input)
+}
+
+func (s buyerCheckStub) List(ctx context.Context, input buyerservice.ListInput) (buyerservice.ListResult, error) {
+	if s.list == nil {
+		return buyerservice.ListResult{}, nil
+	}
+	return s.list(ctx, input)
 }
 
 func TestBuyerCheckAllowsMissingPledgeID(t *testing.T) {
@@ -211,5 +220,57 @@ func TestBuyerCheckHandlesInvalidRequest(t *testing.T) {
 
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestBuyerListAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewBuyerHandler(buyerCheckStub{
+		check: func(ctx context.Context, input buyerservice.CheckInput) (buyerservice.CheckResult, error) {
+			return buyerservice.CheckResult{}, nil
+		},
+		list: func(ctx context.Context, input buyerservice.ListInput) (buyerservice.ListResult, error) {
+			if input.ActorUserID != "admin-1" || input.Status != "completed" {
+				t.Fatalf("unexpected list input: %#v", input)
+			}
+			return buyerservice.ListResult{
+				Items: []domain.BuyerCheck{{
+					CheckID:       "check-1",
+					ShopID:        "shop-1",
+					ProductID:     "product-1",
+					BuyerUserID:   "buyer-1",
+					Status:        "completed",
+					Version:       2,
+					Verdict:       "high_risk",
+					ActualScore:   4.5,
+					ScoreDeltaAbs: 3.2,
+				}},
+				Page:     1,
+				PageSize: 20,
+				Total:    1,
+			}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/admin/buyer-checks", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "admin-1"})
+		handler.ListAdmin(c)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/buyer-checks?status=completed&page=1&pageSize=20", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	items, ok := payload["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("unexpected payload: %#v", payload)
 	}
 }

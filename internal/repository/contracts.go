@@ -56,6 +56,7 @@ type ProductFreshnessReportRepository interface {
 	GetByID(ctx context.Context, reportID string) (domain.ProductFreshnessReport, error)
 	ListByProductID(ctx context.Context, productID string) ([]domain.ProductFreshnessReport, error)
 	ListByReporterUserID(ctx context.Context, reporterUserID string) ([]domain.ProductFreshnessReport, error)
+	List(ctx context.Context, filter ProductFreshnessReportListFilter) ([]domain.ProductFreshnessReport, error)
 }
 
 type PledgeRepository interface {
@@ -70,6 +71,28 @@ type BuyerCheckRepository interface {
 	GetByID(ctx context.Context, checkID string) (domain.BuyerCheck, error)
 	ListByShopID(ctx context.Context, shopID string) ([]domain.BuyerCheck, error)
 	ListByBuyerUserID(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error)
+	List(ctx context.Context, filter BuyerCheckListFilter) ([]domain.BuyerCheck, error)
+}
+
+type BuyerCheckListFilter struct {
+	CheckID       string
+	ShopID        string
+	ProductID     string
+	BuyerUserID   string
+	Status        string
+	Verdict       string
+	CreatedAfter  time.Time
+	CreatedBefore time.Time
+}
+
+type ProductFreshnessReportListFilter struct {
+	ReportID       string
+	ShopID         string
+	ProductID      string
+	ReporterUserID string
+	Status         string
+	CreatedAfter   time.Time
+	CreatedBefore  time.Time
 }
 
 type ShopReviewRepository interface {

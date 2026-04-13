@@ -101,6 +101,8 @@ func New(deps Dependencies) *gin.Engine {
 		v1.PATCH("/admin/products/:productId/moderation", deps.AuthMiddleware.Handle(), deps.ProductHandler.Moderate)
 		v1.PATCH("/admin/product-freshness-reports/:reportId/moderation", deps.AuthMiddleware.Handle(), deps.ProductHandler.ModerateFreshnessReport)
 		v1.PATCH("/admin/buyer-checks/:checkId/moderation", deps.AuthMiddleware.Handle(), deps.BuyerHandler.Moderate)
+		v1.GET("/admin/buyer-checks", deps.AuthMiddleware.Handle(), deps.BuyerHandler.ListAdmin)
+		v1.GET("/admin/product-freshness-reports", deps.AuthMiddleware.Handle(), deps.ProductHandler.ListFreshnessReportsAdmin)
 		v1.GET("/admin/users", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.List)
 		v1.PATCH("/admin/users/:userId/role", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.UpdateRole)
 		v1.PATCH("/admin/users/:userId/status", deps.AuthMiddleware.Handle(), deps.AdminUserHandler.UpdateStatus)

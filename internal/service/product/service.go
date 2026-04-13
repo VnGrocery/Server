@@ -132,6 +132,26 @@ type ModerateFreshnessReportInput struct {
 	ModerationNote  string
 }
 
+type ListFreshnessReportAdminInput struct {
+	ActorUserID    string
+	ReportID       string
+	ShopID         string
+	ProductID      string
+	ReporterUserID string
+	Status         string
+	CreatedAfter   time.Time
+	CreatedBefore  time.Time
+	Page           int
+	PageSize       int
+}
+
+type ListFreshnessReportAdminResult struct {
+	Items    []domain.ProductFreshnessReport
+	Page     int
+	PageSize int
+	Total    int
+}
+
 type AuditLogger interface {
 	Log(ctx context.Context, input audit.Input) error
 }
@@ -574,6 +594,57 @@ func (s *Service) ListFreshnessReports(ctx context.Context, shopID, productID st
 		}
 	}
 	return active, nil
+}
+
+func (s *Service) ListFreshnessReportsAdmin(ctx context.Context, input ListFreshnessReportAdminInput) (ListFreshnessReportAdminResult, error) {
+	if strings.TrimSpace(input.ActorUserID) == "" {
+		return ListFreshnessReportAdminResult{}, fmt.Errorf("%w: actorUserId is required", ErrInvalidProduct)
+	}
+	if s.reports == nil || s.users == nil {
+		return ListFreshnessReportAdminResult{}, fmt.Errorf("product freshness report list dependencies are not configured")
+	}
+	if err := s.ensureAdmin(ctx, input.ActorUserID); err != nil {
+		return ListFreshnessReportAdminResult{}, err
+	}
+
+	page := input.Page
+	if page <= 0 {
+		page = 1
+	}
+	pageSize := input.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+
+	items, err := s.reports.List(ctx, repository.ProductFreshnessReportListFilter{
+		ReportID:       strings.TrimSpace(input.ReportID),
+		ShopID:         strings.TrimSpace(input.ShopID),
+		ProductID:      strings.TrimSpace(input.ProductID),
+		ReporterUserID: strings.TrimSpace(input.ReporterUserID),
+		Status:         strings.TrimSpace(input.Status),
+		CreatedAfter:   input.CreatedAfter,
+		CreatedBefore:  input.CreatedBefore,
+	})
+	if err != nil {
+		return ListFreshnessReportAdminResult{}, err
+	}
+
+	total := len(items)
+	start := (page - 1) * pageSize
+	if start >= total {
+		return ListFreshnessReportAdminResult{Items: []domain.ProductFreshnessReport{}, Page: page, PageSize: pageSize, Total: total}, nil
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+
+	return ListFreshnessReportAdminResult{
+		Items:    items[start:end],
+		Page:     page,
+		PageSize: pageSize,
+		Total:    total,
+	}, nil
 }
 
 func (s *Service) requireOwnedShop(ctx context.Context, shopID, ownerUserID string) (domain.Shop, error) {

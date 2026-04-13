@@ -500,7 +500,7 @@ func buildSchemas() gin.H {
 				"pledgeId":          gin.H{"type": "string"},
 				"shopId":            gin.H{"type": "string"},
 				"dataHash":          gin.H{"type": "string"},
-				"providedDataHash":  gin.H{"type": "string"},
+				"providedDataHash":  gin.H{"type": "string", "description": "Optional hash from client, compared against the current pledge dataHash stored in DB."},
 				"chainTxHash":       gin.H{"type": "string"},
 				"chainBlockNumber":  gin.H{"type": "integer"},
 				"chainAnchorStatus": gin.H{"type": "string"},

@@ -67,6 +67,7 @@ type ShopReviewResponse struct {
 type ShopResponse struct {
 	ShopID            string                    `json:"shopId"`
 	OwnerUserID       string                    `json:"ownerUserId"`
+	Version           int                       `json:"version"`
 	Name              string                    `json:"name"`
 	Description       string                    `json:"description"`
 	Address           string                    `json:"address"`

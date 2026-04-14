@@ -198,12 +198,12 @@ func main() {
 			PrivateKey:      cfg.BesuPrivateKey,
 			ChainID:         cfg.BesuChainID,
 			GasLimit:        mustParseUint(cfg.BesuGasLimit, 250000),
-			ReceiptTimeout:  time.Duration(mustParseInt(cfg.BesuReceiptTimeoutSec, 15)) * time.Second,
+			ReceiptTimeout:  time.Duration(mustParseInt(cfg.BesuReceiptTimeoutSec, 30)) * time.Second,
 		})
 		integrityManager = integrityservice.NewService(pledgeRepository, besuClientAdapter{client: besuClient}, auditLogger)
 		integrityManager.StartBackground(context.Background(), integrityservice.WorkerConfig{
-			PendingInterval: time.Duration(mustParseInt(cfg.BesuPendingIntervalSec, 10)) * time.Second,
-			VerifyInterval:  time.Duration(mustParseInt(cfg.BesuVerifyIntervalSec, 60)) * time.Second,
+			PendingInterval: time.Duration(mustParseInt(cfg.BesuPendingIntervalSec, 3)) * time.Second,
+			VerifyInterval:  time.Duration(mustParseInt(cfg.BesuVerifyIntervalSec, 8)) * time.Second,
 			PendingBatch:    mustParseInt(cfg.BesuPendingBatchSize, 25),
 			VerifyBatch:     mustParseInt(cfg.BesuVerifyBatchSize, 50),
 		})

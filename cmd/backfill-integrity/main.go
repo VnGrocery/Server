@@ -50,7 +50,7 @@ func main() {
 			PrivateKey:      cfg.BesuPrivateKey,
 			ChainID:         cfg.BesuChainID,
 			GasLimit:        mustParseUint(cfg.BesuGasLimit, 250000),
-			ReceiptTimeout:  time.Duration(mustParseInt(cfg.BesuReceiptTimeoutSec, 15)) * time.Second,
+			ReceiptTimeout:  time.Duration(mustParseInt(cfg.BesuReceiptTimeoutSec, 30)) * time.Second,
 		})
 		integrityManager = integrityservice.NewService(pledgeRepository, besuClientAdapter{client: besuClient}, nil)
 	} else {

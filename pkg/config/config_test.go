@@ -192,6 +192,24 @@ func TestValidateAllowsBesuPrivateKeyWithoutFromAddress(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsBesuFromAddressWithoutPrivateKey(t *testing.T) {
+	cfg := Config{
+		Port:                "8080",
+		MongoEnabled:        true,
+		MongoURI:            "mongodb://127.0.0.1:27017",
+		MongoDatabase:       "vngrocery",
+		JWTSecret:           "test-secret",
+		BesuEnabled:         true,
+		BesuRPCURL:          "http://127.0.0.1:8545",
+		BesuContractAddress: "0x123",
+		BesuFromAddress:     "0xabc",
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
 func TestValidateRequiresMongoSettingsWhenMongoEnabled(t *testing.T) {
 	cfg := Config{
 		Port:          "8080",

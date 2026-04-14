@@ -502,6 +502,7 @@ func toShopResponse(view shopsvc.ShopView) dto.ShopResponse {
 	return dto.ShopResponse{
 		ShopID:            shop.ShopID,
 		OwnerUserID:       shop.OwnerUserID,
+		Version:           shop.Version,
 		Name:              shop.Name,
 		Description:       shop.Description,
 		Address:           shop.Address,

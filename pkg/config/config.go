@@ -99,9 +99,9 @@ func Load() (Config, error) {
 		BesuFromAddress:           os.Getenv("BESU_FROM_ADDRESS"),
 		BesuPrivateKey:            os.Getenv("BESU_PRIVATE_KEY"),
 		BesuGasLimit:              getEnvOrDefault("BESU_GAS_LIMIT", "250000"),
-		BesuReceiptTimeoutSec:     getEnvOrDefault("BESU_RECEIPT_TIMEOUT_SEC", "15"),
-		BesuPendingIntervalSec:    getEnvOrDefault("BESU_PENDING_INTERVAL_SEC", "10"),
-		BesuVerifyIntervalSec:     getEnvOrDefault("BESU_VERIFY_INTERVAL_SEC", "60"),
+		BesuReceiptTimeoutSec:     getEnvOrDefault("BESU_RECEIPT_TIMEOUT_SEC", "30"),
+		BesuPendingIntervalSec:    getEnvOrDefault("BESU_PENDING_INTERVAL_SEC", "3"),
+		BesuVerifyIntervalSec:     getEnvOrDefault("BESU_VERIFY_INTERVAL_SEC", "8"),
 		BesuPendingBatchSize:      getEnvOrDefault("BESU_PENDING_BATCH_SIZE", "25"),
 		BesuVerifyBatchSize:       getEnvOrDefault("BESU_VERIFY_BATCH_SIZE", "50"),
 		AlertWebhookURL:           os.Getenv("ALERT_WEBHOOK_URL"),
@@ -196,8 +196,8 @@ func (c Config) Validate() error {
 		if c.BesuContractAddress == "" {
 			return errors.New("BESU_CONTRACT_ADDRESS is required when BESU_ENABLED=true")
 		}
-		if c.BesuFromAddress == "" && c.BesuPrivateKey == "" {
-			return errors.New("BESU_FROM_ADDRESS or BESU_PRIVATE_KEY is required when BESU_ENABLED=true")
+		if c.BesuPrivateKey == "" {
+			return errors.New("BESU_PRIVATE_KEY is required when BESU_ENABLED=true (Besu requires eth_sendRawTransaction)")
 		}
 	}
 	if c.IPFSEnabled && c.IPFSAPIURL == "" {

@@ -129,6 +129,9 @@ func (c *Client) CommitHash(ctx context.Context, recordID, dataHash string, time
 			"gas":      hexUint64(c.gasLimit),
 			"gasPrice": "0x0",
 		}}, &txHash)
+		if err != nil && strings.Contains(err.Error(), "The method eth_sendTransaction is not supported") {
+			return CommitResult{}, fmt.Errorf("besu requires signed raw transaction; set BESU_PRIVATE_KEY to enable eth_sendRawTransaction: %w", err)
+		}
 	}
 	if err != nil {
 		return CommitResult{}, err
@@ -169,6 +172,9 @@ func (c *Client) RevokeHash(ctx context.Context, recordID string, version int) (
 			"gas":      hexUint64(c.gasLimit),
 			"gasPrice": "0x0",
 		}}, &txHash)
+		if err != nil && strings.Contains(err.Error(), "The method eth_sendTransaction is not supported") {
+			return CommitResult{}, fmt.Errorf("besu requires signed raw transaction; set BESU_PRIVATE_KEY to enable eth_sendRawTransaction: %w", err)
+		}
 	}
 	if err != nil {
 		return CommitResult{}, err

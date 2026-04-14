@@ -34,6 +34,9 @@ func (r *ProductRepository) Save(ctx context.Context, product domain.Product) er
 }
 
 func (r *ProductRepository) GetByID(ctx context.Context, productID string) (domain.Product, error) {
+	if cachepkg.ShouldBypass(ctx) {
+		return r.base.GetByID(ctx, productID)
+	}
 	version, key, err := r.keyWithVersion(ctx, "id:"+productID)
 	if err != nil {
 		return domain.Product{}, err
@@ -59,6 +62,9 @@ func (r *ProductRepository) GetByID(ctx context.Context, productID string) (doma
 }
 
 func (r *ProductRepository) List(ctx context.Context, filter repository.ProductListFilter) ([]domain.Product, error) {
+	if cachepkg.ShouldBypass(ctx) {
+		return r.base.List(ctx, filter)
+	}
 	suffix, err := buildSuffix(filter)
 	if err != nil {
 		return nil, err

@@ -845,6 +845,7 @@ func buildPaths() gin.H {
 					queryParam("createdBefore", "string"),
 					queryParam("page", "integer"),
 					queryParam("pageSize", "integer"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "EventLogListResponse"), errorResponse),
 			},
@@ -856,6 +857,7 @@ func buildPaths() gin.H {
 				"parameters": []gin.H{
 					queryParam("resourceType", "string"),
 					queryParam("resourceId", "string"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "ResourceEventVerificationResponse"), errorResponse),
 			},
@@ -866,6 +868,7 @@ func buildPaths() gin.H {
 				"security": []gin.H{{"bearerAuth": []string{}}},
 				"parameters": []gin.H{
 					pathParam("eventId"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "EventVerificationResponse"), errorResponse),
 			},
@@ -879,6 +882,7 @@ func buildPaths() gin.H {
 					queryParam("q", "string"),
 					queryParam("ownerUserId", "string"),
 					queryParam("status", "string"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "ShopListResponse"), errorResponse),
 			},
@@ -892,7 +896,7 @@ func buildPaths() gin.H {
 		"/v1/shops/{shopId}": gin.H{
 			"get": gin.H{
 				"summary":    "Get shop detail",
-				"parameters": []gin.H{pathParam("shopId")},
+				"parameters": []gin.H{pathParam("shopId"), realtimeQueryParam()},
 				"responses":  mergeResponses(success(http.StatusOK, "ShopResponse"), errorResponse),
 			},
 			"put": gin.H{
@@ -919,6 +923,7 @@ func buildPaths() gin.H {
 					pathParam("shopId"),
 					queryParam("productId", "string"),
 					queryParam("category", "string"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "PledgeHistoryResponse"), errorResponse),
 			},
@@ -930,6 +935,7 @@ func buildPaths() gin.H {
 					pathParam("shopId"),
 					pathParam("pledgeId"),
 					queryParam("dataHash", "string"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "PledgeIntegrityResponse"), errorResponse),
 			},
@@ -941,6 +947,7 @@ func buildPaths() gin.H {
 					pathParam("shopId"),
 					pathParam("pledgeId"),
 					queryParam("dataHash", "string"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "PledgeProofBundleResponse"), errorResponse),
 			},
@@ -975,6 +982,7 @@ func buildPaths() gin.H {
 					queryParam("category", "string"),
 					queryParam("tag", "string"),
 					queryParam("sort", "string"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "ProductListResponse"), errorResponse),
 			},
@@ -992,6 +1000,7 @@ func buildPaths() gin.H {
 				"parameters": []gin.H{
 					pathParam("shopId"),
 					pathParam("productId"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "ProductResponse"), errorResponse),
 			},
@@ -1022,6 +1031,7 @@ func buildPaths() gin.H {
 				"parameters": []gin.H{
 					pathParam("shopId"),
 					pathParam("productId"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "ProductFreshnessReportListResponse"), errorResponse),
 			},
@@ -1057,7 +1067,7 @@ func buildPaths() gin.H {
 		"/v1/shops/{shopId}/reviews": gin.H{
 			"get": gin.H{
 				"summary":    "List shop reviews",
-				"parameters": []gin.H{pathParam("shopId")},
+				"parameters": []gin.H{pathParam("shopId"), realtimeQueryParam()},
 				"responses": gin.H{
 					"200": gin.H{
 						"description": "OK",
@@ -1091,6 +1101,7 @@ func buildPaths() gin.H {
 					queryParam("q", "string"),
 					queryParam("ownerUserId", "string"),
 					queryParam("status", "string"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "ShopListResponse"), errorResponse),
 			},
@@ -1118,6 +1129,7 @@ func buildPaths() gin.H {
 					queryParam("createdBefore", "string"),
 					queryParam("page", "integer"),
 					queryParam("pageSize", "integer"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "ProductFreshnessReportListResponse"), errorResponse),
 			},
@@ -1146,6 +1158,7 @@ func buildPaths() gin.H {
 					queryParam("createdBefore", "string"),
 					queryParam("page", "integer"),
 					queryParam("pageSize", "integer"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "BuyerCheckListResponse"), errorResponse),
 			},
@@ -1166,6 +1179,7 @@ func buildPaths() gin.H {
 				"parameters": []gin.H{
 					queryParam("status", "string"),
 					queryParam("role", "string"),
+					realtimeQueryParam(),
 				},
 				"responses": mergeResponses(success(http.StatusOK, "AdminUserListResponse"), errorResponse),
 			},
@@ -1573,6 +1587,16 @@ func queryParam(name, schemaType string) gin.H {
 		"in":       "query",
 		"required": false,
 		"schema":   gin.H{"type": schemaType},
+	}
+}
+
+func realtimeQueryParam() gin.H {
+	return gin.H{
+		"name":        "realtime",
+		"in":          "query",
+		"required":    false,
+		"description": "Set to 1/true to bypass Redis cache and fetch fresh data directly from database",
+		"schema":      gin.H{"type": "boolean"},
 	}
 }
 

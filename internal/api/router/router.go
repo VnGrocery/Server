@@ -8,6 +8,7 @@ import (
 
 	"vngrocery/internal/api/handler"
 	"vngrocery/internal/api/middleware"
+	cachepkg "vngrocery/pkg/cache"
 )
 
 type Dependencies struct {
@@ -61,6 +62,10 @@ func New(deps Dependencies) *gin.Engine {
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
+		}
+		if cachepkg.ParseRealtimeFlag(c.Query("realtime")) {
+			c.Request = c.Request.WithContext(cachepkg.WithBypass(c.Request.Context(), true))
+			c.Header("Cache-Control", "no-store")
 		}
 		c.Next()
 	})

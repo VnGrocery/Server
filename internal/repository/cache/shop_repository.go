@@ -35,6 +35,9 @@ func (r *ShopRepository) Save(ctx context.Context, shop domain.Shop) error {
 }
 
 func (r *ShopRepository) GetByID(ctx context.Context, shopID string) (domain.Shop, error) {
+	if cachepkg.ShouldBypass(ctx) {
+		return r.base.GetByID(ctx, shopID)
+	}
 	version, key, err := r.keyWithVersion(ctx, "id:"+shopID)
 	if err != nil {
 		return domain.Shop{}, err
@@ -60,6 +63,9 @@ func (r *ShopRepository) GetByID(ctx context.Context, shopID string) (domain.Sho
 }
 
 func (r *ShopRepository) List(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
+	if cachepkg.ShouldBypass(ctx) {
+		return r.base.List(ctx, filter)
+	}
 	suffix, err := buildSuffix(filter)
 	if err != nil {
 		return nil, err

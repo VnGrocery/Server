@@ -18,7 +18,7 @@ services:
       IPFS_GATEWAY_URL: http://ipfs:8080
       CACHE_BACKEND: redis
       CACHE_PREFIX: "vngrocery:cache:"
-      CACHE_TTL_SECONDS: 30
+      CACHE_TTL_SECONDS: 10
       REDIS_ADDR: redis:6379
       REDIS_DB: 0
     ports:

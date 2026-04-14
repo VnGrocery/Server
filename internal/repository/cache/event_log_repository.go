@@ -34,6 +34,9 @@ func (r *EventLogRepository) Save(ctx context.Context, event domain.EventLog) er
 }
 
 func (r *EventLogRepository) GetByID(ctx context.Context, eventID string) (domain.EventLog, error) {
+	if cachepkg.ShouldBypass(ctx) {
+		return r.base.GetByID(ctx, eventID)
+	}
 	version, key, err := r.keyWithVersion(ctx, "id:"+eventID)
 	if err != nil {
 		return domain.EventLog{}, err
@@ -59,6 +62,9 @@ func (r *EventLogRepository) GetByID(ctx context.Context, eventID string) (domai
 }
 
 func (r *EventLogRepository) GetLatestByResource(ctx context.Context, resourceType, resourceID string) (domain.EventLog, error) {
+	if cachepkg.ShouldBypass(ctx) {
+		return r.base.GetLatestByResource(ctx, resourceType, resourceID)
+	}
 	suffix := "latest:" + resourceType + ":" + resourceID
 	version, key, err := r.keyWithVersion(ctx, suffix)
 	if err != nil {
@@ -85,6 +91,9 @@ func (r *EventLogRepository) GetLatestByResource(ctx context.Context, resourceTy
 }
 
 func (r *EventLogRepository) List(ctx context.Context, filter repository.EventLogListFilter) ([]domain.EventLog, error) {
+	if cachepkg.ShouldBypass(ctx) {
+		return r.base.List(ctx, filter)
+	}
 	suffix, err := buildSuffix(filter)
 	if err != nil {
 		return nil, err

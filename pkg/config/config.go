@@ -128,7 +128,7 @@ func Load() (Config, error) {
 		AdminRateLimitWindowSec:   getEnvOrDefault("ADMIN_RATE_LIMIT_WINDOW_SEC", "60"),
 		CacheBackend:              getEnvOrDefault("CACHE_BACKEND", "none"),
 		CachePrefix:               getEnvOrDefault("CACHE_PREFIX", "vngrocery:cache:"),
-		CacheTTLSeconds:           getEnvOrDefault("CACHE_TTL_SECONDS", "30"),
+		CacheTTLSeconds:           getEnvOrDefault("CACHE_TTL_SECONDS", "10"),
 		RedisAddr:                 getEnvOrDefault("REDIS_ADDR", "127.0.0.1:6379"),
 		RedisPassword:             os.Getenv("REDIS_PASSWORD"),
 		RedisDB:                   getEnvOrDefault("REDIS_DB", "0"),

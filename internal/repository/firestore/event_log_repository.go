@@ -2,14 +2,19 @@ package firestore
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	gofirestore "cloud.google.com/go/firestore"
 
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
 )
+
+const eventLogListReadLimit = 1000
+const eventLogListTimeout = 8 * time.Second
 
 type EventLogRepository struct {
 	client *gofirestore.Client
@@ -67,6 +72,9 @@ func (r *EventLogRepository) GetLatestByResource(ctx context.Context, resourceTy
 }
 
 func (r *EventLogRepository) List(ctx context.Context, filter repository.EventLogListFilter) ([]domain.EventLog, error) {
+	listCtx, cancel := context.WithTimeout(ctx, eventLogListTimeout)
+	defer cancel()
+
 	query := r.client.Collection(EventLogsCollection).Query
 	if filter.ResourceType != "" {
 		query = query.Where("resourceType", "==", filter.ResourceType)
@@ -83,9 +91,25 @@ func (r *EventLogRepository) List(ctx context.Context, filter repository.EventLo
 	if filter.Status != "" {
 		query = query.Where("status", "==", filter.Status)
 	}
+	if filter.MinSequence > 0 {
+		query = query.Where("sequence", ">=", filter.MinSequence)
+	}
+	if filter.MaxSequence > 0 {
+		query = query.Where("sequence", "<=", filter.MaxSequence)
+	}
+	if !filter.CreatedAfter.IsZero() {
+		query = query.Where("createdAt", ">=", filter.CreatedAfter)
+	}
+	if !filter.CreatedBefore.IsZero() {
+		query = query.Where("createdAt", "<=", filter.CreatedBefore)
+	}
+	query = query.Limit(eventLogListReadLimit)
 
-	docs, err := query.Documents(ctx).GetAll()
+	docs, err := query.Documents(listCtx).GetAll()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(listCtx.Err(), context.DeadlineExceeded) {
+			return nil, fmt.Errorf("failed to list event logs: query timeout: %w", context.DeadlineExceeded)
+		}
 		return nil, fmt.Errorf("failed to list event logs: %w", err)
 	}
 
@@ -94,18 +118,6 @@ func (r *EventLogRepository) List(ctx context.Context, filter repository.EventLo
 		var event domain.EventLog
 		if err := doc.DataTo(&event); err != nil {
 			return nil, fmt.Errorf("failed to decode event log: %w", err)
-		}
-		if filter.MinSequence > 0 && event.Sequence < filter.MinSequence {
-			continue
-		}
-		if filter.MaxSequence > 0 && event.Sequence > filter.MaxSequence {
-			continue
-		}
-		if !filter.CreatedAfter.IsZero() && event.CreatedAt.Before(filter.CreatedAfter) {
-			continue
-		}
-		if !filter.CreatedBefore.IsZero() && event.CreatedAt.After(filter.CreatedBefore) {
-			continue
 		}
 		events = append(events, event)
 	}

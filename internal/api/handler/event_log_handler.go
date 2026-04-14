@@ -9,6 +9,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"google.golang.org/api/googleapi"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 
 	"vngrocery/internal/api/dto"
 	auditsvc "vngrocery/internal/service/audit"
@@ -70,7 +73,8 @@ func (h *EventLogHandler) List(c *gin.Context) {
 		PageSize:      pageSize,
 	})
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		statusCode, message := mapEventLogListError(err)
+		c.JSON(statusCode, gin.H{"error": message})
 		return
 	}
 
@@ -193,4 +197,55 @@ func parseOptionalTime(raw, field string) (time.Time, error) {
 		return time.Time{}, errors.New(field + " must be an RFC3339 timestamp")
 	}
 	return parsed, nil
+}
+
+func mapEventLogListError(err error) (int, string) {
+	if isQuotaExceededError(err) {
+		return http.StatusTooManyRequests, "event log quota exceeded, narrow filters and retry later"
+	}
+	if isPermissionDeniedError(err) {
+		return http.StatusForbidden, "you do not have permission to view these event logs"
+	}
+	if isTimeoutError(err) {
+		return http.StatusGatewayTimeout, "event log query timed out, please retry with narrower filters"
+	}
+	return http.StatusBadRequest, err.Error()
+}
+
+func isQuotaExceededError(err error) bool {
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		if st, ok := grpcstatus.FromError(current); ok && st.Code() == codes.ResourceExhausted {
+			return true
+		}
+		var gErr *googleapi.Error
+		if errors.As(current, &gErr) && gErr.Code == http.StatusTooManyRequests {
+			return true
+		}
+	}
+	return false
+}
+
+func isPermissionDeniedError(err error) bool {
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		if st, ok := grpcstatus.FromError(current); ok && st.Code() == codes.PermissionDenied {
+			return true
+		}
+		var gErr *googleapi.Error
+		if errors.As(current, &gErr) && gErr.Code == http.StatusForbidden {
+			return true
+		}
+	}
+	return false
+}
+
+func isTimeoutError(err error) bool {
+	for current := err; current != nil; current = errors.Unwrap(current) {
+		if errors.Is(current, context.DeadlineExceeded) {
+			return true
+		}
+		if st, ok := grpcstatus.FromError(current); ok && st.Code() == codes.DeadlineExceeded {
+			return true
+		}
+	}
+	return false
 }

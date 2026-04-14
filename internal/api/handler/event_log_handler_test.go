@@ -3,12 +3,16 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"vngrocery/internal/domain"
 	auditsvc "vngrocery/internal/service/audit"
@@ -129,6 +133,66 @@ func TestEventLogListRejectsInvalidTime(t *testing.T) {
 	}
 }
 
+func TestEventLogListReturnsTooManyRequestsOnQuotaExceeded(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewEventLogHandler(eventLogAdapter{
+		list: func(ctx context.Context, input auditsvc.ListInput) (auditsvc.ListResult, error) {
+			return auditsvc.ListResult{}, fmt.Errorf("failed to list event logs: %w", status.Error(codes.ResourceExhausted, "Quota exceeded"))
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/events", handler.List)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/events?resourceType=shop", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got %d", rec.Code)
+	}
+}
+
+func TestEventLogListReturnsForbiddenOnPermissionDenied(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewEventLogHandler(eventLogAdapter{
+		list: func(ctx context.Context, input auditsvc.ListInput) (auditsvc.ListResult, error) {
+			return auditsvc.ListResult{}, fmt.Errorf("failed to list event logs: %w", status.Error(codes.PermissionDenied, "forbidden"))
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/events", handler.List)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/events?resourceType=shop", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rec.Code)
+	}
+}
+
+func TestEventLogListReturnsGatewayTimeoutOnDeadlineExceeded(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewEventLogHandler(eventLogAdapter{
+		list: func(ctx context.Context, input auditsvc.ListInput) (auditsvc.ListResult, error) {
+			return auditsvc.ListResult{}, fmt.Errorf("failed to list event logs: %w", context.DeadlineExceeded)
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/events", handler.List)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/events?resourceType=shop", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusGatewayTimeout {
+		t.Fatalf("expected 504, got %d", rec.Code)
+	}
+}
+
 func TestEventLogVerifyEvent(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := NewEventLogHandler(eventLogAdapter{
@@ -198,5 +262,46 @@ func TestEventLogVerifyResource(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestMapEventLogListErrorFallbackBadRequest(t *testing.T) {
+	statusCode, message := mapEventLogListError(fmt.Errorf("invalid filter"))
+	if statusCode != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", statusCode)
+	}
+	if message != "invalid filter" {
+		t.Fatalf("unexpected message: %s", message)
+	}
+}
+
+func TestMapEventLogListErrorTimeoutUnwrap(t *testing.T) {
+	statusCode, message := mapEventLogListError(fmt.Errorf("wrapped: %w", context.DeadlineExceeded))
+	if statusCode != http.StatusGatewayTimeout {
+		t.Fatalf("expected 504, got %d", statusCode)
+	}
+	if message == "" {
+		t.Fatalf("expected timeout message")
+	}
+}
+
+func TestListResponseBodyIsJson(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewEventLogHandler(eventLogAdapter{
+		list: func(ctx context.Context, input auditsvc.ListInput) (auditsvc.ListResult, error) {
+			return auditsvc.ListResult{}, fmt.Errorf("failed to list event logs: %w", status.Error(codes.ResourceExhausted, "Quota exceeded"))
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/events", handler.List)
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/events?resourceType=shop", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	body, _ := io.ReadAll(rec.Body)
+	if len(body) == 0 || body[0] != '{' {
+		t.Fatalf("expected json body, got %q", string(body))
 	}
 }

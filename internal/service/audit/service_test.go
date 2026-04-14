@@ -223,6 +223,26 @@ func TestListRejectsInvalidRanges(t *testing.T) {
 	}
 }
 
+func TestListAllowsEmptyFilter(t *testing.T) {
+	service := NewService(
+		eventLogRepoStub{
+			list: func(ctx context.Context, filter repository.EventLogListFilter) ([]domain.EventLog, error) {
+				return []domain.EventLog{{EventID: "event-1"}, {EventID: "event-2"}}, nil
+			},
+		},
+		nil,
+		nil,
+	)
+
+	result, err := service.List(context.Background(), ListInput{})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.Total != 2 || len(result.Items) != 2 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
 func TestVerifyEventAndResourceChain(t *testing.T) {
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {

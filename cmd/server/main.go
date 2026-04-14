@@ -12,6 +12,7 @@ import (
 	"vngrocery/internal/api/router"
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
+	cacherepo "vngrocery/internal/repository/cache"
 	firestorerepo "vngrocery/internal/repository/firestore"
 	mongorepo "vngrocery/internal/repository/mongo"
 	auditservice "vngrocery/internal/service/audit"
@@ -25,6 +26,7 @@ import (
 	visionservice "vngrocery/internal/service/vision"
 	alertpkg "vngrocery/pkg/alert"
 	besupkg "vngrocery/pkg/besu"
+	cachepkg "vngrocery/pkg/cache"
 	"vngrocery/pkg/config"
 	firebasepkg "vngrocery/pkg/firebase"
 	ipfspkg "vngrocery/pkg/ipfs"
@@ -84,6 +86,25 @@ func main() {
 	var eventLogRepository repository.EventLogRepository
 	var firebaseApp *firebasepkg.App
 	var mongoApp *mongopkg.App
+	var cacheStore *cachepkg.Store
+	if cfg.CacheBackend == "redis" {
+		redisDB, err := strconv.Atoi(cfg.RedisDB)
+		if err != nil || redisDB < 0 {
+			log.Fatalf("invalid REDIS_DB: %q", cfg.RedisDB)
+		}
+		redisKV := cachepkg.NewRedisKV(cfg.RedisAddr, cfg.RedisPassword, redisDB)
+		pingCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		if err := redisKV.Ping(pingCtx); err != nil {
+			log.Fatalf("failed to connect redis cache: %v", err)
+		}
+		defer func() {
+			if closeErr := redisKV.Close(); closeErr != nil {
+				log.Printf("failed to close Redis resources: %v", closeErr)
+			}
+		}()
+		cacheStore = cachepkg.NewStore(redisKV, cfg.CachePrefix, time.Duration(mustParseInt(cfg.CacheTTLSeconds, 30))*time.Second)
+	}
 
 	if cfg.UseMongo() {
 		mongoApp, err = mongopkg.NewApp(cfg)
@@ -138,6 +159,12 @@ func main() {
 		} else {
 			rateLimitStore = middleware.NewMemoryRateLimitStore()
 		}
+	}
+	if cacheStore != nil && cacheStore.IsEnabled() {
+		shopRepository = cacherepo.NewShopRepository(shopRepository, cacheStore)
+		productRepository = cacherepo.NewProductRepository(productRepository, cacheStore)
+		eventLogRepository = cacherepo.NewEventLogRepository(eventLogRepository, cacheStore)
+		log.Printf("cache enabled: backend=%s ttl=%ss prefix=%s", cfg.CacheBackend, cfg.CacheTTLSeconds, cfg.CachePrefix)
 	}
 	metrics := middleware.NewMetrics()
 	var accountKeys authservice.AccountKeyStore

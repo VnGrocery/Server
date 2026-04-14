@@ -16,6 +16,11 @@ services:
       IPFS_ENABLED: "true"
       IPFS_API_URL: http://ipfs:5001
       IPFS_GATEWAY_URL: http://ipfs:8080
+      CACHE_BACKEND: redis
+      CACHE_PREFIX: "vngrocery:cache:"
+      CACHE_TTL_SECONDS: 30
+      REDIS_ADDR: redis:6379
+      REDIS_DB: 0
     ports:
       - "5000:5000"
     volumes:
@@ -25,6 +30,8 @@ services:
         condition: service_healthy
       ipfs:
         condition: service_started
+      redis:
+        condition: service_healthy
     networks:
       - vngrocery_app
     restart: unless-stopped
@@ -64,9 +71,28 @@ services:
       - vngrocery_app
     restart: unless-stopped
 
+  redis:
+    image: redis:7.4-alpine
+    container_name: vngrocery-redis
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    networks:
+      - vngrocery_app
+    restart: unless-stopped
+
 volumes:
   ipfs-staging:
   ipfs-data:
+  redis-data:
 
 networks:
   vngrocery_app:

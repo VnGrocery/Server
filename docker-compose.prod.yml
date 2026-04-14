@@ -5,6 +5,11 @@ services:
       IPFS_ENABLED: "true"
       RATE_LIMIT_BACKEND: firestore
       RATE_LIMIT_COLLECTION: rate_limits
+      CACHE_BACKEND: redis
+      CACHE_PREFIX: "vngrocery:cache:"
+      CACHE_TTL_SECONDS: 30
+      REDIS_ADDR: redis:6379
+      REDIS_DB: 0
     restart: always
     logging:
       options:
@@ -35,6 +40,13 @@ services:
         max-file: "5"
 
   vault:
+    restart: always
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  redis:
     restart: always
     logging:
       options:

@@ -60,6 +60,12 @@ type Config struct {
 	RateLimitWindowSec        string
 	AdminRateLimitMaxRequests string
 	AdminRateLimitWindowSec   string
+	CacheBackend              string
+	CachePrefix               string
+	CacheTTLSeconds           string
+	RedisAddr                 string
+	RedisPassword             string
+	RedisDB                   string
 	AIProvider                string
 	OpenAIAPIKey              string
 	OpenAIBaseURL             string
@@ -120,6 +126,12 @@ func Load() (Config, error) {
 		RateLimitWindowSec:        getEnvOrDefault("RATE_LIMIT_WINDOW_SEC", "60"),
 		AdminRateLimitMaxRequests: getEnvOrDefault("ADMIN_RATE_LIMIT_MAX_REQUESTS", "30"),
 		AdminRateLimitWindowSec:   getEnvOrDefault("ADMIN_RATE_LIMIT_WINDOW_SEC", "60"),
+		CacheBackend:              getEnvOrDefault("CACHE_BACKEND", "none"),
+		CachePrefix:               getEnvOrDefault("CACHE_PREFIX", "vngrocery:cache:"),
+		CacheTTLSeconds:           getEnvOrDefault("CACHE_TTL_SECONDS", "30"),
+		RedisAddr:                 getEnvOrDefault("REDIS_ADDR", "127.0.0.1:6379"),
+		RedisPassword:             os.Getenv("REDIS_PASSWORD"),
+		RedisDB:                   getEnvOrDefault("REDIS_DB", "0"),
 		AIProvider:                getEnvOrDefault("AI_PROVIDER", "openai"),
 		OpenAIAPIKey:              os.Getenv("OPENAI_API_KEY"),
 		OpenAIBaseURL:             getEnvOrDefault("OPENAI_BASE_URL", "https://api.openai.com/v1"),
@@ -193,6 +205,12 @@ func (c Config) Validate() error {
 	}
 	if c.RateLimitBackend != "" && c.RateLimitBackend != "memory" && c.RateLimitBackend != "firestore" {
 		return fmt.Errorf("unsupported RATE_LIMIT_BACKEND: %s", c.RateLimitBackend)
+	}
+	if c.CacheBackend != "" && c.CacheBackend != "none" && c.CacheBackend != "redis" {
+		return fmt.Errorf("unsupported CACHE_BACKEND: %s", c.CacheBackend)
+	}
+	if c.CacheBackend == "redis" && c.RedisAddr == "" {
+		return errors.New("REDIS_ADDR is required when CACHE_BACKEND=redis")
 	}
 
 	return nil

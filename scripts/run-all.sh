@@ -14,7 +14,24 @@ echo "Checking deploy compose..."
 run_compose config >/dev/null
 
 echo "Starting Vault first..."
-run_compose up -d vault
+run_compose up -d redis vault
+
+echo "Waiting for Redis health..."
+redis_ready=0
+for _ in $(seq 1 30); do
+  if run_compose exec -T redis sh -lc "redis-cli ping" 2>/dev/null | grep -q "PONG"; then
+    redis_ready=1
+    break
+  fi
+  sleep 1
+done
+
+if [[ "$redis_ready" -ne 1 ]]; then
+  echo "Redis is not ready yet."
+  echo "Check:"
+  echo "  docker compose -f $COMPOSE_FILE logs redis"
+  exit 1
+fi
 
 echo "Waiting for Vault status..."
 vault_reachable=0
@@ -71,4 +88,5 @@ echo "Stack started. Useful commands:"
 echo "  docker compose -f $COMPOSE_FILE ps"
 echo "  docker compose -f $COMPOSE_FILE logs -f api"
 echo "  docker compose -f $COMPOSE_FILE logs -f vault"
+echo "  docker compose -f $COMPOSE_FILE logs -f redis"
 echo "  docker compose -f $COMPOSE_FILE logs -f besu-validator1"

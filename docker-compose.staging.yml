@@ -6,6 +6,11 @@ services:
       IPFS_GATEWAY_URL: https://ipfs-staging.example.internal
       RATE_LIMIT_BACKEND: firestore
       RATE_LIMIT_COLLECTION: rate_limits
+      CACHE_BACKEND: redis
+      CACHE_PREFIX: "vngrocery:cache:"
+      CACHE_TTL_SECONDS: 30
+      REDIS_ADDR: redis:6379
+      REDIS_DB: 0
     restart: unless-stopped
 
   proxy:
@@ -31,7 +36,11 @@ services:
       - ipfs-data:/data/ipfs
     restart: unless-stopped
 
+  redis:
+    restart: unless-stopped
+
 volumes:
   vault-data:
   ipfs-staging:
   ipfs-data:
+  redis-data:

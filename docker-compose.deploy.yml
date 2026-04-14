@@ -26,11 +26,18 @@ services:
       BESU_VERIFY_BATCH_SIZE: ${BESU_VERIFY_BATCH_SIZE:-50}
       RATE_LIMIT_BACKEND: firestore
       RATE_LIMIT_COLLECTION: rate_limits
+      CACHE_BACKEND: redis
+      CACHE_PREFIX: "vngrocery:cache:"
+      CACHE_TTL_SECONDS: 30
+      REDIS_ADDR: redis:6379
+      REDIS_DB: 0
     depends_on:
       vault:
         condition: service_healthy
       ipfs:
         condition: service_started
+      redis:
+        condition: service_healthy
       besu-validator1:
         condition: service_started
     restart: always
@@ -77,6 +84,17 @@ services:
         max-size: "10m"
         max-file: "5"
 
+  redis:
+    extends:
+      file: docker-compose.yml
+      service: redis
+    container_name: vngrocery-redis-deploy
+    restart: always
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+
   besu-validator1:
     extends:
       file: docker-compose.besu-qbft.yml
@@ -101,6 +119,7 @@ volumes:
   vault-data:
   ipfs-staging:
   ipfs-data:
+  redis-data:
 
 networks:
   vngrocery_app:

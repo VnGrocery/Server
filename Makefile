@@ -13,9 +13,10 @@ service ?= api
 .PHONY: help
 help:
 	@echo "Available targets:"
-	@echo "  make api-up              # start api + vault(dev) + ipfs"
+	@echo "  make api-up              # start api + vault(dev) + ipfs + redis"
 	@echo "  make vault-up            # start persistent vault only"
 	@echo "  make ipfs-up             # start ipfs only"
+	@echo "  make redis-up            # start redis only"
 	@echo "  make besu-up             # start 4-node Besu QBFT only"
 	@echo "  make stack-up            # start base + persistent vault + besu + staging proxy"
 	@echo "  make deploy-up           # start single-file deploy baseline"
@@ -42,6 +43,10 @@ vault-up:
 .PHONY: ipfs-up
 ipfs-up:
 	$(COMPOSE) $(DEPLOY_COMPOSE) up -d ipfs
+
+.PHONY: redis-up
+redis-up:
+	$(COMPOSE) $(DEPLOY_COMPOSE) up -d redis
 
 .PHONY: besu-up
 besu-up:

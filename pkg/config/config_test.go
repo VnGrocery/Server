@@ -226,3 +226,34 @@ func TestValidateRejectsPlaceholderJWTSecret(t *testing.T) {
 		t.Fatal("expected error, got nil")
 	}
 }
+
+func TestValidateRejectsUnsupportedCacheBackend(t *testing.T) {
+	cfg := Config{
+		Port:          "8080",
+		MongoEnabled:  true,
+		MongoURI:      "mongodb://127.0.0.1:27017",
+		MongoDatabase: "vngrocery",
+		JWTSecret:     "test-secret",
+		CacheBackend:  "memcached",
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}
+
+func TestValidateRequiresRedisAddrWhenCacheRedis(t *testing.T) {
+	cfg := Config{
+		Port:          "8080",
+		MongoEnabled:  true,
+		MongoURI:      "mongodb://127.0.0.1:27017",
+		MongoDatabase: "vngrocery",
+		JWTSecret:     "test-secret",
+		CacheBackend:  "redis",
+		RedisAddr:     "",
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("expected error, got nil")
+	}
+}

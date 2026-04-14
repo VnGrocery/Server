@@ -44,4 +44,8 @@ besu/qbft/data/validator4/*
 # Foundry artifacts
 broadcast/
 cache/
+!pkg/cache/
+!pkg/cache/**
+!internal/repository/cache/
+!internal/repository/cache/**
 out/

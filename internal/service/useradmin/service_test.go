@@ -159,6 +159,30 @@ func TestListUsers(t *testing.T) {
 	}
 }
 
+func TestListUsersDefaultsEmptyStatusToActive(t *testing.T) {
+	service := NewService(userRepositoryStub{
+		getByID: func(ctx context.Context, userID string) (domain.User, error) {
+			return domain.User{UserID: userID, Role: RoleAdmin, Status: StatusActive}, nil
+		},
+		list: func(ctx context.Context, filter repository.UserListFilter) ([]domain.User, error) {
+			return []domain.User{
+				{UserID: "user-1", Role: RoleUser, Status: ""},
+			}, nil
+		},
+	}, authUserRepositoryStub{}, nil, nil)
+
+	users, err := service.List(context.Background(), ListInput{ActorUserID: "admin-1"})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(users) != 1 {
+		t.Fatalf("expected one user, got %d", len(users))
+	}
+	if users[0].Status != StatusActive {
+		t.Fatalf("expected default status active, got %q", users[0].Status)
+	}
+}
+
 func TestUpdateStatusUpdatesUserAndAuthUser(t *testing.T) {
 	auditLogger := &auditLoggerStub{}
 	var savedUser domain.User

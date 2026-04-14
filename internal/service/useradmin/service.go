@@ -104,6 +104,11 @@ func (s *Service) List(ctx context.Context, input ListInput) ([]domain.User, err
 	if err != nil {
 		return nil, err
 	}
+	for i := range users {
+		if strings.TrimSpace(users[i].Status) == "" {
+			users[i].Status = StatusActive
+		}
+	}
 	sort.Slice(users, func(i, j int) bool {
 		return users[i].CreatedAt.Before(users[j].CreatedAt)
 	})

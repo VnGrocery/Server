@@ -126,10 +126,11 @@ func (s *Service) Log(ctx context.Context, input Input) error {
 	previousEventID := latest.EventID
 
 	createdAt := s.now().UTC()
+	occurredAt := createdAt.Format(time.RFC3339Nano)
 	envelopeBytes, err := json.Marshal(signedEnvelope{
 		Action:          strings.TrimSpace(input.Action),
 		ActorUserID:     strings.TrimSpace(input.ActorUserID),
-		OccurredAt:      createdAt.Format(time.RFC3339Nano),
+		OccurredAt:      occurredAt,
 		Payload:         json.RawMessage(payloadBytes),
 		ResourceID:      strings.TrimSpace(input.ResourceID),
 		ResourceType:    strings.TrimSpace(input.ResourceType),
@@ -157,6 +158,7 @@ func (s *Service) Log(ctx context.Context, input Input) error {
 		Status:          strings.TrimSpace(input.Status),
 		Sequence:        sequence,
 		PreviousEventID: previousEventID,
+		OccurredAt:      occurredAt,
 		PayloadJSON:     string(payloadBytes),
 		PublicKey:       publicKey,
 		KeyAlgorithm:    keyAlgorithm,

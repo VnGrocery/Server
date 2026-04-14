@@ -90,6 +90,7 @@ func (h *EventLogHandler) List(c *gin.Context) {
 			Status:          event.Status,
 			Sequence:        event.Sequence,
 			PreviousEventID: event.PreviousEventID,
+			OccurredAt:      event.OccurredAt,
 			PayloadJSON:     event.PayloadJSON,
 			PublicKey:       event.PublicKey,
 			KeyAlgorithm:    event.KeyAlgorithm,

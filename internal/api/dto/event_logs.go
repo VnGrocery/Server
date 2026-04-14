@@ -12,6 +12,7 @@ type EventLogResponse struct {
 	Status          string    `json:"status"`
 	Sequence        int       `json:"sequence"`
 	PreviousEventID string    `json:"previousEventId,omitempty"`
+	OccurredAt      string    `json:"occurredAt,omitempty"`
 	PayloadJSON     string    `json:"payloadJson"`
 	PublicKey       string    `json:"publicKey"`
 	KeyAlgorithm    string    `json:"keyAlgorithm"`

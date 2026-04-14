@@ -12,6 +12,7 @@ type EventLog struct {
 	Status          string    `firestore:"status"`
 	Sequence        int       `firestore:"sequence"`
 	PreviousEventID string    `firestore:"previousEventId"`
+	OccurredAt      string    `firestore:"occurredAt"`
 	PayloadJSON     string    `firestore:"payloadJson"`
 	PublicKey       string    `firestore:"publicKey"`
 	KeyAlgorithm    string    `firestore:"keyAlgorithm"`

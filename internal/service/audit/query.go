@@ -256,10 +256,14 @@ func signedEnvelopeBytes(event domain.EventLog) ([]byte, error) {
 	if len(payload) == 0 {
 		payload = json.RawMessage([]byte("null"))
 	}
+	occurredAt := strings.TrimSpace(event.OccurredAt)
+	if occurredAt == "" {
+		occurredAt = event.CreatedAt.UTC().Format(time.RFC3339Nano)
+	}
 	return json.Marshal(signedEnvelope{
 		Action:          strings.TrimSpace(event.Action),
 		ActorUserID:     strings.TrimSpace(event.ActorUserID),
-		OccurredAt:      event.CreatedAt.UTC().Format(time.RFC3339Nano),
+		OccurredAt:      occurredAt,
 		Payload:         payload,
 		ResourceID:      strings.TrimSpace(event.ResourceID),
 		ResourceType:    strings.TrimSpace(event.ResourceType),

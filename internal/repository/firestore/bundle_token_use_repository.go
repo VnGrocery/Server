@@ -29,3 +29,15 @@ func (r *BundleTokenUseRepository) Reserve(ctx context.Context, usage domain.Bun
 	}
 	return false, fmt.Errorf("failed to reserve bundle token nonce: %w", err)
 }
+
+func (r *BundleTokenUseRepository) GetByID(ctx context.Context, useID string) (domain.BundleTokenUse, error) {
+	doc, err := r.client.Collection(BundleTokenUsesCollection).Doc(useID).Get(ctx)
+	if err != nil {
+		return domain.BundleTokenUse{}, fmt.Errorf("failed to get bundle token use: %w", err)
+	}
+	var usage domain.BundleTokenUse
+	if err := doc.DataTo(&usage); err != nil {
+		return domain.BundleTokenUse{}, fmt.Errorf("failed to decode bundle token use: %w", err)
+	}
+	return usage, nil
+}

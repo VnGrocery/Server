@@ -10,6 +10,7 @@ type BundleTokenUse struct {
 	BundleID    string    `firestore:"bundleId"`
 	PledgeID    string    `firestore:"pledgeId"`
 	BuyerUserID string    `firestore:"buyerUserId"`
+	ClientIP    string    `firestore:"clientIp"`
 	UsedAt      time.Time `firestore:"usedAt"`
 	ExpiresAt   time.Time `firestore:"expiresAt"`
 }

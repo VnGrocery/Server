@@ -11,6 +11,7 @@ import (
 
 type replayRepoStub struct {
 	reserve func(ctx context.Context, usage domain.BundleTokenUse) (bool, error)
+	getByID func(ctx context.Context, useID string) (domain.BundleTokenUse, error)
 }
 
 func (s replayRepoStub) Reserve(ctx context.Context, usage domain.BundleTokenUse) (bool, error) {
@@ -18,6 +19,13 @@ func (s replayRepoStub) Reserve(ctx context.Context, usage domain.BundleTokenUse
 		return true, nil
 	}
 	return s.reserve(ctx, usage)
+}
+
+func (s replayRepoStub) GetByID(ctx context.Context, useID string) (domain.BundleTokenUse, error) {
+	if s.getByID == nil {
+		return domain.BundleTokenUse{}, nil
+	}
+	return s.getByID(ctx, useID)
 }
 
 func TestIssueAndVerifyBundleToken(t *testing.T) {
@@ -96,6 +104,34 @@ func TestVerifyRejectsReplay(t *testing.T) {
 	})
 	if !errors.Is(err, ErrReplayToken) {
 		t.Fatalf("expected ErrReplayToken, got %v", err)
+	}
+}
+
+func TestVerifyDetectsSuspiciousReplayAcrossBuyer(t *testing.T) {
+	service := NewService("secret", "vngrocery", 2*time.Minute, replayRepoStub{
+		reserve: func(ctx context.Context, usage domain.BundleTokenUse) (bool, error) {
+			return false, nil
+		},
+		getByID: func(ctx context.Context, useID string) (domain.BundleTokenUse, error) {
+			return domain.BundleTokenUse{UseID: useID, BuyerUserID: "buyer-a", ClientIP: "10.0.0.1"}, nil
+		},
+	})
+	token, _, err := service.Issue(IssueInput{
+		ShopID:   "shop-1",
+		BundleID: "bundle-1",
+	})
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+
+	_, err = service.VerifyAndConsume(context.Background(), VerifyInput{
+		Token:            token,
+		BuyerUserID:      "buyer-b",
+		ClientIP:         "10.0.0.2",
+		ExpectedBundleID: "bundle-1",
+	})
+	if !errors.Is(err, ErrSuspiciousReplay) {
+		t.Fatalf("expected ErrSuspiciousReplay, got %v", err)
 	}
 }
 

@@ -89,6 +89,7 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		BundleToken:    bundleToken,
 		LocationStatus: locationStatus,
 		BuyerUserID:    principal.UserID,
+		ClientIP:       strings.TrimSpace(c.ClientIP()),
 		ImageHash:      sha256Hex(upload.data),
 		ImageCID:       imageCID,
 		Image: visionservice.ImageInput{

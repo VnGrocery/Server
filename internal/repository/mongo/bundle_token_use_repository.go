@@ -37,3 +37,7 @@ func (r *BundleTokenUseRepository) Reserve(ctx context.Context, usage domain.Bun
 	}
 	return result.UpsertedCount > 0, nil
 }
+
+func (r *BundleTokenUseRepository) GetByID(ctx context.Context, useID string) (domain.BundleTokenUse, error) {
+	return getByID[domain.BundleTokenUse](ctx, r.collection, useID)
+}

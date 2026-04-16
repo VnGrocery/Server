@@ -17,9 +17,10 @@ import (
 )
 
 var (
-	ErrInvalidToken = errors.New("invalid bundle token")
-	ErrExpiredToken = errors.New("bundle token expired")
-	ErrReplayToken  = errors.New("bundle token already used")
+	ErrInvalidToken     = errors.New("invalid bundle token")
+	ErrExpiredToken     = errors.New("bundle token expired")
+	ErrReplayToken      = errors.New("bundle token already used")
+	ErrSuspiciousReplay = errors.New("bundle token replay detected across identities")
 )
 
 const QRVersionV1 = "bundle_qr_v1"
@@ -36,6 +37,7 @@ type IssueInput struct {
 type VerifyInput struct {
 	Token            string
 	BuyerUserID      string
+	ClientIP         string
 	ExpectedBundleID string
 	ExpectedPledgeID string
 }
@@ -49,6 +51,7 @@ type Claims struct {
 	Nonce     string
 	IssuedAt  time.Time
 	ExpiresAt time.Time
+	Watermark string
 }
 
 type Service struct {
@@ -100,6 +103,7 @@ func (s *Service) Issue(input IssueInput) (string, time.Time, error) {
 		"pledgeId":    strings.TrimSpace(input.PledgeID),
 		"sellerId":    strings.TrimSpace(input.CreatedByID),
 		"committedAt": input.CommittedAt.UTC().Format(time.RFC3339),
+		"watermark":   shortHash(bundleID + "|" + issuedAt.Format(time.RFC3339Nano) + "|" + s.issuer),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := token.SignedString(s.secret)
@@ -148,6 +152,7 @@ func (s *Service) VerifyAndConsume(ctx context.Context, input VerifyInput) (Clai
 	pledgeID := getString("pledgeId")
 	productID := getString("productId")
 	qrVersion := getString("qrVersion")
+	watermark := getString("watermark")
 	if bundleID == "" || shopID == "" || nonce == "" {
 		return out, fmt.Errorf("%w: required claims missing", ErrInvalidToken)
 	}
@@ -187,6 +192,7 @@ func (s *Service) VerifyAndConsume(ctx context.Context, input VerifyInput) (Clai
 			BundleID:    bundleID,
 			PledgeID:    pledgeID,
 			BuyerUserID: strings.TrimSpace(input.BuyerUserID),
+			ClientIP:    strings.TrimSpace(input.ClientIP),
 			UsedAt:      s.now().UTC(),
 			ExpiresAt:   exp,
 		})
@@ -194,6 +200,15 @@ func (s *Service) VerifyAndConsume(ctx context.Context, input VerifyInput) (Clai
 			return out, err
 		}
 		if !reserved {
+			existing, getErr := s.replay.GetByID(ctx, nonceHash)
+			if getErr == nil {
+				if existing.BuyerUserID != "" && strings.TrimSpace(input.BuyerUserID) != "" && existing.BuyerUserID != strings.TrimSpace(input.BuyerUserID) {
+					return out, ErrSuspiciousReplay
+				}
+				if existing.ClientIP != "" && strings.TrimSpace(input.ClientIP) != "" && existing.ClientIP != strings.TrimSpace(input.ClientIP) {
+					return out, ErrSuspiciousReplay
+				}
+			}
 			return out, ErrReplayToken
 		}
 	}
@@ -207,6 +222,7 @@ func (s *Service) VerifyAndConsume(ctx context.Context, input VerifyInput) (Clai
 		Nonce:     nonce,
 		IssuedAt:  issuedAt.Time.UTC(),
 		ExpiresAt: exp,
+		Watermark: watermark,
 	}
 	return out, nil
 }
@@ -214,4 +230,12 @@ func (s *Service) VerifyAndConsume(ctx context.Context, input VerifyInput) (Clai
 func sha256Hex(value string) string {
 	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])
+}
+
+func shortHash(value string) string {
+	hash := sha256Hex(value)
+	if len(hash) < 10 {
+		return hash
+	}
+	return hash[:10]
 }

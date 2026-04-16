@@ -32,6 +32,7 @@ type CheckInput struct {
 	BundleToken    string
 	LocationStatus string
 	BuyerUserID    string
+	ClientIP       string
 	ImageHash      string
 	ImageCID       string
 	Image          visionservice.ImageInput
@@ -164,6 +165,7 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	tokenClaims, err := s.tokens.VerifyAndConsume(ctx, bundletokenservice.VerifyInput{
 		Token:            bundleToken,
 		BuyerUserID:      buyerUserID,
+		ClientIP:         strings.TrimSpace(input.ClientIP),
 		ExpectedBundleID: bundleID,
 		ExpectedPledgeID: pledgeID,
 	})
@@ -171,6 +173,8 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 		switch {
 		case errors.Is(err, bundletokenservice.ErrExpiredToken):
 			return CheckResult{}, fmt.Errorf("%w: bundleToken expired", ErrInvalidCheck)
+		case errors.Is(err, bundletokenservice.ErrSuspiciousReplay):
+			return CheckResult{}, fmt.Errorf("%w: suspicious bundleToken replay detected", ErrInvalidCheck)
 		case errors.Is(err, bundletokenservice.ErrReplayToken):
 			if existing, ok := s.lookupReplayRetry(ctx, buyerUserID, bundleID, pledgeID, strings.TrimSpace(input.ImageHash)); ok {
 				return existing, nil

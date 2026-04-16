@@ -26,11 +26,13 @@ const (
 )
 
 type CheckInput struct {
-	PledgeID    string
-	BuyerUserID string
-	ImageHash   string
-	ImageCID    string
-	Image       visionservice.ImageInput
+	PledgeID       string
+	BundleID       string
+	LocationStatus string
+	BuyerUserID    string
+	ImageHash      string
+	ImageCID       string
+	Image          visionservice.ImageInput
 }
 
 type ModerateInput struct {
@@ -42,17 +44,19 @@ type ModerateInput struct {
 }
 
 type ListInput struct {
-	ActorUserID   string
-	CheckID       string
-	ShopID        string
-	ProductID     string
-	BuyerUserID   string
-	Status        string
-	Verdict       string
-	CreatedAfter  time.Time
-	CreatedBefore time.Time
-	Page          int
-	PageSize      int
+	ActorUserID    string
+	CheckID        string
+	ShopID         string
+	BundleID       string
+	ProductID      string
+	BuyerUserID    string
+	Status         string
+	Verdict        string
+	LocationStatus string
+	CreatedAfter   time.Time
+	CreatedBefore  time.Time
+	Page           int
+	PageSize       int
 }
 
 type ListResult struct {
@@ -66,6 +70,7 @@ type CheckResult struct {
 	CheckID          string
 	ShopID           string
 	ProductID        string
+	BundleID         string
 	PolicyVersion    string
 	HasPledge        bool
 	PledgeID         string
@@ -79,6 +84,7 @@ type CheckResult struct {
 	PledgedCategory  string
 	ActualCategory   string
 	ActualConfidence float64
+	LocationStatus   string
 	CategoryMatch    bool
 	ImageHash        string
 	ImageCID         string
@@ -118,6 +124,14 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	if buyerUserID == "" {
 		return CheckResult{}, fmt.Errorf("%w: buyerUserId is required", ErrInvalidCheck)
 	}
+	bundleID := strings.TrimSpace(input.BundleID)
+	if bundleID == "" {
+		return CheckResult{}, fmt.Errorf("%w: bundleId is required", ErrInvalidCheck)
+	}
+	locationStatus, err := normalizeLocationStatus(input.LocationStatus)
+	if err != nil {
+		return CheckResult{}, err
+	}
 	if s.scorer == nil {
 		return CheckResult{}, visionservice.ErrProviderUnavailable
 	}
@@ -135,10 +149,12 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 			return CheckResult{}, fmt.Errorf("pledge repository is not configured")
 		}
 	} else if pledgeID != "" {
-		var err error
 		pledge, err = s.pledges.GetByID(ctx, pledgeID)
 		if err != nil {
 			return CheckResult{}, err
+		}
+		if strings.TrimSpace(pledge.BundleID) != bundleID {
+			return CheckResult{}, fmt.Errorf("%w: bundleId does not match pledge", ErrInvalidCheck)
 		}
 	}
 
@@ -148,14 +164,14 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	}
 
 	if pledgeID == "" {
-		result := standaloneQualityResult(scored)
+		result := standaloneQualityResult(scored, bundleID, locationStatus)
 		result.BuyerUserID = buyerUserID
 		result.ImageHash = strings.TrimSpace(input.ImageHash)
 		result.ImageCID = strings.TrimSpace(input.ImageCID)
 		return s.persistCheck(ctx, result)
 	}
 
-	result := comparePledge(pledge, scored)
+	result := comparePledge(pledge, scored, locationStatus)
 	result.BuyerUserID = buyerUserID
 	result.ImageHash = strings.TrimSpace(input.ImageHash)
 	result.ImageCID = strings.TrimSpace(input.ImageCID)
@@ -243,14 +259,16 @@ func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error)
 	}
 
 	items, err := s.checks.List(ctx, repository.BuyerCheckListFilter{
-		CheckID:       strings.TrimSpace(input.CheckID),
-		ShopID:        strings.TrimSpace(input.ShopID),
-		ProductID:     strings.TrimSpace(input.ProductID),
-		BuyerUserID:   strings.TrimSpace(input.BuyerUserID),
-		Status:        strings.TrimSpace(input.Status),
-		Verdict:       strings.TrimSpace(input.Verdict),
-		CreatedAfter:  input.CreatedAfter,
-		CreatedBefore: input.CreatedBefore,
+		CheckID:        strings.TrimSpace(input.CheckID),
+		ShopID:         strings.TrimSpace(input.ShopID),
+		BundleID:       strings.TrimSpace(input.BundleID),
+		ProductID:      strings.TrimSpace(input.ProductID),
+		BuyerUserID:    strings.TrimSpace(input.BuyerUserID),
+		Status:         strings.TrimSpace(input.Status),
+		Verdict:        strings.TrimSpace(input.Verdict),
+		LocationStatus: strings.TrimSpace(input.LocationStatus),
+		CreatedAfter:   input.CreatedAfter,
+		CreatedBefore:  input.CreatedBefore,
 	})
 	if err != nil {
 		return ListResult{}, err
@@ -280,21 +298,23 @@ const (
 	minRequiredConfidence = 0.60
 )
 
-func standaloneQualityResult(scored visionservice.ScoreResult) CheckResult {
+func standaloneQualityResult(scored visionservice.ScoreResult, bundleID string, locationStatus string) CheckResult {
 	return CheckResult{
 		PolicyVersion:    policyVersionV1,
 		HasPledge:        false,
 		Trusted:          false,
 		Verdict:          "no_pledge",
+		BundleID:         bundleID,
 		ActualScore:      scored.Score,
 		ActualCategory:   scored.Category,
 		ActualConfidence: scored.Confidence,
+		LocationStatus:   locationStatus,
 		CategoryMatch:    false,
 		Reasons:          []string{"no_seller_pledge"},
 	}
 }
 
-func comparePledge(pledge domain.Pledge, scored visionservice.ScoreResult) CheckResult {
+func comparePledge(pledge domain.Pledge, scored visionservice.ScoreResult, locationStatus string) CheckResult {
 	scoreDelta := scored.Score - pledge.Score
 	absoluteDelta := math.Abs(scoreDelta)
 	categoryMatch := strings.EqualFold(strings.TrimSpace(pledge.Category), strings.TrimSpace(scored.Category))
@@ -327,6 +347,7 @@ func comparePledge(pledge domain.Pledge, scored visionservice.ScoreResult) Check
 	return CheckResult{
 		ShopID:           pledge.ShopID,
 		ProductID:        pledge.ProductID,
+		BundleID:         pledge.BundleID,
 		PolicyVersion:    policyVersionV1,
 		HasPledge:        true,
 		PledgeID:         pledge.PledgeID,
@@ -339,6 +360,7 @@ func comparePledge(pledge domain.Pledge, scored visionservice.ScoreResult) Check
 		PledgedCategory:  pledge.Category,
 		ActualCategory:   scored.Category,
 		ActualConfidence: scored.Confidence,
+		LocationStatus:   locationStatus,
 		CategoryMatch:    categoryMatch,
 		Reasons:          reasons,
 	}
@@ -373,6 +395,7 @@ func (r CheckResult) toBuyerCheck(checkID string, createdAt time.Time) domain.Bu
 		CheckID:          checkID,
 		ShopID:           r.ShopID,
 		ProductID:        r.ProductID,
+		BundleID:         r.BundleID,
 		PledgeID:         r.PledgeID,
 		BuyerUserID:      r.BuyerUserID,
 		Status:           BuyerCheckStatusCompleted,
@@ -387,12 +410,26 @@ func (r CheckResult) toBuyerCheck(checkID string, createdAt time.Time) domain.Bu
 		PledgedCategory:  r.PledgedCategory,
 		ActualCategory:   r.ActualCategory,
 		ActualConfidence: r.ActualConfidence,
+		LocationStatus:   r.LocationStatus,
 		CategoryMatch:    r.CategoryMatch,
 		ImageHash:        r.ImageHash,
 		ImageCID:         r.ImageCID,
 		Reasons:          r.Reasons,
 		CreatedAt:        createdAt,
 		UpdatedAt:        createdAt,
+	}
+}
+
+func normalizeLocationStatus(raw string) (string, error) {
+	status := strings.TrimSpace(strings.ToLower(raw))
+	if status == "" {
+		return "reference_only", nil
+	}
+	switch status {
+	case "verified_near_shop", "reference_only", "too_far_from_shop", "shop_location_missing":
+		return status, nil
+	default:
+		return "", fmt.Errorf("%w: invalid locationStatus", ErrInvalidCheck)
 	}
 }
 

@@ -304,9 +304,11 @@ func (h *ShopHandler) GetPledgeProof(c *gin.Context) {
 		PledgeID:           proof.PledgeID,
 		ShopID:             proof.ShopID,
 		ProductID:          proof.ProductID,
+		BundleID:           proof.BundleID,
 		Score:              proof.Score,
 		Category:           proof.Category,
 		Confidence:         proof.Confidence,
+		CommittedAt:        proof.CommittedAt,
 		ImageHash:          proof.ImageHash,
 		ImageCID:           proof.ImageCID,
 		ProofStatus:        proof.ProofStatus,
@@ -545,10 +547,15 @@ func toShopResponse(view shopsvc.ShopView) dto.ShopResponse {
 }
 
 func toPledgeResponse(pledge domain.Pledge) dto.PledgeResponse {
+	committedAt := pledge.CommittedAt
+	if committedAt.IsZero() {
+		committedAt = pledge.CreatedAt
+	}
 	return dto.PledgeResponse{
 		PledgeID:          pledge.PledgeID,
 		ShopID:            pledge.ShopID,
 		ProductID:         pledge.ProductID,
+		BundleID:          pledge.BundleID,
 		CreatedByUserID:   pledge.CreatedByUserID,
 		Status:            pledge.Status,
 		Version:           pledge.Version,
@@ -563,6 +570,7 @@ func toPledgeResponse(pledge domain.Pledge) dto.PledgeResponse {
 		ChainAnchorStatus: pledge.ChainAnchorStatus,
 		ChainAnchorTime:   pledge.ChainAnchorTime,
 		IntegrityStatus:   pledge.IntegrityStatus,
+		CommittedAt:       committedAt,
 		CreatedAt:         pledge.CreatedAt,
 		UpdatedAt:         pledge.UpdatedAt,
 	}

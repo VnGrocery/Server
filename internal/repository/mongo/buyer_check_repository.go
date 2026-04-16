@@ -36,6 +36,9 @@ func (r *BuyerCheckRepository) List(ctx context.Context, filter repository.Buyer
 	if filter.ShopID != "" {
 		query["shopId"] = filter.ShopID
 	}
+	if filter.BundleID != "" {
+		query["bundleId"] = filter.BundleID
+	}
 	if filter.ProductID != "" {
 		query["productId"] = filter.ProductID
 	}
@@ -47,6 +50,9 @@ func (r *BuyerCheckRepository) List(ctx context.Context, filter repository.Buyer
 	}
 	if filter.Verdict != "" {
 		query["verdict"] = filter.Verdict
+	}
+	if filter.LocationStatus != "" {
+		query["locationStatus"] = filter.LocationStatus
 	}
 	if !filter.CreatedAfter.IsZero() || !filter.CreatedBefore.IsZero() {
 		rangeFilter := bson.M{}

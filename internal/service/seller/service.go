@@ -23,6 +23,7 @@ const PledgeStatusCommitted = "committed"
 type CommitInput struct {
 	ShopID          string
 	ProductID       string
+	BundleID        string
 	CreatedByUserID string
 	Score           float64
 	Category        string
@@ -103,6 +104,7 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 		PledgeID:        uuid.NewString(),
 		ShopID:          strings.TrimSpace(input.ShopID),
 		ProductID:       productID,
+		BundleID:        strings.TrimSpace(input.BundleID),
 		CreatedByUserID: strings.TrimSpace(input.CreatedByUserID),
 		Status:          PledgeStatusCommitted,
 		Version:         1,
@@ -111,6 +113,7 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 		Confidence:      input.Confidence,
 		ImageHash:       strings.TrimSpace(input.ImageHash),
 		ImageCID:        strings.TrimSpace(input.ImageCID),
+		CommittedAt:     now,
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}
@@ -157,6 +160,9 @@ func validateCommitInput(input CommitInput) error {
 	}
 	if strings.TrimSpace(input.CreatedByUserID) == "" {
 		return fmt.Errorf("%w: createdByUserId is required", ErrInvalidCommit)
+	}
+	if strings.TrimSpace(input.BundleID) == "" {
+		return fmt.Errorf("%w: bundleId is required", ErrInvalidCommit)
 	}
 	if strings.TrimSpace(input.Category) == "" {
 		return fmt.Errorf("%w: category is required", ErrInvalidCommit)

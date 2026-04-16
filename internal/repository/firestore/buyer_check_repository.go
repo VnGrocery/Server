@@ -78,6 +78,9 @@ func (r *BuyerCheckRepository) List(ctx context.Context, filter repository.Buyer
 		if strings.TrimSpace(filter.ShopID) != "" && check.ShopID != strings.TrimSpace(filter.ShopID) {
 			continue
 		}
+		if strings.TrimSpace(filter.BundleID) != "" && check.BundleID != strings.TrimSpace(filter.BundleID) {
+			continue
+		}
 		if strings.TrimSpace(filter.ProductID) != "" && check.ProductID != strings.TrimSpace(filter.ProductID) {
 			continue
 		}
@@ -88,6 +91,9 @@ func (r *BuyerCheckRepository) List(ctx context.Context, filter repository.Buyer
 			continue
 		}
 		if strings.TrimSpace(filter.Verdict) != "" && check.Verdict != strings.TrimSpace(filter.Verdict) {
+			continue
+		}
+		if strings.TrimSpace(filter.LocationStatus) != "" && check.LocationStatus != strings.TrimSpace(filter.LocationStatus) {
 			continue
 		}
 		if !filter.CreatedAfter.IsZero() && check.CreatedAt.Before(filter.CreatedAfter) {

@@ -6,6 +6,7 @@ type BuyerCheckResponse struct {
 	CheckID           string     `json:"checkId,omitempty"`
 	ShopID            string     `json:"shopId,omitempty"`
 	ProductID         string     `json:"productId,omitempty"`
+	BundleID          string     `json:"bundleId,omitempty"`
 	BuyerUserID       string     `json:"buyerUserId,omitempty"`
 	Status            string     `json:"status,omitempty"`
 	Version           int        `json:"version,omitempty"`
@@ -21,6 +22,7 @@ type BuyerCheckResponse struct {
 	PledgedCategory   string     `json:"pledgedCategory,omitempty"`
 	ActualCategory    string     `json:"actualCategory"`
 	ActualConfidence  float64    `json:"actualConfidence"`
+	LocationStatus    string     `json:"locationStatus,omitempty"`
 	CategoryMatch     bool       `json:"categoryMatch"`
 	ImageHash         string     `json:"imageHash,omitempty"`
 	ImageCID          string     `json:"imageCid,omitempty"`

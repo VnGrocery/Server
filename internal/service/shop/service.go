@@ -88,9 +88,11 @@ type PledgeProofBundle struct {
 	PledgeID           string
 	ShopID             string
 	ProductID          string
+	BundleID           string
 	Score              float64
 	Category           string
 	Confidence         float64
+	CommittedAt        time.Time
 	ImageHash          string
 	ImageCID           string
 	ProofStatus        string
@@ -205,13 +207,19 @@ type PledgeIntegrityView struct {
 }
 
 func buildProofBundle(pledge domain.Pledge, integrity PledgeIntegrityView) PledgeProofBundle {
+	committedAt := pledge.CommittedAt
+	if committedAt.IsZero() {
+		committedAt = pledge.CreatedAt
+	}
 	bundle := PledgeProofBundle{
 		PledgeID:           pledge.PledgeID,
 		ShopID:             pledge.ShopID,
 		ProductID:          pledge.ProductID,
+		BundleID:           pledge.BundleID,
 		Score:              pledge.Score,
 		Category:           pledge.Category,
 		Confidence:         pledge.Confidence,
+		CommittedAt:        committedAt,
 		ImageHash:          pledge.ImageHash,
 		ImageCID:           pledge.ImageCID,
 		RecommendedActions: []string{},
@@ -901,6 +909,10 @@ func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView
 		}
 		if len(pledges) > 0 {
 			latest := pledges[0]
+			lastCommittedAt := latest.CommittedAt
+			if lastCommittedAt.IsZero() {
+				lastCommittedAt = latest.CreatedAt
+			}
 			shopView.TrustSummary = TrustSummary{
 				HasPledges:         true,
 				PledgeCount:        len(pledges),
@@ -909,7 +921,7 @@ func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView
 				LatestScore:        latest.Score,
 				LatestCategory:     latest.Category,
 				LatestConfidence:   latest.Confidence,
-				LastCommittedAt:    &latest.CreatedAt,
+				LastCommittedAt:    &lastCommittedAt,
 			}
 		}
 	}

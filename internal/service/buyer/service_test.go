@@ -126,6 +126,7 @@ func TestCheckReturnsTrustedVerdict(t *testing.T) {
 				return domain.Pledge{
 					PledgeID:   pledgeID,
 					ShopID:     "shop-1",
+					BundleID:   "bundle-1",
 					Score:      8.5,
 					Category:   "fresh_produce",
 					Confidence: 0.91,
@@ -155,6 +156,7 @@ func TestCheckReturnsTrustedVerdict(t *testing.T) {
 
 	result, err := service.Check(context.Background(), CheckInput{
 		PledgeID:    "pledge-1",
+		BundleID:    "bundle-1",
 		BuyerUserID: "buyer-1",
 		ImageHash:   "image-hash-1",
 		Image: visionservice.ImageInput{
@@ -201,6 +203,7 @@ func TestCheckReturnsHighRiskOnMismatch(t *testing.T) {
 				return domain.Pledge{
 					PledgeID: pledgeID,
 					ShopID:   "shop-1",
+					BundleID: "bundle-1",
 					Score:    9.0,
 					Category: "fresh_produce",
 				}, nil
@@ -222,6 +225,7 @@ func TestCheckReturnsHighRiskOnMismatch(t *testing.T) {
 
 	result, err := service.Check(context.Background(), CheckInput{
 		PledgeID:    "pledge-1",
+		BundleID:    "bundle-1",
 		BuyerUserID: "buyer-1",
 		Image: visionservice.ImageInput{
 			Filename: "shop.jpg",
@@ -249,6 +253,7 @@ func TestCheckReturnsWarningForLowConfidence(t *testing.T) {
 				return domain.Pledge{
 					PledgeID: pledgeID,
 					ShopID:   "shop-1",
+					BundleID: "bundle-1",
 					Score:    7.5,
 					Category: "fresh_produce",
 				}, nil
@@ -270,6 +275,7 @@ func TestCheckReturnsWarningForLowConfidence(t *testing.T) {
 
 	result, err := service.Check(context.Background(), CheckInput{
 		PledgeID:    "pledge-1",
+		BundleID:    "bundle-1",
 		BuyerUserID: "buyer-1",
 		Image: visionservice.ImageInput{
 			Filename: "shop.jpg",
@@ -324,6 +330,7 @@ func TestCheckWithoutPledgeReturnsStandaloneQuality(t *testing.T) {
 
 	result, err := service.Check(context.Background(), CheckInput{
 		BuyerUserID: "buyer-1",
+		BundleID:    "bundle-standalone",
 		ImageHash:   "image-hash-1",
 		Image: visionservice.ImageInput{
 			Filename: "buyer.jpg",
@@ -377,6 +384,7 @@ func TestCheckRejectsWhenQuotaExceeded(t *testing.T) {
 
 	_, err := service.Check(context.Background(), CheckInput{
 		BuyerUserID: "buyer-1",
+		BundleID:    "bundle-1",
 		Image: visionservice.ImageInput{
 			Filename: "buyer.jpg",
 			Content:  bytes.NewBuffer([]byte("fake")),

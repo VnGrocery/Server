@@ -5,6 +5,7 @@ import "time"
 type SellerCommitRequest struct {
 	ShopID     string  `json:"shopId"`
 	ProductID  string  `json:"productId"`
+	BundleID   string  `json:"bundleId"`
 	Score      float64 `json:"score"`
 	Category   string  `json:"category"`
 	Confidence float64 `json:"confidence"`
@@ -16,6 +17,7 @@ type SellerCommitResponse struct {
 	PledgeID          string     `json:"pledgeId"`
 	ShopID            string     `json:"shopId"`
 	ProductID         string     `json:"productId,omitempty"`
+	BundleID          string     `json:"bundleId"`
 	CreatedByUserID   string     `json:"createdByUserId"`
 	Status            string     `json:"status"`
 	Score             float64    `json:"score"`
@@ -29,6 +31,7 @@ type SellerCommitResponse struct {
 	ChainAnchorStatus string     `json:"chainAnchorStatus"`
 	ChainAnchorTime   *time.Time `json:"chainAnchorTime,omitempty"`
 	IntegrityStatus   string     `json:"integrityStatus"`
+	CommittedAt       time.Time  `json:"committedAt"`
 	CreatedAt         time.Time  `json:"createdAt"`
 	UpdatedAt         time.Time  `json:"updatedAt"`
 }
@@ -41,6 +44,7 @@ type PledgeResponse struct {
 	PledgeID          string     `json:"pledgeId"`
 	ShopID            string     `json:"shopId"`
 	ProductID         string     `json:"productId,omitempty"`
+	BundleID          string     `json:"bundleId"`
 	CreatedByUserID   string     `json:"createdByUserId"`
 	Status            string     `json:"status"`
 	Version           int        `json:"version"`
@@ -55,6 +59,7 @@ type PledgeResponse struct {
 	ChainAnchorStatus string     `json:"chainAnchorStatus"`
 	ChainAnchorTime   *time.Time `json:"chainAnchorTime,omitempty"`
 	IntegrityStatus   string     `json:"integrityStatus"`
+	CommittedAt       time.Time  `json:"committedAt"`
 	CreatedAt         time.Time  `json:"createdAt"`
 	UpdatedAt         time.Time  `json:"updatedAt"`
 }
@@ -85,9 +90,11 @@ type PledgeProofBundleResponse struct {
 	PledgeID           string                  `json:"pledgeId"`
 	ShopID             string                  `json:"shopId"`
 	ProductID          string                  `json:"productId,omitempty"`
+	BundleID           string                  `json:"bundleId"`
 	Score              float64                 `json:"score"`
 	Category           string                  `json:"category"`
 	Confidence         float64                 `json:"confidence"`
+	CommittedAt        time.Time               `json:"committedAt"`
 	ImageHash          string                  `json:"imageHash"`
 	ImageCID           string                  `json:"imageCid,omitempty"`
 	ProofStatus        string                  `json:"proofStatus"`

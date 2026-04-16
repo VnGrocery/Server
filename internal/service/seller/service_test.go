@@ -46,6 +46,9 @@ func TestCommitCreatesPledge(t *testing.T) {
 			if pledge.ProductID != "product-1" {
 				t.Fatalf("unexpected product id: %s", pledge.ProductID)
 			}
+			if pledge.BundleID != "bundle-1" {
+				t.Fatalf("unexpected bundle id: %s", pledge.BundleID)
+			}
 			if pledge.CreatedByUserID != "user-1" {
 				t.Fatalf("unexpected user id: %s", pledge.CreatedByUserID)
 			}
@@ -89,6 +92,7 @@ func TestCommitCreatesPledge(t *testing.T) {
 	pledge, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",
 		ProductID:       "product-1",
+		BundleID:        "bundle-1",
 		CreatedByUserID: "user-1",
 		Score:           8.8,
 		Category:        "fresh_produce",
@@ -117,6 +121,7 @@ func TestCommitRejectsInvalidInput(t *testing.T) {
 
 	_, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "",
+		BundleID:        "bundle-1",
 		CreatedByUserID: "user-1",
 		Score:           8.8,
 		Category:        "fresh_produce",
@@ -142,6 +147,7 @@ func TestCommitRejectsMissingShop(t *testing.T) {
 
 	_, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",
+		BundleID:        "bundle-1",
 		CreatedByUserID: "user-1",
 		Score:           8.8,
 		Category:        "fresh_produce",
@@ -167,6 +173,7 @@ func TestCommitRejectsNonOwnerShop(t *testing.T) {
 
 	_, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",
+		BundleID:        "bundle-1",
 		CreatedByUserID: "user-1",
 		Score:           8.8,
 		Category:        "fresh_produce",
@@ -246,6 +253,7 @@ func TestCommitWritesAuditLog(t *testing.T) {
 
 	if _, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",
+		BundleID:        "bundle-1",
 		CreatedByUserID: "user-1",
 		Score:           8.8,
 		Category:        "fresh_produce",

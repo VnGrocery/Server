@@ -54,6 +54,8 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 	}
 
 	pledgeID := c.PostForm("pledgeId")
+	bundleID := c.PostForm("bundleId")
+	locationStatus := c.PostForm("locationStatus")
 
 	fileHeader, err := c.FormFile("image")
 	if err != nil {
@@ -81,10 +83,12 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 	}
 
 	result, err := h.checker.Check(c.Request.Context(), buyerservice.CheckInput{
-		PledgeID:    pledgeID,
-		BuyerUserID: principal.UserID,
-		ImageHash:   sha256Hex(upload.data),
-		ImageCID:    imageCID,
+		PledgeID:       pledgeID,
+		BundleID:       bundleID,
+		LocationStatus: locationStatus,
+		BuyerUserID:    principal.UserID,
+		ImageHash:      sha256Hex(upload.data),
+		ImageCID:       imageCID,
 		Image: visionservice.ImageInput{
 			Filename: upload.filename,
 			Size:     int64(len(upload.data)),
@@ -114,6 +118,7 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		CheckID:          result.CheckID,
 		ShopID:           result.ShopID,
 		ProductID:        result.ProductID,
+		BundleID:         result.BundleID,
 		BuyerUserID:      result.BuyerUserID,
 		Status:           buyerservice.BuyerCheckStatusCompleted,
 		Version:          1,
@@ -129,6 +134,7 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		PledgedCategory:  result.PledgedCategory,
 		ActualCategory:   result.ActualCategory,
 		ActualConfidence: result.ActualConfidence,
+		LocationStatus:   result.LocationStatus,
 		CategoryMatch:    result.CategoryMatch,
 		ImageHash:        result.ImageHash,
 		ImageCID:         result.ImageCID,
@@ -180,6 +186,7 @@ func (h *BuyerHandler) Moderate(c *gin.Context) {
 		CheckID:           check.CheckID,
 		ShopID:            check.ShopID,
 		ProductID:         check.ProductID,
+		BundleID:          check.BundleID,
 		BuyerUserID:       check.BuyerUserID,
 		Status:            check.Status,
 		Version:           check.Version,
@@ -195,6 +202,7 @@ func (h *BuyerHandler) Moderate(c *gin.Context) {
 		PledgedCategory:   check.PledgedCategory,
 		ActualCategory:    check.ActualCategory,
 		ActualConfidence:  check.ActualConfidence,
+		LocationStatus:    check.LocationStatus,
 		CategoryMatch:     check.CategoryMatch,
 		ImageHash:         check.ImageHash,
 		ImageCID:          check.ImageCID,
@@ -238,17 +246,19 @@ func (h *BuyerHandler) ListAdmin(c *gin.Context) {
 		return
 	}
 	result, err := lister.List(c.Request.Context(), buyerservice.ListInput{
-		ActorUserID:   principal.UserID,
-		CheckID:       c.Query("checkId"),
-		ShopID:        c.Query("shopId"),
-		ProductID:     c.Query("productId"),
-		BuyerUserID:   c.Query("buyerUserId"),
-		Status:        c.Query("status"),
-		Verdict:       c.Query("verdict"),
-		CreatedAfter:  createdAfter,
-		CreatedBefore: createdBefore,
-		Page:          page,
-		PageSize:      pageSize,
+		ActorUserID:    principal.UserID,
+		CheckID:        c.Query("checkId"),
+		ShopID:         c.Query("shopId"),
+		BundleID:       c.Query("bundleId"),
+		ProductID:      c.Query("productId"),
+		BuyerUserID:    c.Query("buyerUserId"),
+		Status:         c.Query("status"),
+		Verdict:        c.Query("verdict"),
+		LocationStatus: c.Query("locationStatus"),
+		CreatedAfter:   createdAfter,
+		CreatedBefore:  createdBefore,
+		Page:           page,
+		PageSize:       pageSize,
 	})
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -261,6 +271,7 @@ func (h *BuyerHandler) ListAdmin(c *gin.Context) {
 			CheckID:           check.CheckID,
 			ShopID:            check.ShopID,
 			ProductID:         check.ProductID,
+			BundleID:          check.BundleID,
 			BuyerUserID:       check.BuyerUserID,
 			Status:            check.Status,
 			Version:           check.Version,
@@ -276,6 +287,7 @@ func (h *BuyerHandler) ListAdmin(c *gin.Context) {
 			PledgedCategory:   check.PledgedCategory,
 			ActualCategory:    check.ActualCategory,
 			ActualConfidence:  check.ActualConfidence,
+			LocationStatus:    check.LocationStatus,
 			CategoryMatch:     check.CategoryMatch,
 			ImageHash:         check.ImageHash,
 			ImageCID:          check.ImageCID,

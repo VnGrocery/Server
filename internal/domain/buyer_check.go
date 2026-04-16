@@ -6,6 +6,7 @@ type BuyerCheck struct {
 	CheckID           string     `firestore:"checkId"`
 	ShopID            string     `firestore:"shopId"`
 	ProductID         string     `firestore:"productId"`
+	BundleID          string     `firestore:"bundleId"`
 	PledgeID          string     `firestore:"pledgeId"`
 	BuyerUserID       string     `firestore:"buyerUserId"`
 	Status            string     `firestore:"status"`
@@ -20,6 +21,7 @@ type BuyerCheck struct {
 	PledgedCategory   string     `firestore:"pledgedCategory"`
 	ActualCategory    string     `firestore:"actualCategory"`
 	ActualConfidence  float64    `firestore:"actualConfidence"`
+	LocationStatus    string     `firestore:"locationStatus"`
 	CategoryMatch     bool       `firestore:"categoryMatch"`
 	ImageHash         string     `firestore:"imageHash"`
 	ImageCID          string     `firestore:"imageCid"`

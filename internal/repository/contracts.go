@@ -75,14 +75,16 @@ type BuyerCheckRepository interface {
 }
 
 type BuyerCheckListFilter struct {
-	CheckID       string
-	ShopID        string
-	ProductID     string
-	BuyerUserID   string
-	Status        string
-	Verdict       string
-	CreatedAfter  time.Time
-	CreatedBefore time.Time
+	CheckID        string
+	ShopID         string
+	BundleID       string
+	ProductID      string
+	BuyerUserID    string
+	Status         string
+	Verdict        string
+	LocationStatus string
+	CreatedAfter   time.Time
+	CreatedBefore  time.Time
 }
 
 type ProductFreshnessReportListFilter struct {

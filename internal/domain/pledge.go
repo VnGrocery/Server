@@ -6,6 +6,7 @@ type Pledge struct {
 	PledgeID          string     `firestore:"pledgeId"`
 	ShopID            string     `firestore:"shopId"`
 	ProductID         string     `firestore:"productId"`
+	BundleID          string     `firestore:"bundleId"`
 	CreatedByUserID   string     `firestore:"createdByUserId"`
 	Status            string     `firestore:"status"`
 	Version           int        `firestore:"version"`
@@ -20,6 +21,7 @@ type Pledge struct {
 	ChainAnchorStatus string     `firestore:"chainAnchorStatus"`
 	ChainAnchorTime   *time.Time `firestore:"chainAnchorTime"`
 	IntegrityStatus   string     `firestore:"integrityStatus"`
+	CommittedAt       time.Time  `firestore:"committedAt"`
 	CreatedAt         time.Time  `firestore:"createdAt"`
 	UpdatedAt         time.Time  `firestore:"updatedAt"`
 }

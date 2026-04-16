@@ -59,7 +59,13 @@ type Service struct {
 	issuer string
 	ttl    time.Duration
 	replay repository.BundleTokenUseRepository
+	stats  Observer
 	now    func() time.Time
+}
+
+type Observer interface {
+	IncBundleTokenIssued()
+	IncBundleTokenReplay()
 }
 
 func NewService(secret, issuer string, ttl time.Duration, replay repository.BundleTokenUseRepository) *Service {
@@ -73,6 +79,10 @@ func NewService(secret, issuer string, ttl time.Duration, replay repository.Bund
 		replay: replay,
 		now:    time.Now,
 	}
+}
+
+func (s *Service) SetObserver(observer Observer) {
+	s.stats = observer
 }
 
 func (s *Service) Issue(input IssueInput) (string, time.Time, error) {
@@ -109,6 +119,9 @@ func (s *Service) Issue(input IssueInput) (string, time.Time, error) {
 	signed, err := token.SignedString(s.secret)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("sign bundle token: %w", err)
+	}
+	if s.stats != nil {
+		s.stats.IncBundleTokenIssued()
 	}
 	return signed, expiresAt, nil
 }
@@ -203,11 +216,20 @@ func (s *Service) VerifyAndConsume(ctx context.Context, input VerifyInput) (Clai
 			existing, getErr := s.replay.GetByID(ctx, nonceHash)
 			if getErr == nil {
 				if existing.BuyerUserID != "" && strings.TrimSpace(input.BuyerUserID) != "" && existing.BuyerUserID != strings.TrimSpace(input.BuyerUserID) {
+					if s.stats != nil {
+						s.stats.IncBundleTokenReplay()
+					}
 					return out, ErrSuspiciousReplay
 				}
 				if existing.ClientIP != "" && strings.TrimSpace(input.ClientIP) != "" && existing.ClientIP != strings.TrimSpace(input.ClientIP) {
+					if s.stats != nil {
+						s.stats.IncBundleTokenReplay()
+					}
 					return out, ErrSuspiciousReplay
 				}
+			}
+			if s.stats != nil {
+				s.stats.IncBundleTokenReplay()
 			}
 			return out, ErrReplayToken
 		}

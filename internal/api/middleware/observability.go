@@ -18,6 +18,9 @@ type Metrics struct {
 	requestsTotal            uint64
 	errorsTotal              uint64
 	rateLimitRejectionsTotal uint64
+	bundleTokenIssuedTotal   uint64
+	bundleTokenReplayTotal   uint64
+	buyerCheckRetriedTotal   uint64
 	integrityAnchorAttempts  uint64
 	integrityAnchorSuccess   uint64
 	integrityAnchorFailures  uint64
@@ -33,10 +36,13 @@ func NewMetrics() *Metrics {
 func (m *Metrics) Handler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.String(http.StatusOK,
-			"requests_total %d\nerrors_total %d\nrate_limit_rejections_total %d\nintegrity_anchor_attempts_total %d\nintegrity_anchor_success_total %d\nintegrity_anchor_failures_total %d\nintegrity_verify_mismatch_total %d\nintegrity_reanchor_total %d\nintegrity_revoke_total %d\n",
+			"requests_total %d\nerrors_total %d\nrate_limit_rejections_total %d\nbundle_token_issued_total %d\nbundle_token_replay_total %d\nbuyer_check_retried_total %d\nintegrity_anchor_attempts_total %d\nintegrity_anchor_success_total %d\nintegrity_anchor_failures_total %d\nintegrity_verify_mismatch_total %d\nintegrity_reanchor_total %d\nintegrity_revoke_total %d\n",
 			atomic.LoadUint64(&m.requestsTotal),
 			atomic.LoadUint64(&m.errorsTotal),
 			atomic.LoadUint64(&m.rateLimitRejectionsTotal),
+			atomic.LoadUint64(&m.bundleTokenIssuedTotal),
+			atomic.LoadUint64(&m.bundleTokenReplayTotal),
+			atomic.LoadUint64(&m.buyerCheckRetriedTotal),
 			atomic.LoadUint64(&m.integrityAnchorAttempts),
 			atomic.LoadUint64(&m.integrityAnchorSuccess),
 			atomic.LoadUint64(&m.integrityAnchorFailures),
@@ -44,6 +50,24 @@ func (m *Metrics) Handler() gin.HandlerFunc {
 			atomic.LoadUint64(&m.integrityReanchorTotal),
 			atomic.LoadUint64(&m.integrityRevokeTotal),
 		)
+	}
+}
+
+func (m *Metrics) IncBundleTokenIssued() {
+	if m != nil {
+		atomic.AddUint64(&m.bundleTokenIssuedTotal, 1)
+	}
+}
+
+func (m *Metrics) IncBundleTokenReplay() {
+	if m != nil {
+		atomic.AddUint64(&m.bundleTokenReplayTotal, 1)
+	}
+}
+
+func (m *Metrics) IncBuyerCheckRetried() {
+	if m != nil {
+		atomic.AddUint64(&m.buyerCheckRetriedTotal, 1)
 	}
 }
 

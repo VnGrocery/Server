@@ -105,6 +105,7 @@ type Service struct {
 	scorer  visionservice.ImageScorer
 	audit   AuditLogger
 	tokens  BundleTokenVerifier
+	stats   Observer
 	now     func() time.Time
 }
 
@@ -114,6 +115,10 @@ type AuditLogger interface {
 
 type BundleTokenVerifier interface {
 	VerifyAndConsume(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error)
+}
+
+type Observer interface {
+	IncBuyerCheckRetried()
 }
 
 func NewService(pledges repository.PledgeRepository, checks repository.BuyerCheckRepository, users repository.UserRepository, scorer visionservice.ImageScorer, auditLogger AuditLogger) *Service {
@@ -129,6 +134,10 @@ func NewService(pledges repository.PledgeRepository, checks repository.BuyerChec
 
 func (s *Service) SetBundleTokenVerifier(verifier BundleTokenVerifier) {
 	s.tokens = verifier
+}
+
+func (s *Service) SetObserver(observer Observer) {
+	s.stats = observer
 }
 
 func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, error) {
@@ -177,6 +186,9 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 			return CheckResult{}, fmt.Errorf("%w: suspicious bundleToken replay detected", ErrInvalidCheck)
 		case errors.Is(err, bundletokenservice.ErrReplayToken):
 			if existing, ok := s.lookupReplayRetry(ctx, buyerUserID, bundleID, pledgeID, strings.TrimSpace(input.ImageHash)); ok {
+				if s.stats != nil {
+					s.stats.IncBuyerCheckRetried()
+				}
 				return existing, nil
 			}
 			return CheckResult{}, fmt.Errorf("%w: bundleToken already used", ErrInvalidCheck)

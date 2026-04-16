@@ -31,6 +31,8 @@ type SellerCommitResponse struct {
 	ChainAnchorStatus string     `json:"chainAnchorStatus"`
 	ChainAnchorTime   *time.Time `json:"chainAnchorTime,omitempty"`
 	IntegrityStatus   string     `json:"integrityStatus"`
+	BundleToken       string     `json:"bundleToken,omitempty"`
+	BundleTokenExp    *time.Time `json:"bundleTokenExpiresAt,omitempty"`
 	CommittedAt       time.Time  `json:"committedAt"`
 	CreatedAt         time.Time  `json:"createdAt"`
 	UpdatedAt         time.Time  `json:"updatedAt"`

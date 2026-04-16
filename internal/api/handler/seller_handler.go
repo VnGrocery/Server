@@ -6,11 +6,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"vngrocery/internal/api/dto"
 	"vngrocery/internal/api/middleware"
+	bundletokenservice "vngrocery/internal/service/bundletoken"
 	sellerservice "vngrocery/internal/service/seller"
 	visionservice "vngrocery/internal/service/vision"
 )
@@ -20,8 +22,13 @@ const maxSellerImageBytes = 10 << 20
 type SellerHandler struct {
 	scorer    visionservice.ImageScorer
 	committer sellerservice.CommitService
+	tokens    BundleTokenIssuer
 	uploader  ImageUploader
 	uploadCfg mediaUploadConfig
+}
+
+type BundleTokenIssuer interface {
+	Issue(input bundletokenservice.IssueInput) (string, time.Time, error)
 }
 
 type ImageUploader interface {
@@ -47,6 +54,10 @@ func (h *SellerHandler) SetUploader(uploader ImageUploader) {
 
 func (h *SellerHandler) SetUploadConfig(cfg mediaUploadConfig) {
 	h.uploadCfg = cfg
+}
+
+func (h *SellerHandler) SetBundleTokenIssuer(issuer BundleTokenIssuer) {
+	h.tokens = issuer
 }
 
 func (h *SellerHandler) Score(c *gin.Context) {
@@ -149,6 +160,27 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 		return
 	}
 
+	var bundleToken string
+	var bundleTokenExp *time.Time
+	if h.tokens != nil {
+		token, expiresAt, tokenErr := h.tokens.Issue(bundletokenservice.IssueInput{
+			ShopID:      pledge.ShopID,
+			ProductID:   pledge.ProductID,
+			BundleID:    pledge.BundleID,
+			PledgeID:    pledge.PledgeID,
+			CreatedByID: pledge.CreatedByUserID,
+		})
+		if tokenErr != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": tokenErr.Error(),
+			})
+			return
+		}
+		bundleToken = token
+		exp := expiresAt.UTC()
+		bundleTokenExp = &exp
+	}
+
 	c.JSON(http.StatusCreated, dto.SellerCommitResponse{
 		PledgeID:          pledge.PledgeID,
 		ShopID:            pledge.ShopID,
@@ -167,6 +199,8 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 		ChainAnchorStatus: pledge.ChainAnchorStatus,
 		ChainAnchorTime:   pledge.ChainAnchorTime,
 		IntegrityStatus:   pledge.IntegrityStatus,
+		BundleToken:       bundleToken,
+		BundleTokenExp:    bundleTokenExp,
 		CommittedAt:       pledge.CommittedAt,
 		CreatedAt:         pledge.CreatedAt,
 		UpdatedAt:         pledge.UpdatedAt,

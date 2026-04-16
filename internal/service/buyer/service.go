@@ -13,6 +13,7 @@ import (
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
 	"vngrocery/internal/service/audit"
+	bundletokenservice "vngrocery/internal/service/bundletoken"
 	visionservice "vngrocery/internal/service/vision"
 )
 
@@ -28,6 +29,7 @@ const (
 type CheckInput struct {
 	PledgeID       string
 	BundleID       string
+	BundleToken    string
 	LocationStatus string
 	BuyerUserID    string
 	ImageHash      string
@@ -101,11 +103,16 @@ type Service struct {
 	users   repository.UserRepository
 	scorer  visionservice.ImageScorer
 	audit   AuditLogger
+	tokens  BundleTokenVerifier
 	now     func() time.Time
 }
 
 type AuditLogger interface {
 	Log(ctx context.Context, input audit.Input) error
+}
+
+type BundleTokenVerifier interface {
+	VerifyAndConsume(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error)
 }
 
 func NewService(pledges repository.PledgeRepository, checks repository.BuyerCheckRepository, users repository.UserRepository, scorer visionservice.ImageScorer, auditLogger AuditLogger) *Service {
@@ -119,6 +126,10 @@ func NewService(pledges repository.PledgeRepository, checks repository.BuyerChec
 	}
 }
 
+func (s *Service) SetBundleTokenVerifier(verifier BundleTokenVerifier) {
+	s.tokens = verifier
+}
+
 func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, error) {
 	buyerUserID := strings.TrimSpace(input.BuyerUserID)
 	if buyerUserID == "" {
@@ -127,6 +138,10 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	bundleID := strings.TrimSpace(input.BundleID)
 	if bundleID == "" {
 		return CheckResult{}, fmt.Errorf("%w: bundleId is required", ErrInvalidCheck)
+	}
+	bundleToken := strings.TrimSpace(input.BundleToken)
+	if bundleToken == "" {
+		return CheckResult{}, fmt.Errorf("%w: bundleToken is required", ErrInvalidCheck)
 	}
 	locationStatus, err := normalizeLocationStatus(input.LocationStatus)
 	if err != nil {
@@ -143,6 +158,29 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	}
 
 	pledgeID := strings.TrimSpace(input.PledgeID)
+	if s.tokens == nil {
+		return CheckResult{}, fmt.Errorf("%w: bundle token verifier is not configured", ErrInvalidCheck)
+	}
+	tokenClaims, err := s.tokens.VerifyAndConsume(ctx, bundletokenservice.VerifyInput{
+		Token:            bundleToken,
+		BuyerUserID:      buyerUserID,
+		ExpectedBundleID: bundleID,
+		ExpectedPledgeID: pledgeID,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, bundletokenservice.ErrExpiredToken):
+			return CheckResult{}, fmt.Errorf("%w: bundleToken expired", ErrInvalidCheck)
+		case errors.Is(err, bundletokenservice.ErrReplayToken):
+			return CheckResult{}, fmt.Errorf("%w: bundleToken already used", ErrInvalidCheck)
+		default:
+			return CheckResult{}, fmt.Errorf("%w: invalid bundleToken", ErrInvalidCheck)
+		}
+	}
+	if pledgeID == "" && strings.TrimSpace(tokenClaims.PledgeID) != "" {
+		pledgeID = strings.TrimSpace(tokenClaims.PledgeID)
+	}
+
 	var pledge domain.Pledge
 	if s.pledges == nil {
 		if pledgeID != "" {
@@ -165,6 +203,8 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 
 	if pledgeID == "" {
 		result := standaloneQualityResult(scored, bundleID, locationStatus)
+		result.ShopID = tokenClaims.ShopID
+		result.ProductID = tokenClaims.ProductID
 		result.BuyerUserID = buyerUserID
 		result.ImageHash = strings.TrimSpace(input.ImageHash)
 		result.ImageCID = strings.TrimSpace(input.ImageCID)

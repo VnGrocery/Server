@@ -10,6 +10,7 @@ import (
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
 	"vngrocery/internal/service/audit"
+	bundletokenservice "vngrocery/internal/service/bundletoken"
 	visionservice "vngrocery/internal/service/vision"
 )
 
@@ -102,6 +103,21 @@ type auditLoggerStub struct {
 	logHits int
 }
 
+type bundleTokenVerifierStub struct {
+	verifyAndConsume func(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error)
+}
+
+func (s bundleTokenVerifierStub) VerifyAndConsume(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error) {
+	if s.verifyAndConsume == nil {
+		return bundletokenservice.Claims{
+			ShopID:   "shop-1",
+			BundleID: input.ExpectedBundleID,
+			PledgeID: input.ExpectedPledgeID,
+		}, nil
+	}
+	return s.verifyAndConsume(ctx, input)
+}
+
 func (s *auditLoggerStub) Log(ctx context.Context, input audit.Input) error {
 	s.logHits++
 	if s.log != nil {
@@ -153,10 +169,12 @@ func TestCheckReturnsTrustedVerdict(t *testing.T) {
 		},
 		auditLogger,
 	)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{})
 
 	result, err := service.Check(context.Background(), CheckInput{
 		PledgeID:    "pledge-1",
 		BundleID:    "bundle-1",
+		BundleToken: "token-1",
 		BuyerUserID: "buyer-1",
 		ImageHash:   "image-hash-1",
 		Image: visionservice.ImageInput{
@@ -222,10 +240,12 @@ func TestCheckReturnsHighRiskOnMismatch(t *testing.T) {
 		},
 		nil,
 	)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{})
 
 	result, err := service.Check(context.Background(), CheckInput{
 		PledgeID:    "pledge-1",
 		BundleID:    "bundle-1",
+		BundleToken: "token-1",
 		BuyerUserID: "buyer-1",
 		Image: visionservice.ImageInput{
 			Filename: "shop.jpg",
@@ -272,10 +292,12 @@ func TestCheckReturnsWarningForLowConfidence(t *testing.T) {
 		},
 		nil,
 	)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{})
 
 	result, err := service.Check(context.Background(), CheckInput{
 		PledgeID:    "pledge-1",
 		BundleID:    "bundle-1",
+		BundleToken: "token-1",
 		BuyerUserID: "buyer-1",
 		Image: visionservice.ImageInput{
 			Filename: "shop.jpg",
@@ -327,10 +349,20 @@ func TestCheckWithoutPledgeReturnsStandaloneQuality(t *testing.T) {
 		},
 		nil,
 	)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{
+		verifyAndConsume: func(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error) {
+			return bundletokenservice.Claims{
+				ShopID:    "shop-2",
+				ProductID: "product-2",
+				BundleID:  input.ExpectedBundleID,
+			}, nil
+		},
+	})
 
 	result, err := service.Check(context.Background(), CheckInput{
 		BuyerUserID: "buyer-1",
 		BundleID:    "bundle-standalone",
+		BundleToken: "token-standalone",
 		ImageHash:   "image-hash-1",
 		Image: visionservice.ImageInput{
 			Filename: "buyer.jpg",
@@ -381,10 +413,12 @@ func TestCheckRejectsWhenQuotaExceeded(t *testing.T) {
 		},
 		nil,
 	)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{})
 
 	_, err := service.Check(context.Background(), CheckInput{
 		BuyerUserID: "buyer-1",
 		BundleID:    "bundle-1",
+		BundleToken: "token-1",
 		Image: visionservice.ImageInput{
 			Filename: "buyer.jpg",
 			Content:  bytes.NewBuffer([]byte("fake")),

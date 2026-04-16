@@ -39,6 +39,10 @@ type PasswordResetTokenRepository interface {
 	GetByTokenHash(ctx context.Context, tokenHash string) (domain.PasswordResetToken, error)
 }
 
+type BundleTokenUseRepository interface {
+	Reserve(ctx context.Context, usage domain.BundleTokenUse) (bool, error)
+}
+
 type ShopRepository interface {
 	Save(ctx context.Context, shop domain.Shop) error
 	GetByID(ctx context.Context, shopID string) (domain.Shop, error)

@@ -17,6 +17,7 @@ import (
 	mongorepo "vngrocery/internal/repository/mongo"
 	auditservice "vngrocery/internal/service/audit"
 	authservice "vngrocery/internal/service/auth"
+	bundletokenservice "vngrocery/internal/service/bundletoken"
 	buyerservice "vngrocery/internal/service/buyer"
 	integrityservice "vngrocery/internal/service/integrity"
 	productservice "vngrocery/internal/service/product"
@@ -83,6 +84,7 @@ func main() {
 	var authUserRepository repository.AuthUserRepository
 	var refreshTokenRepository repository.RefreshTokenRepository
 	var passwordResetTokenRepository repository.PasswordResetTokenRepository
+	var bundleTokenUseRepository repository.BundleTokenUseRepository
 	var eventLogRepository repository.EventLogRepository
 	var firebaseApp *firebasepkg.App
 	var mongoApp *mongopkg.App
@@ -127,6 +129,7 @@ func main() {
 		authUserRepository = mongorepo.NewAuthUserRepository(mongoApp.Database)
 		refreshTokenRepository = mongorepo.NewRefreshTokenRepository(mongoApp.Database)
 		passwordResetTokenRepository = mongorepo.NewPasswordResetTokenRepository(mongoApp.Database)
+		bundleTokenUseRepository = mongorepo.NewBundleTokenUseRepository(mongoApp.Database)
 		eventLogRepository = mongorepo.NewEventLogRepository(mongoApp.Database)
 		rateLimitStore = middleware.NewMemoryRateLimitStore()
 		if cfg.RateLimitBackend == "firestore" {
@@ -153,6 +156,7 @@ func main() {
 		authUserRepository = firestorerepo.NewAuthUserRepository(firebaseApp.Firestore)
 		refreshTokenRepository = firestorerepo.NewRefreshTokenRepository(firebaseApp.Firestore)
 		passwordResetTokenRepository = firestorerepo.NewPasswordResetTokenRepository(firebaseApp.Firestore)
+		bundleTokenUseRepository = firestorerepo.NewBundleTokenUseRepository(firebaseApp.Firestore)
 		eventLogRepository = firestorerepo.NewEventLogRepository(firebaseApp.Firestore)
 		if cfg.RateLimitBackend == "firestore" {
 			rateLimitStore = middleware.NewFirestoreRateLimitStore(firebaseApp.Firestore, cfg.RateLimitCollection)
@@ -237,6 +241,8 @@ func main() {
 	shopManager.SetPledgeIntegrityReader(integrityAdapter{service: integrityManager})
 	sellerCommitService.SetIntegrityManager(integrityManager)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, buyerCheckRepository, userRepository, visionScorer, auditLogger)
+	bundleTokenService := bundletokenservice.NewService(cfg.JWTSecret, "vngrocery", 30*time.Minute, bundleTokenUseRepository)
+	buyerCheckService.SetBundleTokenVerifier(bundleTokenService)
 	authMiddleware := middleware.NewAuthRequired(jwtService)
 	adminMiddleware := middleware.NewAdminRequired(userRepository)
 	healthHandler := handler.NewHealthHandler()
@@ -246,6 +252,7 @@ func main() {
 	eventLogHandler := handler.NewEventLogHandler(auditQueryService)
 	productHandler := handler.NewProductHandler(productManager)
 	sellerHandler := handler.NewSellerHandler(visionScorer, sellerCommitService)
+	sellerHandler.SetBundleTokenIssuer(bundleTokenService)
 	buyerHandler := handler.NewBuyerHandler(buyerCheckService)
 	uploadCfg := handler.NewMediaUploadConfigForRuntime(
 		int64(mustParseInt(cfg.MediaMaxImageBytes, 10<<20)),

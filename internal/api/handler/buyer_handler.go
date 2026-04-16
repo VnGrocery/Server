@@ -55,6 +55,7 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 
 	pledgeID := c.PostForm("pledgeId")
 	bundleID := c.PostForm("bundleId")
+	bundleToken := c.PostForm("bundleToken")
 	locationStatus := c.PostForm("locationStatus")
 
 	fileHeader, err := c.FormFile("image")
@@ -85,6 +86,7 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 	result, err := h.checker.Check(c.Request.Context(), buyerservice.CheckInput{
 		PledgeID:       pledgeID,
 		BundleID:       bundleID,
+		BundleToken:    bundleToken,
 		LocationStatus: locationStatus,
 		BuyerUserID:    principal.UserID,
 		ImageHash:      sha256Hex(upload.data),

@@ -16,6 +16,7 @@ const (
 	authUsersCollection               = firestorecollections.AuthUsersCollection
 	refreshTokensCollection           = firestorecollections.RefreshTokensCollection
 	passwordResetTokensCollection     = firestorecollections.PasswordResetTokensCollection
+	bundleTokenUsesCollection         = firestorecollections.BundleTokenUsesCollection
 	shopsCollection                   = firestorecollections.ShopsCollection
 	productsCollection                = firestorecollections.ProductsCollection
 	productFreshnessReportsCollection = firestorecollections.ProductFreshnessReportsCollection

@@ -17,11 +17,12 @@ import (
 )
 
 var (
-	ErrInvalidShop     = errors.New("invalid shop request")
-	ErrForbidden       = errors.New("forbidden")
-	ErrNotFound        = errors.New("shop not found")
-	ErrAdminRequired   = errors.New("admin role is required")
-	ErrVersionConflict = errors.New("version conflict")
+	ErrInvalidShop       = errors.New("invalid shop request")
+	ErrForbidden         = errors.New("forbidden")
+	ErrNotFound          = errors.New("shop not found")
+	ErrAdminRequired     = errors.New("admin role is required")
+	ErrVersionConflict   = errors.New("version conflict")
+	ErrShopAlreadyExists = errors.New("account already owns a shop")
 )
 
 const (
@@ -302,6 +303,15 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Shop, e
 		return domain.Shop{}, fmt.Errorf("shop repository is not configured")
 	}
 
+	existing, err := s.shops.List(ctx, repository.ShopListFilter{OwnerUserID: strings.TrimSpace(input.OwnerUserID)})
+	if err != nil {
+		return domain.Shop{}, err
+	}
+	for _, shop := range existing {
+		if shop.Status != ShopStatusDeleted {
+			return domain.Shop{}, ErrShopAlreadyExists
+		}
+	}
 	now := s.now().UTC()
 	shop := domain.Shop{
 		ShopID:      uuid.NewString(),

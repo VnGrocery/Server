@@ -910,7 +910,8 @@ func buildPaths() gin.H {
 				"summary":     "Create shop",
 				"security":    []gin.H{{"bearerAuth": []string{}}},
 				"requestBody": jsonBody("UpsertShopRequest"),
-				"responses":   mergeResponses(success(http.StatusCreated, "ShopResponse"), errorResponse),
+				"description": "Mỗi tài khoản chỉ được phép tạo tối đa 1 cửa hàng. Trả 409 nếu đã có cửa hàng active/pending.",
+				"responses":   mergeResponses(mergeResponses(success(http.StatusCreated, "ShopResponse"), gin.H{"409": gin.H{"description": "Account already owns a shop"}}), errorResponse),
 			},
 		},
 		"/v1/shops/{shopId}": gin.H{
@@ -1399,7 +1400,7 @@ func annotatePathDocs(paths gin.H) {
 			},
 			"post": {
 				summary:     "Tạo cửa hàng | Create shop",
-				description: "Cho phép người dùng đã đăng nhập tạo cửa hàng mới.\n\nCreate a new shop with address and coordinates. Shop state is tracked with status and version instead of hard delete.",
+				description: "Mỗi tài khoản chỉ được phép tạo tối đa 1 cửa hàng. Trả 409 Conflict nếu đã có cửa hàng active/pending.\n\nCreate a new shop. Each account can own at most one non-deleted shop. Returns 409 if the account already owns a shop.",
 			},
 		},
 		"/v1/shops/{shopId}": {

@@ -492,6 +492,8 @@ func (h *ShopHandler) writeError(c *gin.Context, err error) {
 		status = http.StatusConflict
 	case errors.Is(err, shopsvc.ErrForbidden), errors.Is(err, shopsvc.ErrAdminRequired):
 		status = http.StatusForbidden
+	case errors.Is(err, shopsvc.ErrShopAlreadyExists):
+		status = http.StatusConflict
 	case errors.Is(err, shopsvc.ErrNotFound):
 		status = http.StatusNotFound
 	}

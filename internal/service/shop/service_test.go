@@ -193,6 +193,9 @@ func TestCreateShop(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
 		},
+		list: func(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
+			return nil, nil
+		},
 	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
 	service.now = func() time.Time { return fixedTime }
 
@@ -301,6 +304,9 @@ func TestCreateRejectsInvalidCoordinates(t *testing.T) {
 		},
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
+		},
+		list: func(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
+			return nil, nil
 		},
 	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
 
@@ -580,6 +586,9 @@ func TestCreateShopWritesAuditLog(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
 		},
+		list: func(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
+			return nil, nil
+		},
 	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, auditLogger)
 
 	if _, err := service.Create(context.Background(), CreateInput{
@@ -635,5 +644,60 @@ func TestGetPledgeProofLoadsPledgeOnce(t *testing.T) {
 	}
 	if getByIDHits != 1 {
 		t.Fatalf("expected pledge to be loaded once, got %d", getByIDHits)
+	}
+}
+
+func TestCreateShopRejectsDuplicate(t *testing.T) {
+	service := NewService(shopRepositoryStub{
+		save: func(ctx context.Context, shop domain.Shop) error {
+			t.Fatal("save should not be called when owner already has a shop")
+			return nil
+		},
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{}, nil
+		},
+		list: func(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
+			if filter.OwnerUserID != "user-1" {
+				t.Fatalf("unexpected owner filter: %s", filter.OwnerUserID)
+			}
+			return []domain.Shop{{ShopID: "existing-shop", OwnerUserID: "user-1", Status: ShopStatusActive}}, nil
+		},
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
+
+	_, err := service.Create(context.Background(), CreateInput{
+		OwnerUserID: "user-1",
+		Name:        "Second Shop",
+		Address:     "456 Side St",
+		Latitude:    10.762622,
+		Longitude:   106.660172,
+	})
+	if !errors.Is(err, ErrShopAlreadyExists) {
+		t.Fatalf("expected ErrShopAlreadyExists, got %v", err)
+	}
+}
+
+func TestCreateShopAllowsAfterDeletedShop(t *testing.T) {
+	service := NewService(shopRepositoryStub{
+		save: func(ctx context.Context, shop domain.Shop) error { return nil },
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{}, nil
+		},
+		list: func(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
+			return []domain.Shop{{ShopID: "old-shop", OwnerUserID: "user-1", Status: ShopStatusDeleted}}, nil
+		},
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
+
+	shop, err := service.Create(context.Background(), CreateInput{
+		OwnerUserID: "user-1",
+		Name:        "New Shop",
+		Address:     "789 New St",
+		Latitude:    10.762622,
+		Longitude:   106.660172,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error for re-creation after delete, got %v", err)
+	}
+	if shop.ShopID == "" {
+		t.Fatal("expected shop id")
 	}
 }

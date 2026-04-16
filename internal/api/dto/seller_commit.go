@@ -31,6 +31,7 @@ type SellerCommitResponse struct {
 	ChainAnchorStatus string     `json:"chainAnchorStatus"`
 	ChainAnchorTime   *time.Time `json:"chainAnchorTime,omitempty"`
 	IntegrityStatus   string     `json:"integrityStatus"`
+	QRVersion         string     `json:"qrVersion,omitempty"`
 	BundleToken       string     `json:"bundleToken,omitempty"`
 	BundleTokenExp    *time.Time `json:"bundleTokenExpiresAt,omitempty"`
 	CommittedAt       time.Time  `json:"committedAt"`
@@ -39,6 +40,7 @@ type SellerCommitResponse struct {
 }
 
 type BundleTokenResponse struct {
+	QRVersion            string     `json:"qrVersion,omitempty"`
 	BundleToken          string     `json:"bundleToken"`
 	BundleTokenExpiresAt *time.Time `json:"bundleTokenExpiresAt,omitempty"`
 }

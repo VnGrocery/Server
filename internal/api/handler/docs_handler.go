@@ -468,6 +468,7 @@ func buildSchemas() gin.H {
 				"chainAnchorStatus":    gin.H{"type": "string"},
 				"chainAnchorTime":      gin.H{"type": "string", "format": "date-time"},
 				"integrityStatus":      gin.H{"type": "string"},
+				"qrVersion":            gin.H{"type": "string"},
 				"bundleToken":          gin.H{"type": "string"},
 				"bundleTokenExpiresAt": gin.H{"type": "string", "format": "date-time"},
 				"committedAt":          gin.H{"type": "string", "format": "date-time"},
@@ -478,6 +479,7 @@ func buildSchemas() gin.H {
 		"BundleTokenResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
+				"qrVersion":            gin.H{"type": "string"},
 				"bundleToken":          gin.H{"type": "string"},
 				"bundleTokenExpiresAt": gin.H{"type": "string", "format": "date-time"},
 			},

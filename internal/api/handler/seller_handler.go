@@ -170,6 +170,7 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 			BundleID:    pledge.BundleID,
 			PledgeID:    pledge.PledgeID,
 			CreatedByID: pledge.CreatedByUserID,
+			CommittedAt: pledge.CommittedAt,
 		})
 		if tokenErr != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -200,6 +201,7 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 		ChainAnchorStatus: pledge.ChainAnchorStatus,
 		ChainAnchorTime:   pledge.ChainAnchorTime,
 		IntegrityStatus:   pledge.IntegrityStatus,
+		QRVersion:         bundletokenservice.QRVersionV1,
 		BundleToken:       bundleToken,
 		BundleTokenExp:    bundleTokenExp,
 		CommittedAt:       pledge.CommittedAt,
@@ -261,6 +263,7 @@ func (h *SellerHandler) ReissueBundleToken(c *gin.Context) {
 		BundleID:    pledge.BundleID,
 		PledgeID:    pledge.PledgeID,
 		CreatedByID: pledge.CreatedByUserID,
+		CommittedAt: pledge.CommittedAt,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -268,6 +271,7 @@ func (h *SellerHandler) ReissueBundleToken(c *gin.Context) {
 	}
 	exp := expiresAt.UTC()
 	c.JSON(http.StatusOK, dto.BundleTokenResponse{
+		QRVersion:            bundletokenservice.QRVersionV1,
 		BundleToken:          token,
 		BundleTokenExpiresAt: &exp,
 	})

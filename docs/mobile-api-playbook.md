@@ -3,15 +3,18 @@
 ## Seller flow
 1. `POST /v1/media/images` with multipart `image`
 2. `POST /v1/seller/score` with multipart `image`
-3. `POST /v1/seller/commit` with `shopId`, optional `productId`, `score`, `category`, `confidence`, `imageHash`, optional `imageCid`
-4. `GET /v1/shops/:shopId/pledges?productId=:productId` for pledge history
-5. `GET /v1/shops/:shopId/pledges/:pledgeId/proof` for buyer-facing proof summary
+3. `POST /v1/seller/commit` with `shopId`, optional `productId`, `bundleId`, `score`, `category`, `confidence`, `imageHash`, optional `imageCid`
+4. Save `bundleToken`, `bundleTokenExpiresAt`, `qrVersion` from commit response for QR
+5. If token expired before buyer scan: `POST /v1/shops/:shopId/pledges/:pledgeId/bundle-token`
+6. `GET /v1/shops/:shopId/pledges?productId=:productId` for pledge history
+7. `GET /v1/shops/:shopId/pledges/:pledgeId/proof` for buyer-facing proof summary
 
 ## Buyer flow
 1. `POST /v1/media/images` with multipart `image`
-2. `POST /v1/buyer/check` with multipart `image` and optional `pledgeId`
-3. `GET /v1/shops/:shopId/pledges/:pledgeId/proof` for final proof view
-4. `GET /v1/shops/:shopId/products/:productId/freshness-reports` for public freshness context
+2. Scan QR and parse `qrVersion`, `bundleId`, optional `pledgeId`, `bundleToken`
+3. `POST /v1/buyer/check` with multipart `image`, `bundleId`, `bundleToken`, optional `pledgeId`
+4. `GET /v1/shops/:shopId/pledges/:pledgeId/proof` for final proof view
+5. `GET /v1/shops/:shopId/products/:productId/freshness-reports` for public freshness context
 
 ## Shop detail screen
 - `GET /v1/shops/:shopId`

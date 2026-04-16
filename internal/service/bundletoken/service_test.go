@@ -55,6 +55,12 @@ func TestIssueAndVerifyBundleToken(t *testing.T) {
 	if claims.ShopID != "shop-1" || claims.BundleID != "bundle-1" || claims.PledgeID != "pledge-1" {
 		t.Fatalf("unexpected claims: %#v", claims)
 	}
+	if claims.QRVersion != QRVersionV1 {
+		t.Fatalf("unexpected qr version: %s", claims.QRVersion)
+	}
+	if claims.IssuedAt.IsZero() {
+		t.Fatal("expected issuedAt claim")
+	}
 }
 
 func TestVerifyRejectsReplay(t *testing.T) {

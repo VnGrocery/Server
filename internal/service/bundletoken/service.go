@@ -22,12 +22,15 @@ var (
 	ErrReplayToken  = errors.New("bundle token already used")
 )
 
+const QRVersionV1 = "bundle_qr_v1"
+
 type IssueInput struct {
 	ShopID      string
 	ProductID   string
 	BundleID    string
 	PledgeID    string
 	CreatedByID string
+	CommittedAt time.Time
 }
 
 type VerifyInput struct {
@@ -38,11 +41,13 @@ type VerifyInput struct {
 }
 
 type Claims struct {
+	QRVersion string
 	ShopID    string
 	ProductID string
 	BundleID  string
 	PledgeID  string
 	Nonce     string
+	IssuedAt  time.Time
 	ExpiresAt time.Time
 }
 
@@ -83,15 +88,18 @@ func (s *Service) Issue(input IssueInput) (string, time.Time, error) {
 	issuedAt := s.now().UTC()
 	expiresAt := issuedAt.Add(s.ttl)
 	claims := jwt.MapClaims{
-		"iss":       s.issuer,
-		"iat":       issuedAt.Unix(),
-		"exp":       expiresAt.Unix(),
-		"nonce":     uuid.NewString(),
-		"shopId":    shopID,
-		"productId": strings.TrimSpace(input.ProductID),
-		"bundleId":  bundleID,
-		"pledgeId":  strings.TrimSpace(input.PledgeID),
-		"sellerId":  strings.TrimSpace(input.CreatedByID),
+		"iss":         s.issuer,
+		"iat":         issuedAt.Unix(),
+		"exp":         expiresAt.Unix(),
+		"tokenType":   "bundle_qr",
+		"qrVersion":   QRVersionV1,
+		"nonce":       uuid.NewString(),
+		"shopId":      shopID,
+		"productId":   strings.TrimSpace(input.ProductID),
+		"bundleId":    bundleID,
+		"pledgeId":    strings.TrimSpace(input.PledgeID),
+		"sellerId":    strings.TrimSpace(input.CreatedByID),
+		"committedAt": input.CommittedAt.UTC().Format(time.RFC3339),
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := token.SignedString(s.secret)
@@ -111,7 +119,8 @@ func (s *Service) VerifyAndConsume(ctx context.Context, input VerifyInput) (Clai
 		return out, fmt.Errorf("%w: secret is not configured", ErrInvalidToken)
 	}
 
-	parsed, err := jwt.Parse(tokenRaw, func(t *jwt.Token) (any, error) {
+	parser := jwt.NewParser(jwt.WithTimeFunc(s.now), jwt.WithoutClaimsValidation())
+	parsed, err := parser.Parse(tokenRaw, func(t *jwt.Token) (any, error) {
 		if t.Method != jwt.SigningMethodHS256 {
 			return nil, fmt.Errorf("%w: unexpected signing method", ErrInvalidToken)
 		}
@@ -138,8 +147,12 @@ func (s *Service) VerifyAndConsume(ctx context.Context, input VerifyInput) (Clai
 	nonce := getString("nonce")
 	pledgeID := getString("pledgeId")
 	productID := getString("productId")
+	qrVersion := getString("qrVersion")
 	if bundleID == "" || shopID == "" || nonce == "" {
 		return out, fmt.Errorf("%w: required claims missing", ErrInvalidToken)
+	}
+	if qrVersion != QRVersionV1 {
+		return out, fmt.Errorf("%w: unsupported qrVersion", ErrInvalidToken)
 	}
 
 	expiresAt, err := claims.GetExpirationTime()
@@ -149,6 +162,10 @@ func (s *Service) VerifyAndConsume(ctx context.Context, input VerifyInput) (Clai
 	exp := expiresAt.Time.UTC()
 	if !exp.After(s.now().UTC()) {
 		return out, ErrExpiredToken
+	}
+	issuedAt, err := claims.GetIssuedAt()
+	if err != nil || issuedAt == nil {
+		return out, fmt.Errorf("%w: iat is invalid", ErrInvalidToken)
 	}
 
 	expectedBundleID := strings.TrimSpace(input.ExpectedBundleID)
@@ -182,11 +199,13 @@ func (s *Service) VerifyAndConsume(ctx context.Context, input VerifyInput) (Clai
 	}
 
 	out = Claims{
+		QRVersion: qrVersion,
 		ShopID:    shopID,
 		ProductID: productID,
 		BundleID:  bundleID,
 		PledgeID:  pledgeID,
 		Nonce:     nonce,
+		IssuedAt:  issuedAt.Time.UTC(),
 		ExpiresAt: exp,
 	}
 	return out, nil

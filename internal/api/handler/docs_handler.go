@@ -475,6 +475,13 @@ func buildSchemas() gin.H {
 				"updatedAt":            gin.H{"type": "string", "format": "date-time"},
 			},
 		},
+		"BundleTokenResponse": gin.H{
+			"type": "object",
+			"properties": gin.H{
+				"bundleToken":          gin.H{"type": "string"},
+				"bundleTokenExpiresAt": gin.H{"type": "string", "format": "date-time"},
+			},
+		},
 		"PledgeResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
@@ -1279,6 +1286,14 @@ func buildPaths() gin.H {
 				"responses":   mergeResponses(success(http.StatusCreated, "SellerCommitResponse"), errorResponse),
 			},
 		},
+		"/v1/shops/{shopId}/pledges/{pledgeId}/bundle-token": gin.H{
+			"post": gin.H{
+				"summary":    "Re-issue bundle token for an existing pledge",
+				"security":   []gin.H{{"bearerAuth": []string{}}},
+				"parameters": []gin.H{pathParam("shopId"), pathParam("pledgeId")},
+				"responses":  mergeResponses(success(http.StatusOK, "BundleTokenResponse"), errorResponse),
+			},
+		},
 		"/v1/buyer/check": gin.H{
 			"post": gin.H{
 				"summary":  "Check buyer image against seller pledge by bundle",
@@ -1551,10 +1566,16 @@ func annotatePathDocs(paths gin.H) {
 				description: "Seller xác nhận cam kết chất lượng cho shop hoặc product.\n\nDepending on runtime config, this may also prepare integrity hash, upload media metadata, and anchor proof on Besu.",
 			},
 		},
+		"/v1/shops/{shopId}/pledges/{pledgeId}/bundle-token": {
+			"post": {
+				summary:     "Seller cấp lại token bó hàng | Re-issue bundle token",
+				description: "Cấp lại bundle token đã ký cho pledge đang tồn tại khi token cũ hết hạn hoặc buyer cần quét lại.\n\nOnly owner of the shop can issue token for its pledge.",
+			},
+		},
 		"/v1/buyer/check": {
 			"post": {
 				summary:     "Buyer kiểm tra bằng ảnh | Buyer image check",
-				description: "Buyer upload ảnh để kiểm tra chất lượng hiện tại.\n\nIf pledgeId is provided, the system compares against the seller pledge. Without pledgeId, this is still valid as a standalone quality check.",
+				description: "Buyer upload ảnh để kiểm tra chất lượng hiện tại.\n\nbundleToken là bắt buộc để ràng buộc đúng bó hàng và chống replay. If pledgeId is provided, the system compares against the seller pledge.",
 			},
 		},
 	}

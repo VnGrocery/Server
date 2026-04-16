@@ -127,6 +127,7 @@ func New(deps Dependencies) *gin.Engine {
 		v1.POST("/admin/users/:userId/keys/backfill", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.AdminUserHandler.BackfillAccountKey)
 		v1.POST("/seller/score", deps.AuthMiddleware.Handle(), deps.SellerHandler.Score)
 		v1.POST("/seller/commit", deps.AuthMiddleware.Handle(), deps.SellerHandler.Commit)
+		v1.POST("/shops/:shopId/pledges/:pledgeId/bundle-token", deps.AuthMiddleware.Handle(), deps.SellerHandler.ReissueBundleToken)
 		v1.POST("/buyer/check", deps.AuthMiddleware.Handle(), deps.BuyerHandler.Check)
 		if deps.MediaHandler != nil {
 			v1.POST("/media/images", deps.AuthMiddleware.Handle(), deps.MediaHandler.UploadImage)

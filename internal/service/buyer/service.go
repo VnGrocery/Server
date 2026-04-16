@@ -172,6 +172,9 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 		case errors.Is(err, bundletokenservice.ErrExpiredToken):
 			return CheckResult{}, fmt.Errorf("%w: bundleToken expired", ErrInvalidCheck)
 		case errors.Is(err, bundletokenservice.ErrReplayToken):
+			if existing, ok := s.lookupReplayRetry(ctx, buyerUserID, bundleID, pledgeID, strings.TrimSpace(input.ImageHash)); ok {
+				return existing, nil
+			}
 			return CheckResult{}, fmt.Errorf("%w: bundleToken already used", ErrInvalidCheck)
 		default:
 			return CheckResult{}, fmt.Errorf("%w: invalid bundleToken", ErrInvalidCheck)
@@ -336,6 +339,7 @@ const (
 	trustedMaxScoreDelta  = 1.0
 	warningMaxScoreDelta  = 2.5
 	minRequiredConfidence = 0.60
+	replayRetryWindow     = 10 * time.Minute
 )
 
 func standaloneQualityResult(scored visionservice.ScoreResult, bundleID string, locationStatus string) CheckResult {
@@ -500,6 +504,57 @@ func (s *Service) ensureAdmin(ctx context.Context, userID string) error {
 		return fmt.Errorf("forbidden")
 	}
 	return nil
+}
+
+func (s *Service) lookupReplayRetry(ctx context.Context, buyerUserID, bundleID, pledgeID, imageHash string) (CheckResult, bool) {
+	if imageHash == "" {
+		return CheckResult{}, false
+	}
+	checks, err := s.checks.ListByBuyerUserID(ctx, buyerUserID)
+	if err != nil {
+		return CheckResult{}, false
+	}
+	since := s.now().UTC().Add(-replayRetryWindow)
+	for _, check := range checks {
+		if check.CreatedAt.Before(since) {
+			break
+		}
+		if check.BundleID != bundleID || check.ImageHash != imageHash {
+			continue
+		}
+		if strings.TrimSpace(pledgeID) != "" && check.PledgeID != strings.TrimSpace(pledgeID) {
+			continue
+		}
+		return checkToResult(check), true
+	}
+	return CheckResult{}, false
+}
+
+func checkToResult(check domain.BuyerCheck) CheckResult {
+	return CheckResult{
+		CheckID:          check.CheckID,
+		ShopID:           check.ShopID,
+		ProductID:        check.ProductID,
+		BundleID:         check.BundleID,
+		PolicyVersion:    check.PolicyVersion,
+		HasPledge:        strings.TrimSpace(check.PledgeID) != "",
+		PledgeID:         check.PledgeID,
+		BuyerUserID:      check.BuyerUserID,
+		Trusted:          check.Trusted,
+		Verdict:          check.Verdict,
+		PledgedScore:     check.PledgedScore,
+		ActualScore:      check.ActualScore,
+		ScoreDelta:       check.ScoreDelta,
+		ScoreDeltaAbs:    check.ScoreDeltaAbs,
+		PledgedCategory:  check.PledgedCategory,
+		ActualCategory:   check.ActualCategory,
+		ActualConfidence: check.ActualConfidence,
+		LocationStatus:   check.LocationStatus,
+		CategoryMatch:    check.CategoryMatch,
+		ImageHash:        check.ImageHash,
+		ImageCID:         check.ImageCID,
+		Reasons:          check.Reasons,
+	}
 }
 
 func validateModerationStatus(status string) (string, error) {

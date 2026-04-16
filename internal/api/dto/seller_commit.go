@@ -38,6 +38,11 @@ type SellerCommitResponse struct {
 	UpdatedAt         time.Time  `json:"updatedAt"`
 }
 
+type BundleTokenResponse struct {
+	BundleToken          string     `json:"bundleToken"`
+	BundleTokenExpiresAt *time.Time `json:"bundleTokenExpiresAt,omitempty"`
+}
+
 type PledgeHistoryResponse struct {
 	Items []PledgeResponse `json:"items"`
 }

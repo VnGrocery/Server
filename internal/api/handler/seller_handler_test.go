@@ -15,6 +15,7 @@ import (
 
 	"vngrocery/internal/domain"
 	authservice "vngrocery/internal/service/auth"
+	bundletokenservice "vngrocery/internal/service/bundletoken"
 	sellerservice "vngrocery/internal/service/seller"
 	visionservice "vngrocery/internal/service/vision"
 )
@@ -28,11 +29,30 @@ func (s scorerStub) Score(ctx context.Context, input visionservice.ImageInput) (
 }
 
 type commitServiceStub struct {
-	commit func(ctx context.Context, input sellerservice.CommitInput) (domain.Pledge, error)
+	commit             func(ctx context.Context, input sellerservice.CommitInput) (domain.Pledge, error)
+	getPledgeForSeller func(ctx context.Context, shopID, pledgeID, sellerUserID string) (domain.Pledge, error)
 }
 
 func (s commitServiceStub) Commit(ctx context.Context, input sellerservice.CommitInput) (domain.Pledge, error) {
 	return s.commit(ctx, input)
+}
+
+func (s commitServiceStub) GetPledgeForSeller(ctx context.Context, shopID, pledgeID, sellerUserID string) (domain.Pledge, error) {
+	if s.getPledgeForSeller == nil {
+		return domain.Pledge{}, errors.New("not implemented")
+	}
+	return s.getPledgeForSeller(ctx, shopID, pledgeID, sellerUserID)
+}
+
+type bundleTokenIssuerStub struct {
+	issue func(input bundletokenservice.IssueInput) (string, time.Time, error)
+}
+
+func (s bundleTokenIssuerStub) Issue(input bundletokenservice.IssueInput) (string, time.Time, error) {
+	if s.issue == nil {
+		return "", time.Time{}, errors.New("not implemented")
+	}
+	return s.issue(input)
 }
 
 func TestSellerScoreRequiresImage(t *testing.T) {
@@ -250,6 +270,56 @@ func TestSellerCommitCreatesPledge(t *testing.T) {
 	}
 	if response["productId"] != "product-1" {
 		t.Fatalf("unexpected product id: %v", response["productId"])
+	}
+}
+
+func TestSellerReissueBundleToken(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewSellerHandler(scorerStub{}, commitServiceStub{
+		commit: func(ctx context.Context, input sellerservice.CommitInput) (domain.Pledge, error) {
+			return domain.Pledge{}, nil
+		},
+		getPledgeForSeller: func(ctx context.Context, shopID, pledgeID, sellerUserID string) (domain.Pledge, error) {
+			if shopID != "shop-1" || pledgeID != "pledge-1" || sellerUserID != "seller-1" {
+				t.Fatalf("unexpected params: %s %s %s", shopID, pledgeID, sellerUserID)
+			}
+			return domain.Pledge{
+				PledgeID:        "pledge-1",
+				ShopID:          "shop-1",
+				ProductID:       "product-1",
+				BundleID:        "bundle-1",
+				CreatedByUserID: "seller-1",
+			}, nil
+		},
+	})
+	handler.SetBundleTokenIssuer(bundleTokenIssuerStub{
+		issue: func(input bundletokenservice.IssueInput) (string, time.Time, error) {
+			if input.BundleID != "bundle-1" || input.PledgeID != "pledge-1" {
+				t.Fatalf("unexpected issue input: %#v", input)
+			}
+			return "bundle-token-1", time.Date(2026, 4, 16, 11, 0, 0, 0, time.UTC), nil
+		},
+	})
+
+	router := gin.New()
+	router.POST("/v1/shops/:shopId/pledges/:pledgeId/bundle-token", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "seller-1"})
+		handler.ReissueBundleToken(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/shops/shop-1/pledges/pledge-1/bundle-token", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["bundleToken"] != "bundle-token-1" {
+		t.Fatalf("unexpected token payload: %#v", payload)
 	}
 }
 

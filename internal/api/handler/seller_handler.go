@@ -12,6 +12,7 @@ import (
 
 	"vngrocery/internal/api/dto"
 	"vngrocery/internal/api/middleware"
+	"vngrocery/internal/domain"
 	bundletokenservice "vngrocery/internal/service/bundletoken"
 	sellerservice "vngrocery/internal/service/seller"
 	visionservice "vngrocery/internal/service/vision"
@@ -204,6 +205,71 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 		CommittedAt:       pledge.CommittedAt,
 		CreatedAt:         pledge.CreatedAt,
 		UpdatedAt:         pledge.UpdatedAt,
+	})
+}
+
+func (h *SellerHandler) ReissueBundleToken(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "authenticated principal was not found in request context",
+		})
+		return
+	}
+	if h.tokens == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error": "bundle token issuer is not configured",
+		})
+		return
+	}
+
+	pledges, ok := h.committer.(interface {
+		GetPledgeForSeller(ctx context.Context, shopID, pledgeID, sellerUserID string) (domain.Pledge, error)
+	})
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "pledge reader is not configured",
+		})
+		return
+	}
+
+	pledge, err := pledges.GetPledgeForSeller(
+		c.Request.Context(),
+		c.Param("shopId"),
+		c.Param("pledgeId"),
+		principal.UserID,
+	)
+	if err != nil {
+		status := http.StatusInternalServerError
+		switch {
+		case errors.Is(err, sellerservice.ErrInvalidCommit):
+			status = http.StatusBadRequest
+		case errors.Is(err, sellerservice.ErrShopNotFound), errors.Is(err, sellerservice.ErrPledgeNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, sellerservice.ErrShopOwnership):
+			status = http.StatusForbidden
+		}
+		c.JSON(status, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	token, expiresAt, err := h.tokens.Issue(bundletokenservice.IssueInput{
+		ShopID:      pledge.ShopID,
+		ProductID:   pledge.ProductID,
+		BundleID:    pledge.BundleID,
+		PledgeID:    pledge.PledgeID,
+		CreatedByID: pledge.CreatedByUserID,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	exp := expiresAt.UTC()
+	c.JSON(http.StatusOK, dto.BundleTokenResponse{
+		BundleToken:          token,
+		BundleTokenExpiresAt: &exp,
 	})
 }
 

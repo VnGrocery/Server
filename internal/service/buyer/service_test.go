@@ -462,3 +462,71 @@ func TestListBuyerChecksForAdmin(t *testing.T) {
 		t.Fatalf("unexpected list result: %#v", result)
 	}
 }
+
+func TestCheckReturnsExistingWhenBundleTokenReplayedWithSameImage(t *testing.T) {
+	now := time.Date(2026, 4, 16, 10, 0, 0, 0, time.UTC)
+	service := NewService(
+		pledgeRepositoryStub{},
+		buyerCheckRepositoryStub{
+			listByBuyerUserID: func(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error) {
+				return []domain.BuyerCheck{
+					{
+						CheckID:          "check-1",
+						ShopID:           "shop-1",
+						ProductID:        "product-1",
+						BundleID:         "bundle-1",
+						PledgeID:         "pledge-1",
+						BuyerUserID:      "buyer-1",
+						PolicyVersion:    "trust_policy_v1",
+						Verdict:          "trusted",
+						Trusted:          true,
+						PledgedScore:     8.5,
+						ActualScore:      8.2,
+						ScoreDelta:       -0.3,
+						ScoreDeltaAbs:    0.3,
+						PledgedCategory:  "fresh_produce",
+						ActualCategory:   "fresh_produce",
+						ActualConfidence: 0.9,
+						CategoryMatch:    true,
+						ImageHash:        "image-hash-1",
+						ImageCID:         "cid-1",
+						Reasons:          []string{},
+						CreatedAt:        now.Add(-1 * time.Minute),
+					},
+				}, nil
+			},
+		},
+		userRepositoryStub{},
+		scorerStub{
+			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
+				t.Fatal("score should not run for replay fallback")
+				return visionservice.ScoreResult{}, nil
+			},
+		},
+		nil,
+	)
+	service.now = func() time.Time { return now }
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{
+		verifyAndConsume: func(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error) {
+			return bundletokenservice.Claims{}, bundletokenservice.ErrReplayToken
+		},
+	})
+
+	result, err := service.Check(context.Background(), CheckInput{
+		PledgeID:    "pledge-1",
+		BundleID:    "bundle-1",
+		BundleToken: "token-1",
+		BuyerUserID: "buyer-1",
+		ImageHash:   "image-hash-1",
+		Image: visionservice.ImageInput{
+			Filename: "retry.jpg",
+			Content:  bytes.NewBuffer([]byte("fake")),
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.CheckID != "check-1" || !result.Trusted {
+		t.Fatalf("unexpected replay fallback result: %#v", result)
+	}
+}

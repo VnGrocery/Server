@@ -17,6 +17,7 @@ import (
 var ErrInvalidCommit = errors.New("invalid seller commit request")
 var ErrShopNotFound = errors.New("shop not found")
 var ErrShopOwnership = errors.New("shop does not belong to the authenticated seller")
+var ErrPledgeNotFound = errors.New("pledge not found")
 
 const PledgeStatusCommitted = "committed"
 
@@ -34,6 +35,10 @@ type CommitInput struct {
 
 type CommitService interface {
 	Commit(ctx context.Context, input CommitInput) (domain.Pledge, error)
+}
+
+type PledgeReader interface {
+	GetPledgeForSeller(ctx context.Context, shopID, pledgeID, sellerUserID string) (domain.Pledge, error)
 }
 
 type Service struct {
@@ -151,6 +156,38 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 		}
 	}
 
+	return pledge, nil
+}
+
+func (s *Service) GetPledgeForSeller(ctx context.Context, shopID, pledgeID, sellerUserID string) (domain.Pledge, error) {
+	shopID = strings.TrimSpace(shopID)
+	pledgeID = strings.TrimSpace(pledgeID)
+	sellerUserID = strings.TrimSpace(sellerUserID)
+	if shopID == "" || pledgeID == "" || sellerUserID == "" {
+		return domain.Pledge{}, fmt.Errorf("%w: shopId, pledgeId and sellerUserId are required", ErrInvalidCommit)
+	}
+	if s.pledges == nil {
+		return domain.Pledge{}, fmt.Errorf("pledge repository is not configured")
+	}
+	if s.shops == nil {
+		return domain.Pledge{}, fmt.Errorf("shop repository is not configured")
+	}
+
+	shop, err := s.shops.GetByID(ctx, shopID)
+	if err != nil {
+		return domain.Pledge{}, fmt.Errorf("%w: %v", ErrShopNotFound, err)
+	}
+	if shop.OwnerUserID != sellerUserID {
+		return domain.Pledge{}, ErrShopOwnership
+	}
+
+	pledge, err := s.pledges.GetByID(ctx, pledgeID)
+	if err != nil {
+		return domain.Pledge{}, fmt.Errorf("%w: %v", ErrPledgeNotFound, err)
+	}
+	if strings.TrimSpace(pledge.PledgeID) == "" || pledge.ShopID != shopID {
+		return domain.Pledge{}, ErrPledgeNotFound
+	}
 	return pledge, nil
 }
 

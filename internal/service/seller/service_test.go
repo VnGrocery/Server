@@ -266,3 +266,46 @@ func TestCommitWritesAuditLog(t *testing.T) {
 		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
 	}
 }
+
+func TestGetPledgeForSeller(t *testing.T) {
+	service := NewService(pledgeRepositoryStub{
+		save: func(ctx context.Context, pledge domain.Pledge) error { return nil },
+		get: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+			return domain.Pledge{
+				PledgeID: pledgeID,
+				ShopID:   "shop-1",
+				BundleID: "bundle-1",
+			}, nil
+		},
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "seller-1"}, nil
+		},
+	}, productRepositoryStub{}, nil)
+
+	pledge, err := service.GetPledgeForSeller(context.Background(), "shop-1", "pledge-1", "seller-1")
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if pledge.PledgeID != "pledge-1" || pledge.BundleID != "bundle-1" {
+		t.Fatalf("unexpected pledge: %#v", pledge)
+	}
+}
+
+func TestGetPledgeForSellerRejectsOwnerMismatch(t *testing.T) {
+	service := NewService(pledgeRepositoryStub{
+		save: func(ctx context.Context, pledge domain.Pledge) error { return nil },
+		get: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+			return domain.Pledge{PledgeID: pledgeID, ShopID: "shop-1"}, nil
+		},
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "seller-2"}, nil
+		},
+	}, productRepositoryStub{}, nil)
+
+	_, err := service.GetPledgeForSeller(context.Background(), "shop-1", "pledge-1", "seller-1")
+	if !errors.Is(err, ErrShopOwnership) {
+		t.Fatalf("expected ErrShopOwnership, got %v", err)
+	}
+}

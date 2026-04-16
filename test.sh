@@ -116,27 +116,17 @@ if [[ -z "$shop_id" ]]; then
   exit 1
 fi
 
-print_step "create second shop (should fail with 409)"
-
-dup_body=$(request POST /v1/shops \
-
-  "${AUTH_HEADER[@]}" \
-
-  "${BASE_HEADERS[@]}" \
-
-  -d "{\"name\":\"Duplicate Shop\",\"address\":\"Nowhere\"}")
-
-echo "$dup_body"
-
-if ! printf '%s' "$dup_body" | grep -q "Account already owns a shop"; then
-
-  echo "ERROR: missing expected 409 error for duplicate shop"
-
-  exit 1
-
-fi
 
 echo
+print_step "create second shop (should fail with 409)"
+dup_body=$(request POST /v1/shops "${AUTH_HEADER[@]}" "${BASE_HEADERS[@]}" -d '{"name":"Duplicate Shop","address":"Nowhere"}')
+echo "$dup_body"
+if ! echo "$dup_body" | grep -q "Account already owns a shop"; then
+  echo "ERROR: missing expected 409 error for duplicate shop"
+  exit 1
+fi
+echo
+
 print_step "create product"
 product_body=$(request POST "/v1/shops/$shop_id/products" \
   "${AUTH_HEADER[@]}" \

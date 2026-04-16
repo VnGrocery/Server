@@ -243,6 +243,7 @@ func main() {
 	buyerCheckService := buyerservice.NewService(pledgeRepository, buyerCheckRepository, userRepository, visionScorer, auditLogger)
 	bundleTokenService := bundletokenservice.NewService(cfg.JWTSecret, "vngrocery", 30*time.Minute, bundleTokenUseRepository)
 	bundleTokenService.SetObserver(metrics)
+	bundleTokenService.StartCleanup(context.Background(), 10*time.Minute, 500)
 	buyerCheckService.SetBundleTokenVerifier(bundleTokenService)
 	buyerCheckService.SetObserver(metrics)
 	authMiddleware := middleware.NewAuthRequired(jwtService)

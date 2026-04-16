@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -260,4 +261,35 @@ func shortHash(value string) string {
 		return hash
 	}
 	return hash[:10]
+}
+
+func (s *Service) StartCleanup(ctx context.Context, interval time.Duration, batchSize int) {
+	if s == nil || s.replay == nil {
+		return
+	}
+	if interval <= 0 {
+		interval = 10 * time.Minute
+	}
+	if batchSize <= 0 {
+		batchSize = 500
+	}
+	ticker := time.NewTicker(interval)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				deleted, err := s.replay.DeleteExpired(context.Background(), s.now().UTC(), batchSize)
+				if err != nil {
+					log.Printf("bundle token cleanup failed: %v", err)
+					continue
+				}
+				if deleted > 0 {
+					log.Printf("bundle token cleanup deleted=%d", deleted)
+				}
+			}
+		}
+	}()
 }

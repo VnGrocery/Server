@@ -10,8 +10,9 @@ import (
 )
 
 type replayRepoStub struct {
-	reserve func(ctx context.Context, usage domain.BundleTokenUse) (bool, error)
-	getByID func(ctx context.Context, useID string) (domain.BundleTokenUse, error)
+	reserve       func(ctx context.Context, usage domain.BundleTokenUse) (bool, error)
+	getByID       func(ctx context.Context, useID string) (domain.BundleTokenUse, error)
+	deleteExpired func(ctx context.Context, before time.Time, limit int) (int, error)
 }
 
 func (s replayRepoStub) Reserve(ctx context.Context, usage domain.BundleTokenUse) (bool, error) {
@@ -26,6 +27,13 @@ func (s replayRepoStub) GetByID(ctx context.Context, useID string) (domain.Bundl
 		return domain.BundleTokenUse{}, nil
 	}
 	return s.getByID(ctx, useID)
+}
+
+func (s replayRepoStub) DeleteExpired(ctx context.Context, before time.Time, limit int) (int, error) {
+	if s.deleteExpired == nil {
+		return 0, nil
+	}
+	return s.deleteExpired(ctx, before, limit)
 }
 
 func TestIssueAndVerifyBundleToken(t *testing.T) {

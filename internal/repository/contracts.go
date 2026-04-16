@@ -42,6 +42,7 @@ type PasswordResetTokenRepository interface {
 type BundleTokenUseRepository interface {
 	Reserve(ctx context.Context, usage domain.BundleTokenUse) (bool, error)
 	GetByID(ctx context.Context, useID string) (domain.BundleTokenUse, error)
+	DeleteExpired(ctx context.Context, before time.Time, limit int) (int, error)
 }
 
 type ShopRepository interface {

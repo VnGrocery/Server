@@ -73,6 +73,8 @@ BESU_RPC_URL=http://10.0.0.11:8545
   - `bundle_token_issued_total`
   - `bundle_token_replay_total`
   - `buyer_check_retried_total`
+- Retention:
+  - `bundle_token_uses` is cleaned in background every 10 minutes (batch 500) by `expiresAt`
 - Run `go run ./cmd/backfill-integrity --batch-size 200` after data migrations that affect pledges
 - Run `IMAGE_PATH=/abs/path/to/image.jpg ./scripts/e2e-mobile-flow.sh` against staging before each release
 

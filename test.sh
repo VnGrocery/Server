@@ -2,6 +2,8 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:5000}"
+CURL_CONNECT_TIMEOUT="${CURL_CONNECT_TIMEOUT:-5}"
+CURL_MAX_TIME="${CURL_MAX_TIME:-40}"
 
 EMAIL="${EMAIL:-}"
 PASSWORD="${PASSWORD:-Passw0rd!}"
@@ -25,6 +27,7 @@ PLEDGE_SCORE="${PLEDGE_SCORE:-8.5}"
 PLEDGE_CATEGORY="${PLEDGE_CATEGORY:-fresh_produce}"
 PLEDGE_CONFIDENCE="${PLEDGE_CONFIDENCE:-0.91}"
 PLEDGE_IMAGE_HASH="${PLEDGE_IMAGE_HASH:-manual-test-image-hash}"
+BUNDLE_ID="${BUNDLE_ID:-bundle-${RANDOM}-$(date +%s)}"
 
 REPORT_SCORE="${REPORT_SCORE:-7.2}"
 REPORT_CATEGORY="${REPORT_CATEGORY:-fresh_produce}"
@@ -48,7 +51,16 @@ request() {
   local method="$1"
   local path="$2"
   shift 2
-  curl -sS -X "$method" "$BASE_URL$path" "$@"
+  if ! curl -sS \
+    --connect-timeout "$CURL_CONNECT_TIMEOUT" \
+    --max-time "$CURL_MAX_TIME" \
+    -X "$method" \
+    "$BASE_URL$path" \
+    "$@"; then
+    echo >&2
+    echo "ERROR: request failed or timed out ($method $path) after ${CURL_MAX_TIME}s" >&2
+    return 1
+  fi
 }
 
 print_step() {
@@ -68,10 +80,13 @@ echo "PASSWORD=$PASSWORD"
 echo "DISPLAY_NAME=$DISPLAY_NAME"
 echo "SHOP_NAME=$SHOP_NAME"
 echo "PRODUCT_NAME=$PRODUCT_NAME"
+echo "BUNDLE_ID=$BUNDLE_ID"
+echo "CURL_CONNECT_TIMEOUT=$CURL_CONNECT_TIMEOUT"
+echo "CURL_MAX_TIME=$CURL_MAX_TIME"
 echo "IMAGE_PATH=${IMAGE_PATH:-<empty>}"
 
 print_step "health"
-curl -sS -D- "$BASE_URL/health" -o /dev/null | sed -n '1,5p'
+curl -sS --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" -D- "$BASE_URL/health" -o /dev/null | sed -n '1,5p'
 
 if [[ -z "$EMAIL" ]]; then
   EMAIL="test+$RANDOM$(date +%s)@example.com"
@@ -121,7 +136,7 @@ echo
 print_step "create second shop (should fail with 409)"
 dup_body=$(request POST /v1/shops "${AUTH_HEADER[@]}" "${BASE_HEADERS[@]}" -d '{"name":"Duplicate Shop","address":"Nowhere"}')
 echo "$dup_body"
-if ! echo "$dup_body" | grep -q "Account already owns a shop"; then
+if ! echo "$dup_body" | grep -qi "account already owns a shop"; then
   echo "ERROR: missing expected 409 error for duplicate shop"
   exit 1
 fi
@@ -171,7 +186,7 @@ print_step "seller commit"
 commit_body=$(request POST /v1/seller/commit \
   "${AUTH_HEADER[@]}" \
   "${BASE_HEADERS[@]}" \
-  -d "{\"shopId\":\"$shop_id\",\"productId\":\"$product_id\",\"score\":$PLEDGE_SCORE,\"category\":\"$PLEDGE_CATEGORY\",\"confidence\":$PLEDGE_CONFIDENCE,\"imageHash\":\"$commit_image_hash\"}")
+  -d "{\"shopId\":\"$shop_id\",\"productId\":\"$product_id\",\"bundleId\":\"$BUNDLE_ID\",\"score\":$PLEDGE_SCORE,\"category\":\"$PLEDGE_CATEGORY\",\"confidence\":$PLEDGE_CONFIDENCE,\"imageHash\":\"$commit_image_hash\"}")
 echo "$commit_body"
 
 pledge_id="$(printf '%s' "$commit_body" | json_get pledgeId || true)"
@@ -179,6 +194,11 @@ if [[ -z "$pledge_id" ]]; then
   echo "ERROR: could not extract pledgeId from seller commit" >&2
   exit 1
 fi
+bundle_id="$(printf '%s' "$commit_body" | json_get bundleId || true)"
+if [[ -z "$bundle_id" ]]; then
+  bundle_id="$BUNDLE_ID"
+fi
+bundle_token="$(printf '%s' "$commit_body" | json_get bundleToken || true)"
 
 print_step "pledge history"
 request GET "/v1/shops/$shop_id/pledges?productId=$product_id&category=$PLEDGE_CATEGORY"
@@ -189,10 +209,23 @@ request GET "/v1/shops/$shop_id/pledges/$pledge_id/integrity"
 echo
 
 if [[ -n "$IMAGE_PATH" ]]; then
+  if [[ -z "$bundle_token" ]]; then
+    print_step "reissue bundle token"
+    token_body=$(request POST "/v1/shops/$shop_id/pledges/$pledge_id/bundle-token" "${AUTH_HEADER[@]}")
+    echo "$token_body"
+    bundle_token="$(printf '%s' "$token_body" | json_get bundleToken || true)"
+  fi
+  if [[ -z "$bundle_token" ]]; then
+    echo "ERROR: could not extract bundleToken for buyer check" >&2
+    exit 1
+  fi
+
   print_step "buyer check"
   request POST /v1/buyer/check \
     "${AUTH_HEADER[@]}" \
     -F "pledgeId=$pledge_id" \
+    -F "bundleId=$bundle_id" \
+    -F "bundleToken=$bundle_token" \
     -F "image=@$IMAGE_PATH"
   echo
 

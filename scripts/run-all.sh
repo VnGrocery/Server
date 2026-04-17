@@ -84,6 +84,10 @@ echo "Vault is ready. Starting full stack..."
 run_compose up -d --build
 
 echo
+echo "Ensuring Besu peers are connected..."
+COMPOSE_FILE="$COMPOSE_FILE" ./scripts/ensure-besu-peers.sh
+
+echo
 echo "Stack started. Useful commands:"
 echo "  docker compose -f $COMPOSE_FILE ps"
 echo "  docker compose -f $COMPOSE_FILE logs -f api"

@@ -48,6 +48,18 @@ Khi backend chạy ở server khác, hãy dùng IP hoặc domain thật của Be
 BESU_RPC_URL=http://10.0.0.11:8545
 ```
 
+Nếu log Besu lặp `Unable to find sync target. Currently checking 0 peers`, chạy bootstrap peers:
+
+```bash
+make besu-peers
+```
+
+Hoặc script trực tiếp:
+
+```bash
+COMPOSE_FILE=docker-compose.deploy.yml ./scripts/ensure-besu-peers.sh
+```
+
 ## 3. IPFS chạy nhưng không có `imageCid`
 Kiểm tra:
 - `IPFS_ENABLED=true`

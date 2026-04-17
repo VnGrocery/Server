@@ -25,6 +25,7 @@ help:
 	@echo "  make vault-init          # print/init persistent vault manually"
 	@echo "  make vault-status        # show persistent vault status"
 	@echo "  make deploy-config       # validate deploy compose"
+	@echo "  make besu-peers          # bootstrap/check Besu peers in deploy compose"
 	@echo "  make logs service=api    # tail logs for a service in deploy compose"
 	@echo "  make ps                  # show deploy stack containers"
 	@echo "  make down                # stop deploy stack"
@@ -79,6 +80,10 @@ vault-status:
 .PHONY: deploy-config
 deploy-config:
 	$(COMPOSE) $(DEPLOY_COMPOSE) config
+
+.PHONY: besu-peers
+besu-peers:
+	COMPOSE_FILE=docker-compose.deploy.yml ./scripts/ensure-besu-peers.sh
 
 .PHONY: logs
 logs:

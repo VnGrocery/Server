@@ -26,6 +26,8 @@ help:
 	@echo "  make vault-status        # show persistent vault status"
 	@echo "  make deploy-config       # validate deploy compose"
 	@echo "  make besu-peers          # bootstrap/check Besu peers in deploy compose"
+	@echo "  make besu-heal           # bootstrap peers + auto-heal node drift (restart lagging validators)"
+	@echo "  make besu-heal-strict    # auto-heal with stricter drift threshold"
 	@echo "  make logs service=api    # tail logs for a service in deploy compose"
 	@echo "  make ps                  # show deploy stack containers"
 	@echo "  make down                # stop deploy stack"
@@ -84,6 +86,30 @@ deploy-config:
 .PHONY: besu-peers
 besu-peers:
 	COMPOSE_FILE=docker-compose.deploy.yml ./scripts/ensure-besu-peers.sh
+
+.PHONY: besu-heal
+besu-heal:
+	COMPOSE_FILE=docker-compose.deploy.yml \
+	MAX_ATTEMPTS=10 \
+	SLEEP_SEC=2 \
+	MAX_BLOCK_DRIFT=24 \
+	HEAL_ON_DRIFT=1 \
+	HEAL_ON_ZERO_PEER=1 \
+	HEAL_WAIT_SEC=5 \
+	HEAL_MAX_RESTARTS=3 \
+	./scripts/ensure-besu-peers.sh
+
+.PHONY: besu-heal-strict
+besu-heal-strict:
+	COMPOSE_FILE=docker-compose.deploy.yml \
+	MAX_ATTEMPTS=12 \
+	SLEEP_SEC=2 \
+	MAX_BLOCK_DRIFT=8 \
+	HEAL_ON_DRIFT=1 \
+	HEAL_ON_ZERO_PEER=1 \
+	HEAL_WAIT_SEC=6 \
+	HEAL_MAX_RESTARTS=4 \
+	./scripts/ensure-besu-peers.sh
 
 .PHONY: logs
 logs:

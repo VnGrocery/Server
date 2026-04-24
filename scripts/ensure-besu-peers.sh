@@ -4,6 +4,11 @@ set -euo pipefail
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.deploy.yml}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-8}"
 SLEEP_SEC="${SLEEP_SEC:-2}"
+MAX_BLOCK_DRIFT="${MAX_BLOCK_DRIFT:-24}"
+HEAL_ON_DRIFT="${HEAL_ON_DRIFT:-1}"
+HEAL_ON_ZERO_PEER="${HEAL_ON_ZERO_PEER:-1}"
+HEAL_WAIT_SEC="${HEAL_WAIT_SEC:-5}"
+HEAL_MAX_RESTARTS="${HEAL_MAX_RESTARTS:-2}"
 SERVICES=(besu-validator1 besu-validator2 besu-validator3 besu-validator4)
 
 usage() {
@@ -15,6 +20,11 @@ Environment:
   COMPOSE_FILE   Compose file to use (default: docker-compose.deploy.yml)
   MAX_ATTEMPTS   Max retry loops (default: 8)
   SLEEP_SEC      Sleep between loops in seconds (default: 2)
+  MAX_BLOCK_DRIFT        Max allowed block gap between nodes (default: 24)
+  HEAL_ON_DRIFT          Restart lagging nodes when drift is high (default: 1)
+  HEAL_ON_ZERO_PEER      Restart nodes that keep peerCount=0 (default: 1)
+  HEAL_WAIT_SEC          Wait after each healing restart (default: 5)
+  HEAL_MAX_RESTARTS      Max restart count per node in one run (default: 2)
 EOF
 }
 
@@ -60,6 +70,19 @@ hex_to_dec() {
   printf "%d\n" "$((16#$hex))"
 }
 
+service_name_from_index() {
+  local index="$1"
+  echo "${SERVICES[$index]}"
+}
+
+restart_service_once() {
+  local service="$1"
+  local count="$2"
+  echo "HEAL: restarting $service (restart count: $count/$HEAL_MAX_RESTARTS)"
+  run_compose restart "$service" >/dev/null
+  sleep "$HEAL_WAIT_SEC"
+}
+
 main() {
   local arg="${1:-}"
   if [[ "$arg" =~ ^(-h|--help|help)$ ]]; then
@@ -98,7 +121,16 @@ main() {
     enodes+=("$enode")
   done
 
-  local attempt all_good peer_hex peer_dec add_result
+  local attempt all_good add_result
+  local -a peer_counts=()
+  local -a block_heights=()
+  local -a zero_peer_services=()
+  local -a drift_services=()
+  local -A restart_counts=()
+  local i service_i port_i
+  local peer_hex peer_dec block_hex block_dec
+  local min_block max_block drift
+  local restart_key restart_next_count
   for attempt in $(seq 1 "$MAX_ATTEMPTS"); do
     echo "Peer bootstrap attempt $attempt/$MAX_ATTEMPTS ..."
 
@@ -112,26 +144,90 @@ main() {
       done
     done
 
+    peer_counts=()
+    block_heights=()
+    zero_peer_services=()
+    min_block=-1
+    max_block=-1
+
     all_good=1
     for i in "${!SERVICES[@]}"; do
-      port="${ports[$i]}"
-      peer_hex="$(json_rpc "$port" "net_peerCount" | extract_json_result_hex || true)"
+      service_i="$(service_name_from_index "$i")"
+      port_i="${ports[$i]}"
+
+      peer_hex="$(json_rpc "$port_i" "net_peerCount" | extract_json_result_hex || true)"
       peer_dec="$(hex_to_dec "${peer_hex:-0x0}")"
-      echo "  ${SERVICES[$i]} peers: $peer_dec (${peer_hex:-0x0})"
+      echo "  $service_i peers: $peer_dec (${peer_hex:-0x0})"
+      peer_counts+=("$peer_dec")
       if (( peer_dec < 1 )); then
         all_good=0
+        zero_peer_services+=("$service_i")
       fi
+
+      block_hex="$(json_rpc "$port_i" "eth_blockNumber" | extract_json_result_hex || true)"
+      block_dec="$(hex_to_dec "${block_hex:-0x0}")"
+      block_heights+=("$block_dec")
+      if (( min_block < 0 || block_dec < min_block )); then
+        min_block="$block_dec"
+      fi
+      if (( max_block < 0 || block_dec > max_block )); then
+        max_block="$block_dec"
+      fi
+      echo "  $service_i block: $block_dec (${block_hex:-0x0})"
     done
+
+    drift=$((max_block - min_block))
+    echo "  cluster drift: $drift blocks (min=$min_block max=$max_block threshold=$MAX_BLOCK_DRIFT)"
+    if (( drift > MAX_BLOCK_DRIFT )); then
+      all_good=0
+      drift_services=()
+      for i in "${!SERVICES[@]}"; do
+        service_i="$(service_name_from_index "$i")"
+        if (( block_heights[$i] < max_block - MAX_BLOCK_DRIFT )); then
+          drift_services+=("$service_i")
+        fi
+      done
+      if (( ${#drift_services[@]} > 0 )); then
+        echo "  WARN: lagging nodes: ${drift_services[*]}"
+      fi
+    fi
 
     if (( all_good == 1 )); then
       echo "Besu peer mesh is healthy."
       exit 0
     fi
 
+    if (( HEAL_ON_ZERO_PEER == 1 )); then
+      for service in "${zero_peer_services[@]}"; do
+        restart_key="zero_peer:$service"
+        restart_next_count=$(( ${restart_counts[$restart_key]:-0} + 1 ))
+        if (( restart_next_count <= HEAL_MAX_RESTARTS )); then
+          restart_counts[$restart_key]="$restart_next_count"
+          restart_service_once "$service" "$restart_next_count"
+        else
+          echo "HEAL: skip restart for $service (zero peer) because restart limit reached."
+        fi
+      done
+    fi
+
+    if (( HEAL_ON_DRIFT == 1 && drift > MAX_BLOCK_DRIFT )); then
+      for service in "${drift_services[@]}"; do
+        restart_key="drift:$service"
+        restart_next_count=$(( ${restart_counts[$restart_key]:-0} + 1 ))
+        if (( restart_next_count <= HEAL_MAX_RESTARTS )); then
+          restart_counts[$restart_key]="$restart_next_count"
+          restart_service_once "$service" "$restart_next_count"
+        else
+          echo "HEAL: skip restart for $service (drift) because restart limit reached."
+        fi
+      done
+    fi
+
     sleep "$SLEEP_SEC"
   done
 
   echo "ERROR: Besu peers are still not connected after $MAX_ATTEMPTS attempts." >&2
+  echo "Hint: if one node keeps drifting, check node data/genesis consistency and consider resyncing that validator data dir." >&2
   echo "Check logs: docker compose -f $COMPOSE_FILE logs --tail=100 besu-validator1 besu-validator2 besu-validator3 besu-validator4" >&2
   exit 1
 }

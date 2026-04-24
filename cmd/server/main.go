@@ -194,6 +194,7 @@ func main() {
 		auditLogger = auditQueryService
 	}
 	integrityManager = integrityservice.NewService(pledgeRepository, nil, auditLogger)
+	integrityManager.SetShopRepository(shopRepository)
 	if cfg.BesuEnabled {
 		besuClient := besupkg.NewClient(besupkg.Config{
 			RPCURL:          cfg.BesuRPCURL,
@@ -205,6 +206,7 @@ func main() {
 			ReceiptTimeout:  time.Duration(mustParseInt(cfg.BesuReceiptTimeoutSec, 30)) * time.Second,
 		})
 		integrityManager = integrityservice.NewService(pledgeRepository, besuClientAdapter{client: besuClient}, auditLogger)
+		integrityManager.SetShopRepository(shopRepository)
 		integrityManager.StartBackground(context.Background(), integrityservice.WorkerConfig{
 			PendingInterval: time.Duration(mustParseInt(cfg.BesuPendingIntervalSec, 3)) * time.Second,
 			VerifyInterval:  time.Duration(mustParseInt(cfg.BesuVerifyIntervalSec, 8)) * time.Second,
@@ -239,6 +241,7 @@ func main() {
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, buyerCheckRepository, shopReviewRepository, userRepository, auditLogger)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, productRepository, auditLogger)
 	shopManager.SetPledgeIntegrityReader(integrityAdapter{service: integrityManager})
+	shopManager.SetShopIntegrityManager(integrityManager)
 	sellerCommitService.SetIntegrityManager(integrityManager)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, buyerCheckRepository, userRepository, visionScorer, auditLogger)
 	bundleTokenService := bundletokenservice.NewService(cfg.JWTSecret, "vngrocery", 30*time.Minute, bundleTokenUseRepository)

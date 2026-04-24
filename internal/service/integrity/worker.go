@@ -14,7 +14,7 @@ type WorkerConfig struct {
 }
 
 func (s *Service) StartBackground(ctx context.Context, cfg WorkerConfig) {
-	if s == nil || s.chain == nil || s.pledges == nil {
+	if s == nil || s.chain == nil || (s.pledges == nil && s.shops == nil) {
 		return
 	}
 
@@ -41,6 +41,9 @@ func (s *Service) StartBackground(ctx context.Context, cfg WorkerConfig) {
 		for {
 			if err := s.ProcessPendingPledges(ctx, pendingBatch); err != nil {
 				log.Printf("integrity pending anchor worker failed: %v", err)
+			}
+			if err := s.ProcessPendingShops(ctx, pendingBatch); err != nil {
+				log.Printf("integrity pending shop anchor worker failed: %v", err)
 			}
 			select {
 			case <-ctx.Done():

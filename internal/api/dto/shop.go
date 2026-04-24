@@ -74,6 +74,12 @@ type ShopResponse struct {
 	Latitude          float64                   `json:"latitude"`
 	Longitude         float64                   `json:"longitude"`
 	Status            string                    `json:"status"`
+	DataHash          string                    `json:"dataHash,omitempty"`
+	ChainTxHash       string                    `json:"chainTxHash,omitempty"`
+	ChainBlockNumber  int64                     `json:"chainBlockNumber,omitempty"`
+	ChainAnchorStatus string                    `json:"chainAnchorStatus,omitempty"`
+	ChainAnchorTime   *time.Time                `json:"chainAnchorTime,omitempty"`
+	IntegrityStatus   string                    `json:"integrityStatus,omitempty"`
 	ModeratedByUserID string                    `json:"moderatedByUserId,omitempty"`
 	ModerationNote    string                    `json:"moderationNote,omitempty"`
 	ModeratedAt       *time.Time                `json:"moderatedAt,omitempty"`

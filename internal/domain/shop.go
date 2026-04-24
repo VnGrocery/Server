@@ -11,6 +11,12 @@ type Shop struct {
 	Latitude          float64    `firestore:"latitude"`
 	Longitude         float64    `firestore:"longitude"`
 	Status            string     `firestore:"status"`
+	DataHash          string     `firestore:"dataHash"`
+	ChainTxHash       string     `firestore:"chainTxHash"`
+	ChainBlockNumber  int64      `firestore:"chainBlockNumber"`
+	ChainAnchorStatus string     `firestore:"chainAnchorStatus"`
+	ChainAnchorTime   *time.Time `firestore:"chainAnchorTime"`
+	IntegrityStatus   string     `firestore:"integrityStatus"`
 	Version           int        `firestore:"version"`
 	ModeratedByUserID string     `firestore:"moderatedByUserId"`
 	ModerationNote    string     `firestore:"moderationNote"`

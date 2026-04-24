@@ -58,6 +58,7 @@ type Notifier interface {
 
 type Service struct {
 	pledges  repository.PledgeRepository
+	shops    repository.ShopRepository
 	chain    ChainClient
 	audit    AuditLogger
 	notifier Notifier
@@ -125,6 +126,20 @@ type pledgeHashPayload struct {
 	UpdatedAt       time.Time `json:"updatedAt"`
 }
 
+type shopHashPayload struct {
+	ShopID      string    `json:"shopId"`
+	OwnerUserID string    `json:"ownerUserId"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Address     string    `json:"address"`
+	Latitude    float64   `json:"latitude"`
+	Longitude   float64   `json:"longitude"`
+	Status      string    `json:"status"`
+	Version     int       `json:"version"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
 func NewService(pledges repository.PledgeRepository, chain ChainClient, auditLogger AuditLogger) *Service {
 	return &Service{
 		pledges: pledges,
@@ -136,6 +151,10 @@ func NewService(pledges repository.PledgeRepository, chain ChainClient, auditLog
 
 func (s *Service) SetNotifier(notifier Notifier) {
 	s.notifier = notifier
+}
+
+func (s *Service) SetShopRepository(shops repository.ShopRepository) {
+	s.shops = shops
 }
 
 func (s *Service) SetObserver(observer Observer) {
@@ -205,6 +224,56 @@ func (s *Service) SyncPledge(ctx context.Context, pledge domain.Pledge) (domain.
 	return pledge, nil
 }
 
+func (s *Service) PrepareShop(shop domain.Shop) (domain.Shop, error) {
+	hash, err := HashShop(shop)
+	if err != nil {
+		return domain.Shop{}, err
+	}
+
+	shop.DataHash = hash
+	shop.ChainAnchorStatus = ChainAnchorStatusPending
+	shop.IntegrityStatus = IntegrityStatusPendingAnchor
+	shop.ChainTxHash = ""
+	shop.ChainBlockNumber = 0
+	shop.ChainAnchorTime = nil
+	return shop, nil
+}
+
+func (s *Service) SyncShop(ctx context.Context, shop domain.Shop) (domain.Shop, error) {
+	if s.chain == nil {
+		return shop, nil
+	}
+	if strings.TrimSpace(shop.DataHash) == "" {
+		var err error
+		shop, err = s.PrepareShop(shop)
+		if err != nil {
+			return domain.Shop{}, err
+		}
+	}
+	if shop.ChainAnchorStatus == ChainAnchorStatusAnchored {
+		return shop, nil
+	}
+	if strings.TrimSpace(shop.ChainTxHash) != "" {
+		receipt, err := s.chain.Receipt(ctx, shop.ChainTxHash)
+		if err == nil && receipt.Mined {
+			return s.applyAnchoredShop(shop, receipt), nil
+		}
+		if err == nil {
+			return shop, nil
+		}
+	}
+
+	commit, err := s.chain.CommitHash(ctx, shopRecordID(shop.ShopID), shop.DataHash, shop.CreatedAt, shop.Version)
+	if err != nil {
+		return shop, err
+	}
+	shop.ChainTxHash = commit.TxHash
+	if commit.Mined {
+		return s.applyAnchoredShop(shop, commit), nil
+	}
+	return shop, nil
+}
+
 func (s *Service) ProcessPendingPledges(ctx context.Context, limit int) error {
 	if s.pledges == nil || s.chain == nil {
 		return nil
@@ -225,6 +294,40 @@ func (s *Service) ProcessPendingPledges(ctx context.Context, limit int) error {
 		}
 	}
 
+	return nil
+}
+
+func (s *Service) ProcessPendingShops(ctx context.Context, limit int) error {
+	if s.shops == nil || s.chain == nil {
+		return nil
+	}
+	shops, err := s.shops.List(ctx, repository.ShopListFilter{})
+	if err != nil {
+		return err
+	}
+	if limit <= 0 {
+		limit = 25
+	}
+	processed := 0
+	for _, shop := range shops {
+		if strings.TrimSpace(shop.DataHash) == "" && strings.TrimSpace(shop.ChainAnchorStatus) == "" {
+			continue
+		}
+		if shop.ChainAnchorStatus != ChainAnchorStatusPending {
+			continue
+		}
+		updated, err := s.SyncShop(ctx, shop)
+		if err != nil {
+			continue
+		}
+		if err := s.shops.Save(ctx, updated); err != nil {
+			return err
+		}
+		processed++
+		if processed >= limit {
+			break
+		}
+	}
 	return nil
 }
 
@@ -364,6 +467,29 @@ func HashPledge(pledge domain.Pledge) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
+func HashShop(shop domain.Shop) (string, error) {
+	payload := shopHashPayload{
+		ShopID:      strings.TrimSpace(shop.ShopID),
+		OwnerUserID: strings.TrimSpace(shop.OwnerUserID),
+		Name:        strings.TrimSpace(shop.Name),
+		Description: strings.TrimSpace(shop.Description),
+		Address:     strings.TrimSpace(shop.Address),
+		Latitude:    shop.Latitude,
+		Longitude:   shop.Longitude,
+		Status:      strings.TrimSpace(shop.Status),
+		Version:     shop.Version,
+		CreatedAt:   shop.CreatedAt.UTC(),
+		UpdatedAt:   shop.UpdatedAt.UTC(),
+	}
+
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal shop payload: %w", err)
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
 func (s *Service) verifyPledge(ctx context.Context, pledge domain.Pledge) (bool, LatestRecord, error) {
 	latest, err := s.chain.GetLatest(ctx, pledge.PledgeID)
 	if err != nil {
@@ -439,6 +565,24 @@ func (s *Service) applyAnchored(pledge domain.Pledge, commit CommitResult) domai
 		pledge.ChainAnchorTime = &now
 	}
 	return pledge
+}
+
+func (s *Service) applyAnchoredShop(shop domain.Shop, commit CommitResult) domain.Shop {
+	shop.ChainTxHash = commit.TxHash
+	shop.ChainBlockNumber = commit.BlockNumber
+	shop.ChainAnchorStatus = ChainAnchorStatusAnchored
+	shop.IntegrityStatus = IntegrityStatusAnchored
+	if commit.BlockTime != nil {
+		shop.ChainAnchorTime = commit.BlockTime
+	} else {
+		now := s.now().UTC()
+		shop.ChainAnchorTime = &now
+	}
+	return shop
+}
+
+func shopRecordID(shopID string) string {
+	return "shop:" + strings.TrimSpace(shopID)
 }
 
 func mismatchReason(pledge domain.Pledge, latest LatestRecord, matched bool) string {

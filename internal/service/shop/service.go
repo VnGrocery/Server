@@ -164,14 +164,15 @@ type ListResult struct {
 }
 
 type Service struct {
-	shops     repository.ShopRepository
-	pledges   repository.PledgeRepository
-	checks    repository.BuyerCheckRepository
-	reviews   repository.ShopReviewRepository
-	users     repository.UserRepository
-	audit     AuditLogger
-	integrity PledgeIntegrityReader
-	now       func() time.Time
+	shops         repository.ShopRepository
+	pledges       repository.PledgeRepository
+	checks        repository.BuyerCheckRepository
+	reviews       repository.ShopReviewRepository
+	users         repository.UserRepository
+	audit         AuditLogger
+	integrity     PledgeIntegrityReader
+	shopIntegrity ShopIntegrityManager
+	now           func() time.Time
 }
 
 type AuditLogger interface {
@@ -183,6 +184,11 @@ type PledgeIntegrityReader interface {
 	VerifyPledgeHash(ctx context.Context, pledge domain.Pledge, dataHash string) (PledgeIntegrityView, error)
 	ReanchorPledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error)
 	RevokePledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error)
+}
+
+type ShopIntegrityManager interface {
+	PrepareShop(shop domain.Shop) (domain.Shop, error)
+	SyncShop(ctx context.Context, shop domain.Shop) (domain.Shop, error)
 }
 
 type PledgeIntegrityView struct {
@@ -281,6 +287,10 @@ func (s *Service) SetPledgeIntegrityReader(reader PledgeIntegrityReader) {
 	s.integrity = reader
 }
 
+func (s *Service) SetShopIntegrityManager(manager ShopIntegrityManager) {
+	s.shopIntegrity = manager
+}
+
 type ReviewInput struct {
 	ShopID          string
 	ReviewerUserID  string
@@ -326,9 +336,25 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Shop, e
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
+	if s.shopIntegrity != nil {
+		prepared, err := s.shopIntegrity.PrepareShop(shop)
+		if err != nil {
+			return domain.Shop{}, err
+		}
+		shop = prepared
+	}
 
 	if err := s.shops.Save(ctx, shop); err != nil {
 		return domain.Shop{}, err
+	}
+	if s.shopIntegrity != nil {
+		anchored, err := s.shopIntegrity.SyncShop(ctx, shop)
+		if err == nil {
+			shop = anchored
+			if saveErr := s.shops.Save(ctx, shop); saveErr != nil {
+				return domain.Shop{}, saveErr
+			}
+		}
 	}
 	if err := s.logMutation(ctx, input.OwnerUserID, "shop", shop.ShopID, shop.Version, "shop.created", audit.MutationPayload{
 		After: shop,

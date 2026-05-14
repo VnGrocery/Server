@@ -95,6 +95,16 @@ func buildSchemas() gin.H {
 				"newPassword":     gin.H{"type": "string"},
 			},
 		},
+		"UpdateMeRequest": gin.H{
+			"type":     "object",
+			"required": []string{"expectedVersion"},
+			"properties": gin.H{
+				"expectedVersion": gin.H{"type": "integer", "minimum": 1},
+				"displayName":     gin.H{"type": "string"},
+				"firstName":       gin.H{"type": "string"},
+				"lastName":        gin.H{"type": "string"},
+			},
+		},
 		"ForgotPasswordRequest": gin.H{
 			"type":     "object",
 			"required": []string{"email"},
@@ -846,6 +856,15 @@ func buildPaths() gin.H {
 				"security":  []gin.H{{"bearerAuth": []string{}}},
 				"responses": mergeResponses(success(http.StatusOK, "MeResponse"), errorResponse),
 			},
+			"patch": gin.H{
+				"summary":     "Update current user profile",
+				"security":    []gin.H{{"bearerAuth": []string{}}},
+				"requestBody": jsonBody("UpdateMeRequest"),
+				"responses": mergeResponses(
+					mergeResponses(success(http.StatusOK, "MeResponse"), gin.H{"409": gin.H{"description": "Version conflict"}}),
+					errorResponse,
+				),
+			},
 			"delete": gin.H{
 				"summary":  "Soft delete current user account",
 				"security": []gin.H{{"bearerAuth": []string{}}},
@@ -1383,6 +1402,10 @@ func annotatePathDocs(paths gin.H) {
 			"get": {
 				summary:     "Thông tin tài khoản hiện tại | Current account",
 				description: "Lấy thông tin cơ bản của người dùng đang đăng nhập.\n\nReturn the current authenticated user profile summary.",
+			},
+			"patch": {
+				summary:     "Cập nhật hồ sơ cá nhân | Update current profile",
+				description: "Cập nhật tên hiển thị, họ và tên của tài khoản hiện tại với expectedVersion để tránh ghi đè.\n\nUpdate display name, first name, and last name using optimistic concurrency.",
 			},
 			"delete": {
 				summary:     "Xóa mềm tài khoản | Soft delete account",

@@ -63,6 +63,19 @@ func (a authAccountAdapter) Me(ctx context.Context, userID string) (domain.User,
 	return domain.User{UserID: userID, Status: authservice.AccountStatusActive}, nil
 }
 
+func (a authAccountAdapter) UpdateMe(ctx context.Context, input authservice.UpdateProfileInput) (domain.User, error) {
+	return domain.User{
+		UserID:      input.UserID,
+		DisplayName: input.DisplayName,
+		FirstName:   input.FirstName,
+		LastName:    input.LastName,
+		Role:        "user",
+		Email:       "u@example.com",
+		Status:      authservice.AccountStatusActive,
+		Version:     input.ExpectedVersion + 1,
+	}, nil
+}
+
 func TestDeleteMe(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := NewAuthHandler(authAccountAdapter{
@@ -118,6 +131,34 @@ func TestDeleteMeRequiresExpectedVersion(t *testing.T) {
 
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestUpdateMe(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewAuthHandler(authAccountAdapter{})
+
+	router := gin.New()
+	router.PATCH("/v1/me", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "user-1", Email: "u@example.com", Role: "user"})
+		handler.UpdateMe(c)
+	})
+
+	req := httptest.NewRequest(http.MethodPatch, "/v1/me", bytes.NewBufferString(`{"expectedVersion":1,"firstName":"Van","lastName":"Nguyen","displayName":"VN"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if payload["firstName"] != "Van" || payload["lastName"] != "Nguyen" {
+		t.Fatalf("unexpected response payload: %#v", payload)
 	}
 }
 

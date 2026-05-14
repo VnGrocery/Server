@@ -83,6 +83,14 @@ type DeleteResult struct {
 	Status string
 }
 
+type UpdateProfileInput struct {
+	UserID          string
+	ExpectedVersion int
+	DisplayName     string
+	FirstName       string
+	LastName        string
+}
+
 type AuthResult struct {
 	AccessToken  string
 	RefreshToken string
@@ -571,6 +579,51 @@ func (s *AccountService) Me(ctx context.Context, userID string) (domain.User, er
 	if user.Status != AccountStatusActive {
 		return domain.User{}, ErrAccountDeleted
 	}
+	return user, nil
+}
+
+func (s *AccountService) UpdateMe(ctx context.Context, input UpdateProfileInput) (domain.User, error) {
+	userID := strings.TrimSpace(input.UserID)
+	if userID == "" {
+		return domain.User{}, fmt.Errorf("%w: userId is required", ErrInvalidCredentials)
+	}
+	if input.ExpectedVersion <= 0 {
+		return domain.User{}, fmt.Errorf("%w: expectedVersion must be positive", ErrInvalidCredentials)
+	}
+	if s.users == nil {
+		return domain.User{}, fmt.Errorf("auth service is not configured")
+	}
+
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil || user.UserID == "" {
+		return domain.User{}, ErrInvalidCredentials
+	}
+	if user.Status != AccountStatusActive {
+		return domain.User{}, ErrAccountDeleted
+	}
+	if user.Version != input.ExpectedVersion {
+		return domain.User{}, ErrVersionConflict
+	}
+
+	firstName := strings.TrimSpace(input.FirstName)
+	lastName := strings.TrimSpace(input.LastName)
+	displayName := strings.TrimSpace(input.DisplayName)
+	if displayName == "" {
+		displayName = strings.TrimSpace(strings.Join([]string{lastName, firstName}, " "))
+	}
+	if firstName == "" && lastName == "" && displayName == "" {
+		return domain.User{}, fmt.Errorf("%w: at least one profile field is required", ErrInvalidCredentials)
+	}
+
+	user.FirstName = firstName
+	user.LastName = lastName
+	user.DisplayName = displayName
+	user.Version++
+	user.UpdatedAt = time.Now().UTC()
+	if err := s.users.Save(ctx, user); err != nil {
+		return domain.User{}, err
+	}
+
 	return user, nil
 }
 

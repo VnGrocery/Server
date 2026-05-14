@@ -472,6 +472,10 @@ func (authAccountsStub) Me(ctx context.Context, userID string) (domain.User, err
 	return domain.User{}, errors.New("not implemented")
 }
 
+func (authAccountsStub) UpdateMe(ctx context.Context, input authservice.UpdateProfileInput) (domain.User, error) {
+	return domain.User{}, errors.New("not implemented")
+}
+
 type eventLogUsecaseStub struct{}
 
 func (eventLogUsecaseStub) List(ctx context.Context, input auditservice.ListInput) (auditservice.ListResult, error) {

@@ -30,6 +30,13 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"newPassword"`
 }
 
+type UpdateMeRequest struct {
+	ExpectedVersion int    `json:"expectedVersion"`
+	DisplayName     string `json:"displayName"`
+	FirstName       string `json:"firstName"`
+	LastName        string `json:"lastName"`
+}
+
 type ForgotPasswordRequest struct {
 	Email string `json:"email"`
 }

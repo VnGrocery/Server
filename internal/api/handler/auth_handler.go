@@ -28,6 +28,7 @@ type AccountUsecase interface {
 	ResetPassword(ctx context.Context, resetToken, newPassword string) error
 	Delete(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error)
 	Me(ctx context.Context, userID string) (domain.User, error)
+	UpdateMe(ctx context.Context, input authservice.UpdateProfileInput) (domain.User, error)
 }
 
 func NewAuthHandler(accounts AccountUsecase) *AuthHandler {
@@ -187,6 +188,45 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, dto.StatusResponse{Status: "password_changed"})
+}
+
+func (h *AuthHandler) UpdateMe(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	var request dto.UpdateMeRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+
+	user, err := h.accounts.UpdateMe(c.Request.Context(), authservice.UpdateProfileInput{
+		UserID:          principal.UserID,
+		ExpectedVersion: request.ExpectedVersion,
+		DisplayName:     request.DisplayName,
+		FirstName:       request.FirstName,
+		LastName:        request.LastName,
+	})
+	if err != nil {
+		status := authStatus(err)
+		if errors.Is(err, authservice.ErrVersionConflict) {
+			status = http.StatusConflict
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, dto.MeResponse{
+		UserID:      user.UserID,
+		Email:       user.Email,
+		Role:        user.Role,
+		DisplayName: user.DisplayName,
+		FirstName:   user.FirstName,
+		LastName:    user.LastName,
+	})
 }
 
 func (h *AuthHandler) ForgotPassword(c *gin.Context) {

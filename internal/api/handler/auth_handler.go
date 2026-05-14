@@ -9,6 +9,7 @@ import (
 
 	"vngrocery/internal/api/dto"
 	"vngrocery/internal/api/middleware"
+	"vngrocery/internal/domain"
 	authservice "vngrocery/internal/service/auth"
 )
 
@@ -17,7 +18,7 @@ type AuthHandler struct {
 }
 
 type AccountUsecase interface {
-	Register(ctx context.Context, email, password, displayName string) (authservice.AuthResult, error)
+	Register(ctx context.Context, email, password, displayName, firstName, lastName string) (authservice.AuthResult, error)
 	Login(ctx context.Context, email, password string) (authservice.AuthResult, error)
 	GoogleLogin(ctx context.Context, googleIDToken string) (authservice.AuthResult, error)
 	Refresh(ctx context.Context, refreshToken string) (authservice.AuthResult, error)
@@ -26,6 +27,7 @@ type AccountUsecase interface {
 	RequestPasswordReset(ctx context.Context, email string) (authservice.PasswordResetResult, error)
 	ResetPassword(ctx context.Context, resetToken, newPassword string) error
 	Delete(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error)
+	Me(ctx context.Context, userID string) (domain.User, error)
 }
 
 func NewAuthHandler(accounts AccountUsecase) *AuthHandler {
@@ -41,10 +43,19 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		return
 	}
 
+	user, err := h.accounts.Me(c.Request.Context(), principal.UserID)
+	if err != nil {
+		c.JSON(authStatus(err), gin.H{"error": err.Error()})
+		return
+	}
+
 	c.JSON(http.StatusOK, dto.MeResponse{
-		UserID: principal.UserID,
-		Email:  principal.Email,
-		Role:   principal.Role,
+		UserID:      principal.UserID,
+		Email:       principal.Email,
+		Role:        principal.Role,
+		DisplayName: user.DisplayName,
+		FirstName:   user.FirstName,
+		LastName:    user.LastName,
 	})
 }
 
@@ -55,7 +66,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	result, err := h.accounts.Register(c.Request.Context(), request.Email, request.Password, request.DisplayName)
+	result, err := h.accounts.Register(c.Request.Context(), request.Email, request.Password, request.DisplayName, request.FirstName, request.LastName)
 	if err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, authservice.ErrInvalidCredentials) || errors.Is(err, authservice.ErrEmailTaken) {
@@ -247,6 +258,9 @@ func toAuthTokenResponse(result authservice.AuthResult) dto.AuthTokenResponse {
 		UserID:       result.Principal.UserID,
 		Email:        result.Principal.Email,
 		Role:         result.Principal.Role,
+		DisplayName:  result.DisplayName,
+		FirstName:    result.FirstName,
+		LastName:     result.LastName,
 		PublicKey:    result.PublicKey,
 	}
 }

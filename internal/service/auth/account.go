@@ -87,6 +87,9 @@ type AuthResult struct {
 	AccessToken  string
 	RefreshToken string
 	Principal    Principal
+	DisplayName  string
+	FirstName    string
+	LastName     string
 	PublicKey    string
 }
 
@@ -133,7 +136,7 @@ func NewAccountService(authUsers repository.AuthUserRepository, users repository
 	}
 }
 
-func (s *AccountService) Register(ctx context.Context, email, password, displayName string) (AuthResult, error) {
+func (s *AccountService) Register(ctx context.Context, email, password, displayName, firstName, lastName string) (AuthResult, error) {
 	emailLower := strings.ToLower(strings.TrimSpace(email))
 	if emailLower == "" || password == "" {
 		return AuthResult{}, fmt.Errorf("%w: email and password are required", ErrInvalidCredentials)
@@ -183,16 +186,26 @@ func (s *AccountService) Register(ctx context.Context, email, password, displayN
 		return AuthResult{}, err
 	}
 
-	if err := s.users.Save(ctx, domain.User{
+	firstName = strings.TrimSpace(firstName)
+	lastName = strings.TrimSpace(lastName)
+	displayName = strings.TrimSpace(displayName)
+	if displayName == "" {
+		displayName = strings.TrimSpace(strings.Join([]string{lastName, firstName}, " "))
+	}
+
+	user := domain.User{
 		UserID:      userID,
 		Email:       emailLower,
-		DisplayName: strings.TrimSpace(displayName),
+		DisplayName: displayName,
+		FirstName:   firstName,
+		LastName:    lastName,
 		Role:        role,
 		Status:      AccountStatusActive,
 		Version:     1,
 		CreatedAt:   now,
 		UpdatedAt:   now,
-	}); err != nil {
+	}
+	if err := s.users.Save(ctx, user); err != nil {
 		s.cleanupAccountKey(ctx, key.VaultPath)
 		return AuthResult{}, err
 	}
@@ -201,7 +214,7 @@ func (s *AccountService) Register(ctx context.Context, email, password, displayN
 	}
 
 	principal := Principal{UserID: userID, Email: emailLower, Role: role}
-	return s.issueAuthResult(ctx, principal, key.PublicKey)
+	return s.issueAuthResult(ctx, principal, key.PublicKey, user)
 }
 
 func (s *AccountService) Login(ctx context.Context, email, password string) (AuthResult, error) {
@@ -237,7 +250,7 @@ func (s *AccountService) Login(ctx context.Context, email, password string) (Aut
 	}
 
 	principal := Principal{UserID: authUser.UserID, Email: emailLower, Role: user.Role}
-	return s.issueAuthResult(ctx, principal, authUser.PublicKey)
+	return s.issueAuthResult(ctx, principal, authUser.PublicKey, user)
 }
 
 func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) (AuthResult, error) {
@@ -319,7 +332,7 @@ func (s *AccountService) GoogleLogin(ctx context.Context, googleIDToken string) 
 	}
 
 	principal := Principal{UserID: authUser.UserID, Email: emailLower, Role: user.Role}
-	return s.issueAuthResult(ctx, principal, authUser.PublicKey)
+	return s.issueAuthResult(ctx, principal, authUser.PublicKey, user)
 }
 
 func normalizeBootstrapAdmins(emails []string) map[string]struct{} {
@@ -381,7 +394,7 @@ func (s *AccountService) Refresh(ctx context.Context, refreshToken string) (Auth
 		return AuthResult{}, ErrAccountDeleted
 	}
 
-	return s.issueAuthResult(ctx, Principal{UserID: authUser.UserID, Email: authUser.EmailLower, Role: user.Role}, authUser.PublicKey)
+	return s.issueAuthResult(ctx, Principal{UserID: authUser.UserID, Email: authUser.EmailLower, Role: user.Role}, authUser.PublicKey, user)
 }
 
 func (s *AccountService) Logout(ctx context.Context, refreshToken string) error {
@@ -509,7 +522,7 @@ func (s *AccountService) ResetPassword(ctx context.Context, resetToken, newPassw
 	return s.passwordResets.Save(ctx, stored)
 }
 
-func (s *AccountService) issueAuthResult(ctx context.Context, principal Principal, publicKey string) (AuthResult, error) {
+func (s *AccountService) issueAuthResult(ctx context.Context, principal Principal, publicKey string, user domain.User) (AuthResult, error) {
 	accessToken, err := s.jwt.IssueToken(principal, s.jwtTTL)
 	if err != nil {
 		return AuthResult{}, err
@@ -536,8 +549,29 @@ func (s *AccountService) issueAuthResult(ctx context.Context, principal Principa
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		Principal:    principal,
+		DisplayName:  strings.TrimSpace(user.DisplayName),
+		FirstName:    strings.TrimSpace(user.FirstName),
+		LastName:     strings.TrimSpace(user.LastName),
 		PublicKey:    publicKey,
 	}, nil
+}
+
+func (s *AccountService) Me(ctx context.Context, userID string) (domain.User, error) {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return domain.User{}, ErrInvalidCredentials
+	}
+	if s.users == nil {
+		return domain.User{}, fmt.Errorf("auth service is not configured")
+	}
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil || user.UserID == "" {
+		return domain.User{}, ErrInvalidCredentials
+	}
+	if user.Status != AccountStatusActive {
+		return domain.User{}, ErrAccountDeleted
+	}
+	return user, nil
 }
 
 func (s *AccountService) Delete(ctx context.Context, userID string, expectedVersion int) (DeleteResult, error) {

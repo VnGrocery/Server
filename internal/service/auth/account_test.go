@@ -219,7 +219,7 @@ func TestAccountServiceRegisterCreatesVaultKeyAndReturnsPublicKey(t *testing.T) 
 		"google-client-id",
 	)
 
-	result, err := service.Register(context.Background(), "USER@example.com", "password123", "Demo User")
+	result, err := service.Register(context.Background(), "USER@example.com", "password123", "Demo User", "", "")
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
@@ -289,7 +289,7 @@ func TestAccountServiceRegisterBootstrapsAdminRoleByEmail(t *testing.T) {
 		"admin@example.com",
 	)
 
-	if _, err := service.Register(context.Background(), "Admin@example.com", "password123", "Admin"); err != nil {
+	if _, err := service.Register(context.Background(), "Admin@example.com", "password123", "Admin", "", ""); err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 	if savedUser.Role != "admin" {
@@ -318,7 +318,7 @@ func TestAccountServiceRegisterDoesNotCreateKeyWhenEmailExists(t *testing.T) {
 		"google-client-id",
 	)
 
-	_, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User")
+	_, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User", "", "")
 	if !errors.Is(err, ErrEmailTaken) {
 		t.Fatalf("expected ErrEmailTaken, got %v", err)
 	}
@@ -355,7 +355,7 @@ func TestAccountServiceRegisterCleansVaultKeyWhenUserSaveFails(t *testing.T) {
 		"google-client-id",
 	)
 
-	_, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User")
+	_, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User", "", "")
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -397,7 +397,7 @@ func TestAccountServiceRegisterWritesAuditLog(t *testing.T) {
 		"google-client-id",
 	)
 
-	if _, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User"); err != nil {
+	if _, err := service.Register(context.Background(), "user@example.com", "password123", "Demo User", "", ""); err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 	if auditLogger.logHits != 1 {

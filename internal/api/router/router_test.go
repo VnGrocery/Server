@@ -432,7 +432,7 @@ func (buyerCheckRouteStub) Check(ctx context.Context, input buyerservice.CheckIn
 
 type authAccountsStub struct{}
 
-func (authAccountsStub) Register(ctx context.Context, email, password, displayName string) (authservice.AuthResult, error) {
+func (authAccountsStub) Register(ctx context.Context, email, password, displayName, firstName, lastName string) (authservice.AuthResult, error) {
 	return authservice.AuthResult{}, errors.New("not implemented")
 }
 
@@ -466,6 +466,10 @@ func (authAccountsStub) ResetPassword(ctx context.Context, resetToken, newPasswo
 
 func (authAccountsStub) Delete(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error) {
 	return authservice.DeleteResult{}, errors.New("not implemented")
+}
+
+func (authAccountsStub) Me(ctx context.Context, userID string) (domain.User, error) {
+	return domain.User{}, errors.New("not implemented")
 }
 
 type eventLogUsecaseStub struct{}

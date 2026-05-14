@@ -54,6 +54,8 @@ func buildSchemas() gin.H {
 				"email":       gin.H{"type": "string", "format": "email"},
 				"password":    gin.H{"type": "string"},
 				"displayName": gin.H{"type": "string"},
+				"firstName":   gin.H{"type": "string"},
+				"lastName":    gin.H{"type": "string"},
 			},
 		},
 		"LoginRequest": gin.H{
@@ -116,6 +118,9 @@ func buildSchemas() gin.H {
 				"userId":       gin.H{"type": "string"},
 				"email":        gin.H{"type": "string"},
 				"role":         gin.H{"type": "string"},
+				"displayName":  gin.H{"type": "string"},
+				"firstName":    gin.H{"type": "string"},
+				"lastName":     gin.H{"type": "string"},
 				"publicKey":    gin.H{"type": "string"},
 			},
 		},
@@ -196,9 +201,12 @@ func buildSchemas() gin.H {
 		"MeResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
-				"userId": gin.H{"type": "string"},
-				"email":  gin.H{"type": "string"},
-				"role":   gin.H{"type": "string"},
+				"userId":      gin.H{"type": "string"},
+				"email":       gin.H{"type": "string"},
+				"role":        gin.H{"type": "string"},
+				"displayName": gin.H{"type": "string"},
+				"firstName":   gin.H{"type": "string"},
+				"lastName":    gin.H{"type": "string"},
 			},
 		},
 		"DeleteResponse": gin.H{

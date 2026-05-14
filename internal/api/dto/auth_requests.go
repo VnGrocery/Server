@@ -4,6 +4,8 @@ type RegisterRequest struct {
 	Email       string `json:"email"`
 	Password    string `json:"password"`
 	DisplayName string `json:"displayName"`
+	FirstName   string `json:"firstName"`
+	LastName    string `json:"lastName"`
 }
 
 type LoginRequest struct {
@@ -43,5 +45,8 @@ type AuthTokenResponse struct {
 	UserID       string `json:"userId"`
 	Email        string `json:"email,omitempty"`
 	Role         string `json:"role,omitempty"`
+	DisplayName  string `json:"displayName,omitempty"`
+	FirstName    string `json:"firstName,omitempty"`
+	LastName     string `json:"lastName,omitempty"`
 	PublicKey    string `json:"publicKey,omitempty"`
 }

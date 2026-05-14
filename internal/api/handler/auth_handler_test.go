@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"vngrocery/internal/domain"
 	authservice "vngrocery/internal/service/auth"
 )
 
@@ -22,7 +23,7 @@ type authAccountAdapter struct {
 	delete               func(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error)
 }
 
-func (a authAccountAdapter) Register(ctx context.Context, email, password, displayName string) (authservice.AuthResult, error) {
+func (a authAccountAdapter) Register(ctx context.Context, email, password, displayName, firstName, lastName string) (authservice.AuthResult, error) {
 	return authservice.AuthResult{}, nil
 }
 
@@ -56,6 +57,10 @@ func (a authAccountAdapter) ResetPassword(ctx context.Context, resetToken, newPa
 
 func (a authAccountAdapter) Delete(ctx context.Context, userID string, expectedVersion int) (authservice.DeleteResult, error) {
 	return a.delete(ctx, userID, expectedVersion)
+}
+
+func (a authAccountAdapter) Me(ctx context.Context, userID string) (domain.User, error) {
+	return domain.User{UserID: userID, Status: authservice.AccountStatusActive}, nil
 }
 
 func TestDeleteMe(t *testing.T) {

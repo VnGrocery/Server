@@ -49,3 +49,5 @@ cache/
 !internal/repository/cache/
 !internal/repository/cache/**
 out/
+
+.key.md

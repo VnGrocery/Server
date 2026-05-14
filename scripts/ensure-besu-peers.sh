@@ -9,6 +9,8 @@ HEAL_ON_DRIFT="${HEAL_ON_DRIFT:-1}"
 HEAL_ON_ZERO_PEER="${HEAL_ON_ZERO_PEER:-1}"
 HEAL_WAIT_SEC="${HEAL_WAIT_SEC:-5}"
 HEAL_MAX_RESTARTS="${HEAL_MAX_RESTARTS:-2}"
+NODEINFO_MAX_ATTEMPTS="${NODEINFO_MAX_ATTEMPTS:-30}"
+NODEINFO_SLEEP_SEC="${NODEINFO_SLEEP_SEC:-2}"
 SERVICES=(besu-validator1 besu-validator2 besu-validator3 besu-validator4)
 
 usage() {
@@ -18,13 +20,15 @@ Usage:
 
 Environment:
   COMPOSE_FILE   Compose file to use (default: docker-compose.deploy.yml)
-  MAX_ATTEMPTS   Max retry loops (default: 8)
-  SLEEP_SEC      Sleep between loops in seconds (default: 2)
+  MAX_ATTEMPTS           Max retry loops (default: 8)
+  SLEEP_SEC              Sleep between loops in seconds (default: 2)
   MAX_BLOCK_DRIFT        Max allowed block gap between nodes (default: 24)
   HEAL_ON_DRIFT          Restart lagging nodes when drift is high (default: 1)
   HEAL_ON_ZERO_PEER      Restart nodes that keep peerCount=0 (default: 1)
   HEAL_WAIT_SEC          Wait after each healing restart (default: 5)
   HEAL_MAX_RESTARTS      Max restart count per node in one run (default: 2)
+  NODEINFO_MAX_ATTEMPTS  Max retries waiting for admin_nodeInfo per node (default: 30)
+  NODEINFO_SLEEP_SEC     Sleep between admin_nodeInfo retries (default: 2)
 EOF
 }
 
@@ -93,6 +97,7 @@ main() {
   local ports=()
   local enodes=()
   local service port node_info enode
+  local nodeinfo_attempt
 
   echo "Resolving Besu RPC ports from $COMPOSE_FILE ..."
   for service in "${SERVICES[@]}"; do
@@ -109,13 +114,21 @@ main() {
   for i in "${!SERVICES[@]}"; do
     service="${SERVICES[$i]}"
     port="${ports[$i]}"
-    if ! node_info="$(json_rpc "$port" "admin_nodeInfo")"; then
-      echo "ERROR: admin_nodeInfo failed on $service ($port)" >&2
-      exit 1
-    fi
-    enode="$(printf '%s' "$node_info" | extract_json_string_field "enode")"
-    if [[ -z "$enode" ]]; then
-      echo "ERROR: cannot extract enode for $service ($port)" >&2
+    node_info=""
+    for nodeinfo_attempt in $(seq 1 "$NODEINFO_MAX_ATTEMPTS"); do
+      if node_info="$(json_rpc "$port" "admin_nodeInfo" 2>/dev/null || true)"; then
+        enode="$(printf '%s' "$node_info" | extract_json_string_field "enode")"
+        if [[ -n "$enode" ]]; then
+          break
+        fi
+      fi
+      if (( nodeinfo_attempt < NODEINFO_MAX_ATTEMPTS )); then
+        echo "  waiting admin_nodeInfo on $service ($port) attempt $nodeinfo_attempt/$NODEINFO_MAX_ATTEMPTS ..."
+        sleep "$NODEINFO_SLEEP_SEC"
+      fi
+    done
+    if [[ -z "${enode:-}" ]]; then
+      echo "ERROR: admin_nodeInfo failed on $service ($port) after $NODEINFO_MAX_ATTEMPTS attempts" >&2
       exit 1
     fi
     enodes+=("$enode")

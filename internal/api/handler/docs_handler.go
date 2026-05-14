@@ -217,6 +217,7 @@ func buildSchemas() gin.H {
 				"displayName": gin.H{"type": "string"},
 				"firstName":   gin.H{"type": "string"},
 				"lastName":    gin.H{"type": "string"},
+				"version":     gin.H{"type": "integer"},
 			},
 		},
 		"DeleteResponse": gin.H{

@@ -57,6 +57,7 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		DisplayName: user.DisplayName,
 		FirstName:   user.FirstName,
 		LastName:    user.LastName,
+		Version:     user.Version,
 	})
 }
 
@@ -226,6 +227,7 @@ func (h *AuthHandler) UpdateMe(c *gin.Context) {
 		DisplayName: user.DisplayName,
 		FirstName:   user.FirstName,
 		LastName:    user.LastName,
+		Version:     user.Version,
 	})
 }
 

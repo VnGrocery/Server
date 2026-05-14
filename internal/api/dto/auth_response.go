@@ -11,6 +11,7 @@ type MeResponse struct {
 	DisplayName string `json:"displayName,omitempty"`
 	FirstName   string `json:"firstName,omitempty"`
 	LastName    string `json:"lastName,omitempty"`
+	Version     int    `json:"version"`
 }
 
 type DeleteResponse struct {

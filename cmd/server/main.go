@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
 	"log"
 	"strconv"
 	"strings"
@@ -40,6 +43,8 @@ type vaultAccountKeyStore struct {
 	client *vaultpkg.Client
 }
 
+type localAccountKeyStore struct{}
+
 func (s vaultAccountKeyStore) CreateAccountKey(ctx context.Context, userID string) (authservice.AccountKey, error) {
 	key, err := s.client.CreateAccountKey(ctx, userID)
 	if err != nil {
@@ -56,6 +61,23 @@ func (s vaultAccountKeyStore) CreateAccountKey(ctx context.Context, userID strin
 
 func (s vaultAccountKeyStore) DeleteAccountKey(ctx context.Context, vaultPath string) error {
 	return s.client.DeleteAccountKey(ctx, vaultPath)
+}
+
+func (s localAccountKeyStore) CreateAccountKey(ctx context.Context, userID string) (authservice.AccountKey, error) {
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		return authservice.AccountKey{}, err
+	}
+	return authservice.AccountKey{
+		PublicKey:  base64.StdEncoding.EncodeToString(publicKey),
+		Algorithm:  "Ed25519",
+		VaultPath:  "local/dev/" + strings.TrimSpace(userID),
+		PrivateKey: base64.StdEncoding.EncodeToString(privateKey),
+	}, nil
+}
+
+func (s localAccountKeyStore) DeleteAccountKey(ctx context.Context, vaultPath string) error {
+	return nil
 }
 
 func main() {
@@ -187,6 +209,10 @@ func main() {
 		})
 		accountKeys = vaultAccountKeyStore{client: vaultClient}
 		auditSigner = vaultClient
+	}
+	if accountKeys == nil {
+		accountKeys = localAccountKeyStore{}
+		log.Printf("VAULT_ENABLED=false; using local in-process account key store for development")
 	}
 	auditQueryService := auditservice.NewService(eventLogRepository, authUserRepository, auditSigner)
 	var auditLogger *auditservice.Service

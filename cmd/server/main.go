@@ -215,7 +215,9 @@ func main() {
 		log.Printf("VAULT_ENABLED=false; using local in-process account key store for development")
 	}
 	auditQueryService := auditservice.NewService(eventLogRepository, authUserRepository, auditSigner)
-	var auditLogger *auditservice.Service
+	var auditLogger interface {
+		Log(context.Context, auditservice.Input) error
+	}
 	if auditSigner != nil {
 		auditLogger = auditQueryService
 	}

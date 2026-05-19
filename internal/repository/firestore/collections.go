@@ -8,6 +8,7 @@ const (
 	BundleTokenUsesCollection         = "bundle_token_uses"
 	ShopsCollection                   = "shops"
 	ProductsCollection                = "products"
+	ProductBatchesCollection          = "product_batches"
 	ProductFreshnessReportsCollection = "product_freshness_reports"
 	PledgesCollection                 = "pledges"
 	BuyerChecksCollection             = "buyer_checks"

@@ -19,6 +19,7 @@ const (
 	bundleTokenUsesCollection         = firestorecollections.BundleTokenUsesCollection
 	shopsCollection                   = firestorecollections.ShopsCollection
 	productsCollection                = firestorecollections.ProductsCollection
+	productBatchesCollection          = firestorecollections.ProductBatchesCollection
 	productFreshnessReportsCollection = firestorecollections.ProductFreshnessReportsCollection
 	pledgesCollection                 = firestorecollections.PledgesCollection
 	buyerChecksCollection             = firestorecollections.BuyerChecksCollection

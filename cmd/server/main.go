@@ -20,6 +20,7 @@ import (
 	mongorepo "vngrocery/internal/repository/mongo"
 	auditservice "vngrocery/internal/service/audit"
 	authservice "vngrocery/internal/service/auth"
+	batchservice "vngrocery/internal/service/batch"
 	bundletokenservice "vngrocery/internal/service/bundletoken"
 	buyerservice "vngrocery/internal/service/buyer"
 	integrityservice "vngrocery/internal/service/integrity"
@@ -99,6 +100,7 @@ func main() {
 	var pledgeRepository repository.PledgeRepository
 	var buyerCheckRepository repository.BuyerCheckRepository
 	var productRepository repository.ProductRepository
+	var productBatchRepository repository.ProductBatchRepository
 	var productFreshnessReportRepository repository.ProductFreshnessReportRepository
 	var shopRepository repository.ShopRepository
 	var shopReviewRepository repository.ShopReviewRepository
@@ -144,6 +146,7 @@ func main() {
 		pledgeRepository = mongorepo.NewPledgeRepository(mongoApp.Database)
 		buyerCheckRepository = mongorepo.NewBuyerCheckRepository(mongoApp.Database)
 		productRepository = mongorepo.NewProductRepository(mongoApp.Database)
+		productBatchRepository = mongorepo.NewProductBatchRepository(mongoApp.Database)
 		productFreshnessReportRepository = mongorepo.NewProductFreshnessReportRepository(mongoApp.Database)
 		shopRepository = mongorepo.NewShopRepository(mongoApp.Database)
 		shopReviewRepository = mongorepo.NewShopReviewRepository(mongoApp.Database)
@@ -171,6 +174,7 @@ func main() {
 		pledgeRepository = firestorerepo.NewPledgeRepository(firebaseApp.Firestore)
 		buyerCheckRepository = firestorerepo.NewBuyerCheckRepository(firebaseApp.Firestore)
 		productRepository = firestorerepo.NewProductRepository(firebaseApp.Firestore)
+		productBatchRepository = firestorerepo.NewProductBatchRepository(firebaseApp.Firestore)
 		productFreshnessReportRepository = firestorerepo.NewProductFreshnessReportRepository(firebaseApp.Firestore)
 		shopRepository = firestorerepo.NewShopRepository(firebaseApp.Firestore)
 		shopReviewRepository = firestorerepo.NewShopReviewRepository(firebaseApp.Firestore)
@@ -265,6 +269,7 @@ func main() {
 		splitCommaSeparated(cfg.BootstrapAdminEmails)...,
 	)
 	productManager := productservice.NewService(productRepository, productFreshnessReportRepository, shopRepository, userRepository, auditLogger)
+	batchManager := batchservice.NewService(productBatchRepository, productRepository, shopRepository)
 	userAdminService := useradminservice.NewService(userRepository, authUserRepository, accountKeys, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, buyerCheckRepository, shopReviewRepository, userRepository, auditLogger)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, productRepository, auditLogger)
@@ -285,6 +290,7 @@ func main() {
 	adminUserHandler := handler.NewAdminUserHandler(userAdminService)
 	eventLogHandler := handler.NewEventLogHandler(auditQueryService)
 	productHandler := handler.NewProductHandler(productManager)
+	productBatchHandler := handler.NewProductBatchHandler(batchManager)
 	sellerHandler := handler.NewSellerHandler(visionScorer, sellerCommitService)
 	sellerHandler.SetBundleTokenIssuer(bundleTokenService)
 	buyerHandler := handler.NewBuyerHandler(buyerCheckService)
@@ -310,6 +316,7 @@ func main() {
 		EventLogHandler:           eventLogHandler,
 		MediaHandler:              mediaHandler,
 		ProductHandler:            productHandler,
+		ProductBatchHandler:       productBatchHandler,
 		SellerHandler:             sellerHandler,
 		BuyerHandler:              buyerHandler,
 		ShopHandler:               shopHandler,

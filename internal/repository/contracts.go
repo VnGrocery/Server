@@ -18,6 +18,13 @@ type ProductListFilter struct {
 	OwnerUserID string
 }
 
+type ProductBatchListFilter struct {
+	ShopID      string
+	ProductID   string
+	Status      string
+	OwnerUserID string
+}
+
 type UserListFilter struct {
 	Status string
 	Role   string
@@ -55,6 +62,12 @@ type ProductRepository interface {
 	Save(ctx context.Context, product domain.Product) error
 	GetByID(ctx context.Context, productID string) (domain.Product, error)
 	List(ctx context.Context, filter ProductListFilter) ([]domain.Product, error)
+}
+
+type ProductBatchRepository interface {
+	Save(ctx context.Context, batch domain.ProductBatch) error
+	GetByID(ctx context.Context, batchID string) (domain.ProductBatch, error)
+	List(ctx context.Context, filter ProductBatchListFilter) ([]domain.ProductBatch, error)
 }
 
 type ProductFreshnessReportRepository interface {

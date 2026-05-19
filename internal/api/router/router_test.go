@@ -17,6 +17,7 @@ import (
 	"vngrocery/internal/repository"
 	auditservice "vngrocery/internal/service/audit"
 	authservice "vngrocery/internal/service/auth"
+	batchservice "vngrocery/internal/service/batch"
 	buyerservice "vngrocery/internal/service/buyer"
 	productservice "vngrocery/internal/service/product"
 	sellerservice "vngrocery/internal/service/seller"
@@ -27,17 +28,18 @@ import (
 
 func newTestDependencies(verifier testVerifier) Dependencies {
 	return Dependencies{
-		HealthHandler:    handler.NewHealthHandler(),
-		DocsHandler:      handler.NewDocsHandler(),
-		AuthHandler:      handler.NewAuthHandler(authAccountsStub{}),
-		AdminUserHandler: handler.NewAdminUserHandler(adminUserHandlerStub{}),
-		EventLogHandler:  handler.NewEventLogHandler(eventLogUsecaseStub{}),
-		ProductHandler:   handler.NewProductHandler(productHandlerStub{}),
-		SellerHandler:    handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
-		BuyerHandler:     handler.NewBuyerHandler(buyerCheckRouteStub{}),
-		ShopHandler:      handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware:   middleware.NewAuthRequired(verifier),
-		AdminMiddleware:  middleware.NewAdminRequired(routerUserRepoStub{}),
+		HealthHandler:       handler.NewHealthHandler(),
+		DocsHandler:         handler.NewDocsHandler(),
+		AuthHandler:         handler.NewAuthHandler(authAccountsStub{}),
+		AdminUserHandler:    handler.NewAdminUserHandler(adminUserHandlerStub{}),
+		EventLogHandler:     handler.NewEventLogHandler(eventLogUsecaseStub{}),
+		ProductHandler:      handler.NewProductHandler(productHandlerStub{}),
+		ProductBatchHandler: handler.NewProductBatchHandler(productBatchHandlerStub{}),
+		SellerHandler:       handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
+		BuyerHandler:        handler.NewBuyerHandler(buyerCheckRouteStub{}),
+		ShopHandler:         handler.NewShopHandler(shopHandlerStub{}),
+		AuthMiddleware:      middleware.NewAuthRequired(verifier),
+		AdminMiddleware:     middleware.NewAdminRequired(routerUserRepoStub{}),
 	}
 }
 
@@ -469,7 +471,7 @@ func (authAccountsStub) Delete(ctx context.Context, userID string, expectedVersi
 }
 
 func (authAccountsStub) Me(ctx context.Context, userID string) (domain.User, error) {
-	return domain.User{}, errors.New("not implemented")
+	return domain.User{UserID: userID, Email: "u@example.com", Status: "active"}, nil
 }
 
 func (authAccountsStub) UpdateMe(ctx context.Context, input authservice.UpdateProfileInput) (domain.User, error) {
@@ -823,4 +825,63 @@ func (productHandlerStub) ListFreshnessReportsAdmin(ctx context.Context, input p
 		PageSize: input.PageSize,
 		Total:    1,
 	}, nil
+}
+
+type productBatchHandlerStub struct{}
+
+func (productBatchHandlerStub) Create(ctx context.Context, input batchservice.CreateInput) (domain.ProductBatch, error) {
+	return domain.ProductBatch{
+		BatchID:          "batch-1",
+		ProductID:        input.ProductID,
+		ShopID:           input.ShopID,
+		OwnerUserID:      input.OwnerUserID,
+		BatchCode:        input.BatchCode,
+		CurrentFreshness: input.CurrentFreshness,
+		Status:           batchservice.StatusActive,
+		Version:          1,
+	}, nil
+}
+
+func (productBatchHandlerStub) Update(ctx context.Context, input batchservice.UpdateInput) (domain.ProductBatch, error) {
+	return domain.ProductBatch{
+		BatchID:          input.BatchID,
+		ProductID:        input.ProductID,
+		ShopID:           input.ShopID,
+		OwnerUserID:      input.OwnerUserID,
+		BatchCode:        input.BatchCode,
+		CurrentFreshness: input.CurrentFreshness,
+		Status:           input.Status,
+		Version:          input.ExpectedVersion + 1,
+	}, nil
+}
+
+func (productBatchHandlerStub) Delete(ctx context.Context, input batchservice.DeleteInput) (domain.ProductBatch, error) {
+	return domain.ProductBatch{
+		BatchID:     input.BatchID,
+		ProductID:   input.ProductID,
+		ShopID:      input.ShopID,
+		OwnerUserID: input.OwnerUserID,
+		Status:      batchservice.StatusDeleted,
+		Version:     input.ExpectedVersion + 1,
+	}, nil
+}
+
+func (productBatchHandlerStub) GetByID(ctx context.Context, shopID, productID, batchID string) (domain.ProductBatch, error) {
+	return domain.ProductBatch{
+		BatchID:   batchID,
+		ProductID: productID,
+		ShopID:    shopID,
+		Status:    batchservice.StatusActive,
+		Version:   1,
+	}, nil
+}
+
+func (productBatchHandlerStub) List(ctx context.Context, input batchservice.ListInput) ([]domain.ProductBatch, error) {
+	return []domain.ProductBatch{{
+		BatchID:   "batch-1",
+		ProductID: input.ProductID,
+		ShopID:    input.ShopID,
+		Status:    batchservice.StatusActive,
+		Version:   1,
+	}}, nil
 }

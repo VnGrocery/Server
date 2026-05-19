@@ -799,6 +799,24 @@ Test da chay:
 ./gradlew :app:compileDevDebugKotlin
 ```
 
+### Luong 3: Product detail batch visibility
+
+Trang thai: `done`
+
+Da lam:
+
+- Cap nhat `ProductDetailViewModel` de load batches theo product.
+- Them state `batches` cho man hinh chi tiet san pham.
+- Them section `Lo hang & do tuoi` trong `ProductDetailScreen`.
+- Hien thi empty state khi san pham chua co batch.
+- Hien thi batch cards voi ma lo, do tuoi hien tai, trang thai, han dung va nguon.
+
+Test da chay:
+
+```sh
+./gradlew :app:compileDevDebugKotlin
+```
+
 ## 11. Rủi ro va luu y
 
 - Them batchId vao token/QR co the lam QR cu khong tuong thich. Can giu fallback cho QR cu khong co batchId.

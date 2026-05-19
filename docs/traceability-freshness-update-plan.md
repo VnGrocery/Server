@@ -776,6 +776,29 @@ Test da chay:
 go test ./internal/service/batch ./internal/api/handler ./internal/api/router ./cmd/server
 ```
 
+### Luong 2: Android batch client foundation
+
+Trang thai: `done`
+
+Da lam:
+
+- Them `ProductBatchDTO.kt` cho request/response batch.
+- Them Retrofit endpoints:
+  - `getProductBatches`
+  - `getProductBatch`
+  - `createProductBatch`
+  - `updateProductBatch`
+  - `deleteProductBatch`
+- Them `ProductBatchRepository`.
+- Them UI model `ProductBatch`.
+- Them mapper `ProductBatchResponse.toUiModel()`.
+
+Test da chay:
+
+```sh
+./gradlew :app:compileDevDebugKotlin
+```
+
 ## 11. Rủi ro va luu y
 
 - Them batchId vao token/QR co the lam QR cu khong tuong thich. Can giu fallback cho QR cu khong co batchId.

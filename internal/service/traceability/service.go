@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -25,6 +26,20 @@ const (
 	StatusActive = "active"
 	StatusHidden = "hidden"
 )
+
+const (
+	EventTypeOrigin         = "origin"
+	EventTypeSlaughter      = "slaughter"
+	EventTypePackaging      = "packaging"
+	EventTypeShipping       = "shipping"
+	EventTypeReceived       = "received"
+	EventTypeStorageCheck   = "storage_check"
+	EventTypeFreshnessCheck = "freshness_check"
+	EventTypeRecall         = "recall"
+	EventTypeDisposal       = "disposal"
+)
+
+const maxFutureOccurrenceSkew = 5 * time.Minute
 
 type CreateTraceEventInput struct {
 	BatchID      string
@@ -79,8 +94,8 @@ func (s *Service) CreateTraceEvent(ctx context.Context, input CreateTraceEventIn
 		return domain.TraceEvent{}, fmt.Errorf("%w: shopId, productId, batchId and actorUserId are required", ErrInvalidTraceEvent)
 	}
 	eventType := strings.TrimSpace(input.Type)
-	if eventType == "" {
-		return domain.TraceEvent{}, fmt.Errorf("%w: type is required", ErrInvalidTraceEvent)
+	if err := validateTraceEventType(eventType, true); err != nil {
+		return domain.TraceEvent{}, err
 	}
 	if strings.TrimSpace(input.Title) == "" {
 		return domain.TraceEvent{}, fmt.Errorf("%w: title is required", ErrInvalidTraceEvent)
@@ -88,7 +103,12 @@ func (s *Service) CreateTraceEvent(ctx context.Context, input CreateTraceEventIn
 	if input.OccurredAt.IsZero() {
 		input.OccurredAt = s.now().UTC()
 	}
-	if err := s.requireOwnedBatch(ctx, input.ShopID, input.ProductID, input.BatchID, input.ActorUserID); err != nil {
+	occurredAt := input.OccurredAt.UTC()
+	if occurredAt.After(s.now().UTC().Add(maxFutureOccurrenceSkew)) {
+		return domain.TraceEvent{}, fmt.Errorf("%w: occurredAt is too far in the future", ErrInvalidTraceEvent)
+	}
+	batch, err := s.requireOwnedBatch(ctx, input.ShopID, input.ProductID, input.BatchID, input.ActorUserID)
+	if err != nil {
 		return domain.TraceEvent{}, err
 	}
 
@@ -111,11 +131,19 @@ func (s *Service) CreateTraceEvent(ctx context.Context, input CreateTraceEventIn
 		ImageHash:    strings.TrimSpace(input.ImageHash),
 		DataHash:     strings.TrimSpace(input.DataHash),
 		Status:       StatusActive,
-		OccurredAt:   input.OccurredAt.UTC(),
+		OccurredAt:   occurredAt,
 		CreatedAt:    now,
 	}
 	if err := s.events.Save(ctx, event); err != nil {
 		return domain.TraceEvent{}, err
+	}
+	if event.Type == EventTypeRecall {
+		batch.Status = batchsvc.StatusRecalled
+		batch.Version++
+		batch.UpdatedAt = now
+		if err := s.batches.Save(ctx, batch); err != nil {
+			return domain.TraceEvent{}, err
+		}
 	}
 	return event, nil
 }
@@ -130,39 +158,65 @@ func (s *Service) ListTraceEvents(ctx context.Context, input ListTraceEventsInpu
 	if err := s.requirePublicBatch(ctx, input.ShopID, input.ProductID, input.BatchID); err != nil {
 		return nil, err
 	}
+	eventType := strings.TrimSpace(input.Type)
+	if err := validateTraceEventType(eventType, false); err != nil {
+		return nil, err
+	}
 	status := ""
 	if input.Public {
 		status = StatusActive
 	}
-	return s.events.List(ctx, repository.TraceEventListFilter{
+	events, err := s.events.List(ctx, repository.TraceEventListFilter{
 		ShopID:    strings.TrimSpace(input.ShopID),
 		ProductID: strings.TrimSpace(input.ProductID),
 		BatchID:   strings.TrimSpace(input.BatchID),
-		Type:      strings.TrimSpace(input.Type),
+		Type:      eventType,
 		Status:    status,
 	})
+	if err != nil {
+		return nil, err
+	}
+	sort.SliceStable(events, func(i, j int) bool {
+		return events[i].OccurredAt.Before(events[j].OccurredAt)
+	})
+	return events, nil
 }
 
-func (s *Service) requireOwnedBatch(ctx context.Context, shopID, productID, batchID, actorUserID string) error {
+func validateTraceEventType(eventType string, required bool) error {
+	if strings.TrimSpace(eventType) == "" {
+		if required {
+			return fmt.Errorf("%w: type is required", ErrInvalidTraceEvent)
+		}
+		return nil
+	}
+	switch strings.TrimSpace(eventType) {
+	case EventTypeOrigin, EventTypeSlaughter, EventTypePackaging, EventTypeShipping, EventTypeReceived, EventTypeStorageCheck, EventTypeFreshnessCheck, EventTypeRecall, EventTypeDisposal:
+		return nil
+	default:
+		return fmt.Errorf("%w: unsupported trace event type", ErrInvalidTraceEvent)
+	}
+}
+
+func (s *Service) requireOwnedBatch(ctx context.Context, shopID, productID, batchID, actorUserID string) (domain.ProductBatch, error) {
 	shop, err := s.shops.GetByID(ctx, strings.TrimSpace(shopID))
 	if err != nil || shop.ShopID == "" || shop.Status == shopsvc.ShopStatusDeleted {
-		return ErrNotFound
+		return domain.ProductBatch{}, ErrNotFound
 	}
 	if shop.OwnerUserID != strings.TrimSpace(actorUserID) {
-		return ErrForbidden
+		return domain.ProductBatch{}, ErrForbidden
 	}
 	product, err := s.products.GetByID(ctx, strings.TrimSpace(productID))
 	if err != nil || product.ProductID == "" || product.ShopID != strings.TrimSpace(shopID) {
-		return ErrNotFound
+		return domain.ProductBatch{}, ErrNotFound
 	}
 	batch, err := s.batches.GetByID(ctx, strings.TrimSpace(batchID))
 	if err != nil || batch.BatchID == "" || batch.Status == batchsvc.StatusDeleted || batch.ShopID != strings.TrimSpace(shopID) || batch.ProductID != strings.TrimSpace(productID) {
-		return ErrNotFound
+		return domain.ProductBatch{}, ErrNotFound
 	}
 	if batch.OwnerUserID != "" && batch.OwnerUserID != strings.TrimSpace(actorUserID) {
-		return ErrForbidden
+		return domain.ProductBatch{}, ErrForbidden
 	}
-	return nil
+	return batch, nil
 }
 
 func (s *Service) requirePublicBatch(ctx context.Context, shopID, productID, batchID string) error {

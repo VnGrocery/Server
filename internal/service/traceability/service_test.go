@@ -43,6 +43,87 @@ func TestCreateTraceEvent(t *testing.T) {
 	}
 }
 
+func TestCreateTraceEventRejectsUnsupportedType(t *testing.T) {
+	service := newTraceService(traceEventRepoStub{
+		save: func(ctx context.Context, event domain.TraceEvent) error {
+			t.Fatal("save should not be called")
+			return nil
+		},
+	})
+
+	_, err := service.CreateTraceEvent(context.Background(), CreateTraceEventInput{
+		ShopID:      "shop-1",
+		ProductID:   "product-1",
+		BatchID:     "batch-1",
+		ActorUserID: "seller-1",
+		Type:        "shipping_started",
+		Title:       "Shipping",
+	})
+	if !errors.Is(err, ErrInvalidTraceEvent) {
+		t.Fatalf("expected ErrInvalidTraceEvent, got %v", err)
+	}
+}
+
+func TestCreateTraceEventRejectsFutureOccurredAt(t *testing.T) {
+	now := time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC)
+	service := newTraceService(traceEventRepoStub{
+		save: func(ctx context.Context, event domain.TraceEvent) error {
+			t.Fatal("save should not be called")
+			return nil
+		},
+	})
+	service.now = func() time.Time { return now }
+
+	_, err := service.CreateTraceEvent(context.Background(), CreateTraceEventInput{
+		ShopID:      "shop-1",
+		ProductID:   "product-1",
+		BatchID:     "batch-1",
+		ActorUserID: "seller-1",
+		Type:        EventTypeOrigin,
+		Title:       "Trang trại A",
+		OccurredAt:  now.Add(6 * time.Minute),
+	})
+	if !errors.Is(err, ErrInvalidTraceEvent) {
+		t.Fatalf("expected ErrInvalidTraceEvent, got %v", err)
+	}
+}
+
+func TestCreateRecallTraceEventUpdatesBatchStatus(t *testing.T) {
+	now := time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC)
+	var savedBatch domain.ProductBatch
+	service := NewService(traceEventRepoStub{}, batchRepoStub{
+		save: func(ctx context.Context, batch domain.ProductBatch) error {
+			savedBatch = batch
+			return nil
+		},
+	}, productRepoStub{}, shopRepoStub{})
+	service.now = func() time.Time { return now }
+
+	event, err := service.CreateTraceEvent(context.Background(), CreateTraceEventInput{
+		ShopID:      "shop-1",
+		ProductID:   "product-1",
+		BatchID:     "batch-1",
+		ActorUserID: "seller-1",
+		Type:        EventTypeRecall,
+		Title:       "Thu hồi lô hàng",
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if event.Type != EventTypeRecall {
+		t.Fatalf("unexpected event type: %s", event.Type)
+	}
+	if savedBatch.BatchID != "batch-1" || savedBatch.Status != batchsvc.StatusRecalled {
+		t.Fatalf("expected recalled batch save, got %#v", savedBatch)
+	}
+	if savedBatch.Version != 2 {
+		t.Fatalf("expected incremented batch version, got %d", savedBatch.Version)
+	}
+	if !savedBatch.UpdatedAt.Equal(now) {
+		t.Fatalf("expected batch updated at now, got %v", savedBatch.UpdatedAt)
+	}
+}
+
 func TestCreateTraceEventRejectsNonOwner(t *testing.T) {
 	service := newTraceService(traceEventRepoStub{
 		save: func(ctx context.Context, event domain.TraceEvent) error {
@@ -70,7 +151,10 @@ func TestListTraceEventsFiltersActivePublicEvents(t *testing.T) {
 			if filter.ShopID != "shop-1" || filter.ProductID != "product-1" || filter.BatchID != "batch-1" || filter.Status != StatusActive {
 				t.Fatalf("unexpected filter: %#v", filter)
 			}
-			return []domain.TraceEvent{{EventID: "event-1", Status: StatusActive}}, nil
+			return []domain.TraceEvent{
+				{EventID: "event-2", Status: StatusActive, OccurredAt: time.Date(2026, 5, 20, 11, 0, 0, 0, time.UTC)},
+				{EventID: "event-1", Status: StatusActive, OccurredAt: time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC)},
+			}, nil
 		},
 	})
 
@@ -83,8 +167,28 @@ func TestListTraceEventsFiltersActivePublicEvents(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-	if len(events) != 1 || events[0].EventID != "event-1" {
+	if len(events) != 2 || events[0].EventID != "event-1" || events[1].EventID != "event-2" {
 		t.Fatalf("unexpected events: %#v", events)
+	}
+}
+
+func TestListTraceEventsRejectsUnsupportedType(t *testing.T) {
+	service := newTraceService(traceEventRepoStub{
+		list: func(ctx context.Context, filter repository.TraceEventListFilter) ([]domain.TraceEvent, error) {
+			t.Fatal("list should not be called")
+			return nil, nil
+		},
+	})
+
+	_, err := service.ListTraceEvents(context.Background(), ListTraceEventsInput{
+		ShopID:    "shop-1",
+		ProductID: "product-1",
+		BatchID:   "batch-1",
+		Type:      "shipping_started",
+		Public:    true,
+	})
+	if !errors.Is(err, ErrInvalidTraceEvent) {
+		t.Fatalf("expected ErrInvalidTraceEvent, got %v", err)
 	}
 }
 
@@ -115,11 +219,22 @@ func (s traceEventRepoStub) List(ctx context.Context, filter repository.TraceEve
 	return nil, nil
 }
 
-type batchRepoStub struct{}
+type batchRepoStub struct {
+	save    func(ctx context.Context, batch domain.ProductBatch) error
+	getByID func(ctx context.Context, batchID string) (domain.ProductBatch, error)
+}
 
-func (batchRepoStub) Save(ctx context.Context, batch domain.ProductBatch) error { return nil }
-func (batchRepoStub) GetByID(ctx context.Context, batchID string) (domain.ProductBatch, error) {
-	return domain.ProductBatch{BatchID: batchID, ShopID: "shop-1", ProductID: "product-1", OwnerUserID: "seller-1", Status: batchsvc.StatusActive}, nil
+func (s batchRepoStub) Save(ctx context.Context, batch domain.ProductBatch) error {
+	if s.save != nil {
+		return s.save(ctx, batch)
+	}
+	return nil
+}
+func (s batchRepoStub) GetByID(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+	if s.getByID != nil {
+		return s.getByID(ctx, batchID)
+	}
+	return domain.ProductBatch{BatchID: batchID, ShopID: "shop-1", ProductID: "product-1", OwnerUserID: "seller-1", Status: batchsvc.StatusActive, Version: 1}, nil
 }
 func (batchRepoStub) List(ctx context.Context, filter repository.ProductBatchListFilter) ([]domain.ProductBatch, error) {
 	return nil, nil

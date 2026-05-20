@@ -1,6 +1,6 @@
 # Luong 07: Enum hoa trace event va validate timeline
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ## Van de
 
@@ -62,15 +62,25 @@ Trace event hien chi yeu cau `type` khong rong. Timeline truy xuat nguon goc co 
 
 ## Da lam
 
-- Chua lam.
+- Them constants taxonomy cho trace event:
+  - `origin`, `slaughter`, `packaging`, `shipping`, `received`
+  - `storage_check`, `freshness_check`, `recall`, `disposal`
+- Create trace event reject type rong/khong ho tro.
+- List trace events reject filter `type` khong ho tro neu client truyen.
+- Validate `occurredAt` khong duoc qua tuong lai hon 5 phut.
+- Public/list timeline duoc sort tang dan theo `OccurredAt`.
+- Khi tao event `recall`, backend cap nhat batch status sang `recalled`, tang version va updatedAt.
+- Luu y hien tai chua co transaction giua save trace event va save batch recall; neu batch save loi sau event save thi service tra error nhung event co the da duoc luu.
+- Them test cho valid type, unsupported type, future occurredAt, recall update batch, list sort va invalid list type.
 
 ## Test da chay
 
-- Chua chay.
+- `go test ./internal/service/traceability`
+- `go test ./...`
 
 ## Commit
 
-De xuat:
+Da commit:
 
 ```text
 Validate trace event taxonomy

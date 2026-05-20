@@ -1,6 +1,6 @@
 # Luong 05: Loc status khi tinh trust score
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ## Van de
 
@@ -39,15 +39,21 @@ Trust score hien lay tat ca reviews va buyer checks cua shop. Review da deleted/
 
 ## Da lam
 
-- Chua lam.
+- Loc pledge truoc khi tinh trust summary: chi tinh pledge status `committed`.
+- Loc review truoc khi tinh rating/trust score: chi tinh `active`.
+- Loc buyer check truoc khi tinh trust score/count: chi tinh `completed` va `flagged`.
+- `BuyerCheckCount`, `TrustedCheckCount`, `HighRiskCheckCount`, coverage, recency va consistency deu dung tap eligible sau loc.
+- Cap nhat test trust summary hien co de set status ro rang.
+- Them test dam bao draft pledge, deleted review va rejected buyer check khong bi tinh vao summary.
 
 ## Test da chay
 
-- Chua chay.
+- `go test ./internal/service/shop`
+- `go test ./...`
 
 ## Commit
 
-De xuat:
+Da commit:
 
 ```text
 Filter trust signals by status

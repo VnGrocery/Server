@@ -348,15 +348,15 @@ func TestListReturnsTrustSummary(t *testing.T) {
 	}, buyerCheckRepositoryStub{
 		listByShopID: func(ctx context.Context, shopID string) ([]domain.BuyerCheck, error) {
 			return []domain.BuyerCheck{
-				{ShopID: shopID, Verdict: "trusted", Trusted: true, CategoryMatch: true, ScoreDeltaAbs: 0.4},
-				{ShopID: shopID, Verdict: "warning", CategoryMatch: true, ScoreDeltaAbs: 1.8},
+				{ShopID: shopID, Status: "completed", Verdict: "trusted", Trusted: true, CategoryMatch: true, ScoreDeltaAbs: 0.4},
+				{ShopID: shopID, Status: "completed", Verdict: "warning", CategoryMatch: true, ScoreDeltaAbs: 1.8},
 			}, nil
 		},
 	}, reviewRepositoryStub{
 		listByShopID: func(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
 			return []domain.ShopReview{
-				{ShopID: shopID, Rating: 5},
-				{ShopID: shopID, Rating: 3},
+				{ShopID: shopID, Status: ReviewStatusActive, Rating: 5},
+				{ShopID: shopID, Status: ReviewStatusActive, Rating: 3},
 			}, nil
 		},
 	}, userRepositoryStub{}, nil)
@@ -394,6 +394,63 @@ func TestListReturnsTrustSummary(t *testing.T) {
 	}
 	if result.Items[0].TrustSummary.CoverageScore <= 0 || result.Items[0].TrustSummary.RecencyScore <= 0 {
 		t.Fatalf("expected v2 breakdown scores, got %#v", result.Items[0].TrustSummary)
+	}
+}
+
+func TestListTrustSummaryFiltersIneligibleSignals(t *testing.T) {
+	committedAt := time.Date(2026, 4, 3, 10, 0, 0, 0, time.UTC)
+	service := NewService(shopRepositoryStub{
+		list: func(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
+			return []domain.Shop{{ShopID: "shop-1", Name: "Green Shop", Address: "123 Main St", Status: ShopStatusActive}}, nil
+		},
+		save:    func(ctx context.Context, shop domain.Shop) error { return nil },
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) { return domain.Shop{}, nil },
+	}, pledgeRepositoryStub{
+		listByShopID: func(ctx context.Context, shopID string) ([]domain.Pledge, error) {
+			return []domain.Pledge{
+				{PledgeID: "pledge-1", ShopID: shopID, Status: "committed", Score: 8.8, Category: "fresh_produce", Confidence: 0.92, CreatedAt: committedAt},
+				{PledgeID: "pledge-draft", ShopID: shopID, Status: "draft", Score: 1.0, Category: "bad", Confidence: 0.1, CreatedAt: committedAt.Add(time.Hour)},
+			}, nil
+		},
+	}, buyerCheckRepositoryStub{
+		listByShopID: func(ctx context.Context, shopID string) ([]domain.BuyerCheck, error) {
+			return []domain.BuyerCheck{
+				{ShopID: shopID, Status: "completed", Verdict: "trusted", Trusted: true, CategoryMatch: true, ScoreDeltaAbs: 0.4, BuyerUserID: "buyer-1"},
+				{ShopID: shopID, Status: "flagged", Verdict: "high_risk", CategoryMatch: false, ScoreDeltaAbs: 3.4, BuyerUserID: "buyer-2"},
+				{ShopID: shopID, Status: "rejected", Verdict: "high_risk", CategoryMatch: false, ScoreDeltaAbs: 9.0, BuyerUserID: "buyer-3"},
+			}, nil
+		},
+	}, reviewRepositoryStub{
+		listByShopID: func(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
+			return []domain.ShopReview{
+				{ShopID: shopID, Status: ReviewStatusActive, Rating: 5},
+				{ShopID: shopID, Status: ShopStatusDeleted, Rating: 1},
+			}, nil
+		},
+	}, userRepositoryStub{}, nil)
+
+	result, err := service.List(context.Background(), ListInput{})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(result.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(result.Items))
+	}
+	view := result.Items[0]
+	if view.TrustSummary.PledgeCount != 1 || view.TrustSummary.LatestPledgeID != "pledge-1" {
+		t.Fatalf("expected only committed pledge in summary, got %#v", view.TrustSummary)
+	}
+	if view.RatingSummary.RatingCount != 1 || view.RatingSummary.AverageRating != 5 {
+		t.Fatalf("expected only active review in rating summary, got %#v", view.RatingSummary)
+	}
+	if view.TrustSummary.BuyerCheckCount != 2 {
+		t.Fatalf("expected completed and flagged checks only, got %d", view.TrustSummary.BuyerCheckCount)
+	}
+	if view.TrustSummary.TrustedCheckCount != 1 {
+		t.Fatalf("expected one trusted check, got %d", view.TrustSummary.TrustedCheckCount)
+	}
+	if view.TrustSummary.HighRiskCheckCount != 1 {
+		t.Fatalf("expected one eligible high risk check, got %d", view.TrustSummary.HighRiskCheckCount)
 	}
 }
 

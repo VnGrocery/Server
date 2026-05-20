@@ -945,6 +945,7 @@ func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView
 		if err != nil {
 			return ShopView{}, err
 		}
+		pledges = filterCommittedPledges(pledges)
 		if len(pledges) > 0 {
 			latest := pledges[0]
 			lastCommittedAt := latest.CommittedAt
@@ -969,6 +970,7 @@ func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView
 		if err != nil {
 			return ShopView{}, err
 		}
+		reviews = filterActiveReviews(reviews)
 		if len(reviews) > 0 {
 			totalRating := 0
 			for _, review := range reviews {
@@ -986,9 +988,41 @@ func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView
 		if err != nil {
 			return ShopView{}, err
 		}
+		checks = filterEligibleBuyerChecks(checks)
 	}
 	applyTrustScore(&shopView.TrustSummary, shopView.RatingSummary, pledges, reviews, checks)
 	return shopView, nil
+}
+
+func filterCommittedPledges(pledges []domain.Pledge) []domain.Pledge {
+	filtered := pledges[:0]
+	for _, pledge := range pledges {
+		if strings.TrimSpace(pledge.Status) == "committed" {
+			filtered = append(filtered, pledge)
+		}
+	}
+	return filtered
+}
+
+func filterActiveReviews(reviews []domain.ShopReview) []domain.ShopReview {
+	filtered := reviews[:0]
+	for _, review := range reviews {
+		if strings.TrimSpace(review.Status) == ReviewStatusActive {
+			filtered = append(filtered, review)
+		}
+	}
+	return filtered
+}
+
+func filterEligibleBuyerChecks(checks []domain.BuyerCheck) []domain.BuyerCheck {
+	filtered := checks[:0]
+	for _, check := range checks {
+		switch strings.TrimSpace(check.Status) {
+		case "completed", "flagged":
+			filtered = append(filtered, check)
+		}
+	}
+	return filtered
 }
 
 const trustScoreFormulaVersion = "trust_score_v2"

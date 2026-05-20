@@ -230,7 +230,7 @@ Validate buyer check batch consistency
 
 ## 7. Luong 4: Android buyer/result hien batch info
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ### Android tasks
 
@@ -246,6 +246,21 @@ Trang thai: `todo`
   - status
 
 ### Tests
+
+- `./gradlew :app:compileDevDebugKotlin`
+
+### Da lam
+
+- `BuyerCheckResultScreen` doc `batchId` tu `BuyerCheckResponse`.
+- Neu co `batchId`, load batch detail bang `ProductBatchRepository.getBatch`.
+- Hien card `Lo hang` gom:
+  - batch code hoac batch id
+  - current freshness
+  - status
+  - expiry neu co
+- Neu khong load duoc chi tiet batch, van hien `batchId` va trang thai loi gon.
+
+### Test da chay
 
 - `./gradlew :app:compileDevDebugKotlin`
 
@@ -514,4 +529,5 @@ Hoan thanh khi:
 - Da hoan thanh Luong 1: Backend validate seller commit batch.
 - Da hoan thanh Luong 2: Android seller create pledge chon batch.
 - Da hoan thanh Luong 3: Backend validate buyer check batch consistency.
-- Luong tiep theo: Luong 4 Android buyer/result hien batch info.
+- Da hoan thanh Luong 4: Android buyer/result hien batch info.
+- Luong tiep theo: Luong 5 Freshness history UI theo batch.

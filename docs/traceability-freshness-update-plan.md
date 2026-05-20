@@ -837,6 +837,25 @@ Test da chay:
 go test ./...
 ```
 
+### Luong 5: Android freshness reports by batch
+
+Trang thai: `done`
+
+Da lam:
+
+- Them `batchId` vao `ProductFreshnessReportResponse`.
+- Them `batchId` vao `CreateFreshnessReportRequest`.
+- Cap nhat Retrofit `getFreshnessReports` de ho tro query `batchId`.
+- Them repository methods:
+  - `listFreshnessReports(shopId, productId, batchId)`
+  - `createFreshnessReport(shopId, productId, request)`
+
+Test da chay:
+
+```sh
+./gradlew :app:compileDevDebugKotlin
+```
+
 ## 11. Rủi ro va luu y
 
 - Them batchId vao token/QR co the lam QR cu khong tuong thich. Can giu fallback cho QR cu khong co batchId.

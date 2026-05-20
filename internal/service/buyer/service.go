@@ -13,6 +13,7 @@ import (
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
 	"vngrocery/internal/service/audit"
+	batchservice "vngrocery/internal/service/batch"
 	bundletokenservice "vngrocery/internal/service/bundletoken"
 	visionservice "vngrocery/internal/service/vision"
 )
@@ -104,6 +105,7 @@ type CheckService interface {
 type Service struct {
 	pledges repository.PledgeRepository
 	checks  repository.BuyerCheckRepository
+	batches repository.ProductBatchRepository
 	users   repository.UserRepository
 	scorer  visionservice.ImageScorer
 	audit   AuditLogger
@@ -137,6 +139,10 @@ func NewService(pledges repository.PledgeRepository, checks repository.BuyerChec
 
 func (s *Service) SetBundleTokenVerifier(verifier BundleTokenVerifier) {
 	s.tokens = verifier
+}
+
+func (s *Service) SetProductBatchRepository(batches repository.ProductBatchRepository) {
+	s.batches = batches
 }
 
 func (s *Service) SetObserver(observer Observer) {
@@ -225,6 +231,11 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	batchID, err := resolveBatchIDForCheck(requestBatchID, tokenBatchID, pledge, hasPledge)
 	if err != nil {
 		return CheckResult{}, err
+	}
+	if batchID != "" {
+		if err := s.validateBatchForCheck(ctx, batchID, tokenClaims, pledge, hasPledge); err != nil {
+			return CheckResult{}, err
+		}
 	}
 
 	scored, err := s.scorer.Score(ctx, input.Image)
@@ -552,6 +563,40 @@ func (s *Service) ensureQuota(ctx context.Context, buyerUserID string) error {
 	}
 	if count >= 10 {
 		return ErrRateLimited
+	}
+	return nil
+}
+
+func (s *Service) validateBatchForCheck(ctx context.Context, batchID string, claims bundletokenservice.Claims, pledge domain.Pledge, hasPledge bool) error {
+	if s.batches == nil {
+		return fmt.Errorf("product batch repository is not configured")
+	}
+	batch, err := s.batches.GetByID(ctx, strings.TrimSpace(batchID))
+	if err != nil || strings.TrimSpace(batch.BatchID) == "" {
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrInvalidCheck, err)
+		}
+		return fmt.Errorf("%w: batchId not found", ErrInvalidCheck)
+	}
+
+	expectedShopID := strings.TrimSpace(claims.ShopID)
+	expectedProductID := strings.TrimSpace(claims.ProductID)
+	if hasPledge {
+		if strings.TrimSpace(pledge.ShopID) != "" {
+			expectedShopID = strings.TrimSpace(pledge.ShopID)
+		}
+		if strings.TrimSpace(pledge.ProductID) != "" {
+			expectedProductID = strings.TrimSpace(pledge.ProductID)
+		}
+	}
+	if expectedShopID != "" && batch.ShopID != expectedShopID {
+		return fmt.Errorf("%w: batchId does not belong to shop", ErrInvalidCheck)
+	}
+	if expectedProductID != "" && batch.ProductID != expectedProductID {
+		return fmt.Errorf("%w: batchId does not belong to product", ErrInvalidCheck)
+	}
+	if strings.TrimSpace(batch.Status) != batchservice.StatusActive {
+		return fmt.Errorf("%w: batch is not active", ErrInvalidCheck)
 	}
 	return nil
 }

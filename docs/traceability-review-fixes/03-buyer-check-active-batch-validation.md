@@ -1,6 +1,6 @@
 # Luong 03: Buyer check validate batch con hop le
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ## Van de
 
@@ -53,15 +53,25 @@ Buyer check hien da validate batch consistency giua request, token va pledge. Tu
 
 ## Da lam
 
-- Chua lam.
+- Them dependency `ProductBatchRepository` cho `buyer.Service` qua setter.
+- Wire `productBatchRepository` vao buyer check service trong `cmd/server/main.go`.
+- Sau khi resolve `batchId`, buyer check se load batch va validate:
+  - batch phai ton tai
+  - batch phai thuoc dung shop theo pledge/token
+  - batch phai thuoc dung product theo pledge/token
+  - batch status phai la `active`
+- Giu fallback legacy: QR/check khong co `batchId` khong bi lookup batch.
+- Replay retry van tra result cu truoc khi validate/cham lai.
+- Them test cho active batch, inactive batch, sai shop, sai product.
 
 ## Test da chay
 
-- Chua chay.
+- `go test ./internal/service/buyer`
+- `go test ./...`
 
 ## Commit
 
-De xuat:
+Da commit:
 
 ```text
 Require active batches for buyer checks

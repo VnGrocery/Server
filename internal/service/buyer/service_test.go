@@ -80,6 +80,33 @@ func (s buyerCheckRepositoryStub) List(ctx context.Context, filter repository.Bu
 	return nil, nil
 }
 
+type productBatchRepositoryStub struct {
+	save    func(ctx context.Context, batch domain.ProductBatch) error
+	getByID func(ctx context.Context, batchID string) (domain.ProductBatch, error)
+	list    func(ctx context.Context, filter repository.ProductBatchListFilter) ([]domain.ProductBatch, error)
+}
+
+func (s productBatchRepositoryStub) Save(ctx context.Context, batch domain.ProductBatch) error {
+	if s.save != nil {
+		return s.save(ctx, batch)
+	}
+	return nil
+}
+
+func (s productBatchRepositoryStub) GetByID(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+	if s.getByID != nil {
+		return s.getByID(ctx, batchID)
+	}
+	return domain.ProductBatch{}, nil
+}
+
+func (s productBatchRepositoryStub) List(ctx context.Context, filter repository.ProductBatchListFilter) ([]domain.ProductBatch, error) {
+	if s.list != nil {
+		return s.list(ctx, filter)
+	}
+	return nil, nil
+}
+
 type userRepositoryStub struct{}
 
 func (userRepositoryStub) Save(ctx context.Context, user domain.User) error { return nil }
@@ -349,6 +376,11 @@ func TestCheckWithoutPledgeReturnsStandaloneQuality(t *testing.T) {
 		},
 		nil,
 	)
+	service.SetProductBatchRepository(productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{BatchID: batchID, ShopID: "shop-1", ProductID: "product-1", Status: "active"}, nil
+		},
+	})
 	service.SetBundleTokenVerifier(bundleTokenVerifierStub{
 		verifyAndConsume: func(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error) {
 			return bundletokenservice.Claims{
@@ -423,6 +455,11 @@ func TestCheckKeepsBatchWhenRequestTokenAndPledgeMatch(t *testing.T) {
 		},
 		nil,
 	)
+	service.SetProductBatchRepository(productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{BatchID: batchID, ShopID: "shop-1", ProductID: "product-1", Status: "active"}, nil
+		},
+	})
 	service.SetBundleTokenVerifier(bundleTokenVerifierStub{
 		verifyAndConsume: func(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error) {
 			return bundletokenservice.Claims{
@@ -448,6 +485,66 @@ func TestCheckKeepsBatchWhenRequestTokenAndPledgeMatch(t *testing.T) {
 	}
 	if result.BatchID != "batch-1" {
 		t.Fatalf("expected result batch id, got %s", result.BatchID)
+	}
+}
+
+func TestCheckRejectsInactiveBatch(t *testing.T) {
+	service := newBuyerBatchValidationService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{BatchID: batchID, ShopID: "shop-1", ProductID: "product-1", Status: "recalled"}, nil
+		},
+	})
+
+	_, err := service.Check(context.Background(), CheckInput{
+		PledgeID:    "pledge-1",
+		BatchID:     "batch-1",
+		BundleID:    "bundle-1",
+		BundleToken: "token-1",
+		BuyerUserID: "buyer-1",
+		Image:       buyerTestImage("buyer.jpg"),
+	})
+	if !errors.Is(err, ErrInvalidCheck) {
+		t.Fatalf("expected ErrInvalidCheck, got %v", err)
+	}
+}
+
+func TestCheckRejectsBatchFromDifferentShop(t *testing.T) {
+	service := newBuyerBatchValidationService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{BatchID: batchID, ShopID: "shop-2", ProductID: "product-1", Status: "active"}, nil
+		},
+	})
+
+	_, err := service.Check(context.Background(), CheckInput{
+		PledgeID:    "pledge-1",
+		BatchID:     "batch-1",
+		BundleID:    "bundle-1",
+		BundleToken: "token-1",
+		BuyerUserID: "buyer-1",
+		Image:       buyerTestImage("buyer.jpg"),
+	})
+	if !errors.Is(err, ErrInvalidCheck) {
+		t.Fatalf("expected ErrInvalidCheck, got %v", err)
+	}
+}
+
+func TestCheckRejectsBatchFromDifferentProduct(t *testing.T) {
+	service := newBuyerBatchValidationService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{BatchID: batchID, ShopID: "shop-1", ProductID: "product-2", Status: "active"}, nil
+		},
+	})
+
+	_, err := service.Check(context.Background(), CheckInput{
+		PledgeID:    "pledge-1",
+		BatchID:     "batch-1",
+		BundleID:    "bundle-1",
+		BundleToken: "token-1",
+		BuyerUserID: "buyer-1",
+		Image:       buyerTestImage("buyer.jpg"),
+	})
+	if !errors.Is(err, ErrInvalidCheck) {
+		t.Fatalf("expected ErrInvalidCheck, got %v", err)
 	}
 }
 
@@ -612,6 +709,52 @@ func TestCheckAllowsLegacyQRCodeWithoutBatch(t *testing.T) {
 	if result.BatchID != "" {
 		t.Fatalf("expected empty batch id for legacy QR, got %s", result.BatchID)
 	}
+}
+
+func newBuyerBatchValidationService(t *testing.T, batches productBatchRepositoryStub) *Service {
+	t.Helper()
+	service := NewService(
+		pledgeRepositoryStub{
+			getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+				return domain.Pledge{
+					PledgeID:  pledgeID,
+					ShopID:    "shop-1",
+					ProductID: "product-1",
+					BatchID:   "batch-1",
+					BundleID:  "bundle-1",
+					Score:     8.5,
+					Category:  "fresh_produce",
+				}, nil
+			},
+		},
+		buyerCheckRepositoryStub{
+			save: func(ctx context.Context, check domain.BuyerCheck) error {
+				t.Fatal("save should not be called")
+				return nil
+			},
+		},
+		userRepositoryStub{},
+		scorerStub{
+			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
+				t.Fatal("score should not run when batch is invalid")
+				return visionservice.ScoreResult{}, nil
+			},
+		},
+		nil,
+	)
+	service.SetProductBatchRepository(batches)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{
+		verifyAndConsume: func(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error) {
+			return bundletokenservice.Claims{
+				ShopID:    "shop-1",
+				ProductID: "product-1",
+				BatchID:   "batch-1",
+				BundleID:  input.ExpectedBundleID,
+				PledgeID:  input.ExpectedPledgeID,
+			}, nil
+		},
+	})
+	return service
 }
 
 func TestCheckRejectsWhenQuotaExceeded(t *testing.T) {

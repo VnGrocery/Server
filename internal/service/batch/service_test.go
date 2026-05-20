@@ -107,6 +107,51 @@ func TestCreateBatch(t *testing.T) {
 	}
 }
 
+func TestCreateBatchNormalizesFreshnessScoreToPercent(t *testing.T) {
+	service := newOwnedBatchService(t, batchRepositoryStub{
+		save: func(ctx context.Context, batch domain.ProductBatch) error {
+			if batch.CurrentFreshness != 85 {
+				t.Fatalf("expected normalized freshness 85, got %v", batch.CurrentFreshness)
+			}
+			return nil
+		},
+	})
+
+	batch, err := service.Create(context.Background(), CreateInput{
+		ShopID:           "shop-1",
+		ProductID:        "product-1",
+		OwnerUserID:      "seller-1",
+		BatchCode:        "BATCH-001",
+		CurrentFreshness: 8.5,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if batch.CurrentFreshness != 85 {
+		t.Fatalf("expected normalized freshness in response, got %v", batch.CurrentFreshness)
+	}
+}
+
+func TestCreateBatchRejectsFreshnessOutsidePercentScale(t *testing.T) {
+	service := newOwnedBatchService(t, batchRepositoryStub{
+		save: func(ctx context.Context, batch domain.ProductBatch) error {
+			t.Fatal("save should not be called")
+			return nil
+		},
+	})
+
+	_, err := service.Create(context.Background(), CreateInput{
+		ShopID:           "shop-1",
+		ProductID:        "product-1",
+		OwnerUserID:      "seller-1",
+		BatchCode:        "BATCH-001",
+		CurrentFreshness: 101,
+	})
+	if !errors.Is(err, ErrInvalidBatch) {
+		t.Fatalf("expected ErrInvalidBatch, got %v", err)
+	}
+}
+
 func TestCreateBatchRejectsForeignShop(t *testing.T) {
 	service := NewService(batchRepositoryStub{
 		save: func(ctx context.Context, batch domain.ProductBatch) error {
@@ -133,6 +178,19 @@ func TestCreateBatchRejectsForeignShop(t *testing.T) {
 	if !errors.Is(err, ErrForbidden) {
 		t.Fatalf("expected ErrForbidden, got %v", err)
 	}
+}
+
+func newOwnedBatchService(t *testing.T, batches batchRepositoryStub) *Service {
+	t.Helper()
+	return NewService(batches, productRepositoryStub{
+		getByID: func(ctx context.Context, productID string) (domain.Product, error) {
+			return domain.Product{ProductID: productID, ShopID: "shop-1", OwnerUserID: "seller-1", Status: productsvc.ProductStatusActive}, nil
+		},
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "seller-1", Status: shopsvc.ShopStatusActive}, nil
+		},
+	})
 }
 
 func TestUpdateBatchRejectsVersionConflict(t *testing.T) {

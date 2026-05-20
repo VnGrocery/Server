@@ -141,7 +141,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Product
 		QuantityUnit:     defaultQuantityUnit(input.QuantityUnit),
 		StorageTempMin:   input.StorageTempMin,
 		StorageTempMax:   input.StorageTempMax,
-		CurrentFreshness: input.CurrentFreshness,
+		CurrentFreshness: normalizeFreshnessPercent(input.CurrentFreshness),
 		CurrentCategory:  strings.TrimSpace(input.CurrentCategory),
 		Status:           status,
 		Version:          1,
@@ -198,7 +198,7 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Product
 	existing.QuantityUnit = defaultQuantityUnit(input.QuantityUnit)
 	existing.StorageTempMin = input.StorageTempMin
 	existing.StorageTempMax = input.StorageTempMax
-	existing.CurrentFreshness = input.CurrentFreshness
+	existing.CurrentFreshness = normalizeFreshnessPercent(input.CurrentFreshness)
 	existing.CurrentCategory = strings.TrimSpace(input.CurrentCategory)
 	existing.Status = status
 	existing.Version++
@@ -362,10 +362,31 @@ func validateMutableFields(batchCode string, quantity, tempMin, tempMax, freshne
 	if tempMin > tempMax {
 		return fmt.Errorf("%w: storageTempMin must be less than or equal to storageTempMax", ErrInvalidBatch)
 	}
-	if freshness < 0 || freshness > 100 {
-		return fmt.Errorf("%w: currentFreshness must be between 0 and 100", ErrInvalidBatch)
+	if _, err := NormalizeFreshnessPercent(freshness); err != nil {
+		return err
 	}
 	return nil
+}
+
+func NormalizeFreshnessPercent(score float64) (float64, error) {
+	if score < 0 {
+		return 0, fmt.Errorf("%w: currentFreshness must be between 0 and 100 percent", ErrInvalidBatch)
+	}
+	if score <= 10 {
+		return score * 10, nil
+	}
+	if score <= 100 {
+		return score, nil
+	}
+	return 0, fmt.Errorf("%w: currentFreshness must be between 0 and 100 percent", ErrInvalidBatch)
+}
+
+func normalizeFreshnessPercent(score float64) float64 {
+	normalized, err := NormalizeFreshnessPercent(score)
+	if err != nil {
+		return score
+	}
+	return normalized
 }
 
 func validateStatus(status string) (string, error) {

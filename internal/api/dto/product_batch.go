@@ -15,7 +15,7 @@ type CreateProductBatchRequest struct {
 	QuantityUnit     string     `json:"quantityUnit"`
 	StorageTempMin   float64    `json:"storageTempMin"`
 	StorageTempMax   float64    `json:"storageTempMax"`
-	CurrentFreshness float64    `json:"currentFreshness"`
+	CurrentFreshness float64    `json:"currentFreshness"` // accepts 0-100 percent; 0-10 scores are normalized to percent
 	CurrentCategory  string     `json:"currentCategory"`
 	Status           string     `json:"status"`
 }
@@ -34,7 +34,7 @@ type UpdateProductBatchRequest struct {
 	QuantityUnit     string     `json:"quantityUnit"`
 	StorageTempMin   float64    `json:"storageTempMin"`
 	StorageTempMax   float64    `json:"storageTempMax"`
-	CurrentFreshness float64    `json:"currentFreshness"`
+	CurrentFreshness float64    `json:"currentFreshness"` // accepts 0-100 percent; 0-10 scores are normalized to percent
 	CurrentCategory  string     `json:"currentCategory"`
 	Status           string     `json:"status"`
 }
@@ -56,7 +56,7 @@ type ProductBatchResponse struct {
 	QuantityUnit     string     `json:"quantityUnit"`
 	StorageTempMin   float64    `json:"storageTempMin"`
 	StorageTempMax   float64    `json:"storageTempMax"`
-	CurrentFreshness float64    `json:"currentFreshness"`
+	CurrentFreshness float64    `json:"currentFreshness"` // percent, 0-100
 	CurrentCategory  string     `json:"currentCategory"`
 	Status           string     `json:"status"`
 	Version          int        `json:"version"`

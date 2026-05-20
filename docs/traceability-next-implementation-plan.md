@@ -389,7 +389,7 @@ Add default batch backfill
 
 ## 10. Luong 7: Chuan hoa thang diem do tuoi
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ### Van de
 
@@ -420,6 +420,26 @@ He thong dang co diem 0-10 cho AI/seller pledge, trong khi batch `currentFreshne
 ### Tests
 
 - Unit tests normalize helper.
+- `go test ./...`
+- `./gradlew :app:compileDevDebugKotlin`
+
+### Da lam
+
+- Backend:
+  - them `batch.NormalizeFreshnessPercent`
+  - batch create/update chap nhan input 0-10 va normalize sang percent 0-100
+  - batch create/update van reject input am hoac >100
+  - backfill default batch dung chung helper normalize
+  - them DTO comment cho `currentFreshness`
+- Android:
+  - product card/list dung label `Score AI` cho product freshness score 0-10
+  - doi nguong mau score AI ve 8/6 thay vi 80/60
+  - batch detail hien `currentFreshness%` ro la do tuoi percent
+  - product detail ghi ro score cam ket thang 0-10
+
+### Test da chay
+
+- `go test ./internal/service/batch ./internal/service/batchbackfill ./cmd/backfill-batches`
 - `go test ./...`
 - `./gradlew :app:compileDevDebugKotlin`
 
@@ -576,4 +596,5 @@ Hoan thanh khi:
 - Da hoan thanh Luong 4: Android buyer/result hien batch info.
 - Da hoan thanh Luong 5: Freshness history UI theo batch.
 - Da hoan thanh Luong 6: Backfill default batch.
-- Luong tiep theo: Luong 7 Chuan hoa thang diem do tuoi.
+- Da hoan thanh Luong 7: Chuan hoa thang diem do tuoi.
+- Luong tiep theo: Luong 8 TraceEvent backend foundation.

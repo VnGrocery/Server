@@ -144,6 +144,10 @@ func (s *Service) ensureDefaultBatch(ctx context.Context, product domain.Product
 		return existing[0], false, nil
 	}
 
+	freshness, err := batchsvc.NormalizeFreshnessPercent(product.FreshnessScore)
+	if err != nil {
+		return domain.ProductBatch{}, false, err
+	}
 	now := s.now().UTC()
 	batch := domain.ProductBatch{
 		BatchID:          defaultBatchID(product.ProductID),
@@ -151,7 +155,7 @@ func (s *Service) ensureDefaultBatch(ctx context.Context, product domain.Product
 		ShopID:           strings.TrimSpace(product.ShopID),
 		OwnerUserID:      strings.TrimSpace(product.OwnerUserID),
 		BatchCode:        "DEFAULT-" + strings.TrimSpace(product.ProductID),
-		CurrentFreshness: normalizeFreshnessPercent(product.FreshnessScore),
+		CurrentFreshness: freshness,
 		CurrentCategory:  strings.TrimSpace(product.Category),
 		Status:           status,
 		Version:          1,
@@ -244,17 +248,4 @@ func (s *Service) backfillChecks(ctx context.Context, product domain.Product, ba
 
 func defaultBatchID(productID string) string {
 	return "default-" + strings.TrimSpace(productID)
-}
-
-func normalizeFreshnessPercent(score float64) float64 {
-	switch {
-	case score < 0:
-		return 0
-	case score <= 10:
-		return score * 10
-	case score > 100:
-		return 100
-	default:
-		return score
-	}
 }

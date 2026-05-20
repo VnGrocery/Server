@@ -22,6 +22,11 @@ var ErrPledgeNotFound = errors.New("pledge not found")
 
 const PledgeStatusCommitted = "committed"
 
+const (
+	productStatusActive    = "active"
+	productStatusPublished = "published"
+)
+
 type CommitInput struct {
 	ShopID          string
 	ProductID       string
@@ -103,8 +108,8 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 		if err != nil {
 			return domain.Pledge{}, fmt.Errorf("%w: %v", ErrInvalidCommit, err)
 		}
-		if product.ShopID != strings.TrimSpace(input.ShopID) {
-			return domain.Pledge{}, fmt.Errorf("%w: productId does not belong to shop", ErrInvalidCommit)
+		if err := validateProductForCommit(product, strings.TrimSpace(input.ShopID), strings.TrimSpace(input.CreatedByUserID)); err != nil {
+			return domain.Pledge{}, err
 		}
 	}
 	batchID := strings.TrimSpace(input.BatchID)
@@ -197,6 +202,24 @@ func (s *Service) validateBatch(ctx context.Context, shopID, productID, batchID,
 		return fmt.Errorf("%w: batch is not active", ErrInvalidCommit)
 	}
 	return nil
+}
+
+func validateProductForCommit(product domain.Product, shopID, sellerUserID string) error {
+	if strings.TrimSpace(product.ProductID) == "" {
+		return fmt.Errorf("%w: productId not found", ErrInvalidCommit)
+	}
+	if product.ShopID != shopID {
+		return fmt.Errorf("%w: productId does not belong to shop", ErrInvalidCommit)
+	}
+	if strings.TrimSpace(product.OwnerUserID) != "" && product.OwnerUserID != sellerUserID {
+		return ErrShopOwnership
+	}
+	switch strings.TrimSpace(product.Status) {
+	case productStatusActive, productStatusPublished:
+		return nil
+	default:
+		return fmt.Errorf("%w: product is not active", ErrInvalidCommit)
+	}
 }
 
 func (s *Service) GetPledgeForSeller(ctx context.Context, shopID, pledgeID, sellerUserID string) (domain.Pledge, error) {

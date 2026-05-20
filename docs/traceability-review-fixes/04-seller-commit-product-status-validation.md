@@ -1,6 +1,6 @@
 # Luong 04: Seller commit validate trang thai product
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ## Van de
 
@@ -44,15 +44,22 @@ Seller commit da validate shop owner va batch active, nhung product validation m
 
 ## Da lam
 
-- Chua lam.
+- Them validate product rieng cho seller commit.
+- Product co `productId` phai ton tai, thuoc dung shop va co status hop le.
+- Cho phep product status `active` va `published`.
+- Reject product status rong, `draft`, `archived`, `deleted`.
+- Reject product co `OwnerUserID` khac seller neu field nay co gia tri.
+- Cap nhat test fixture product sang active.
+- Them test cho published product, inactive product va owner mismatch.
 
 ## Test da chay
 
-- Chua chay.
+- `go test ./internal/service/seller`
+- `go test ./...`
 
 ## Commit
 
-De xuat:
+Da commit:
 
 ```text
 Validate seller pledge product status

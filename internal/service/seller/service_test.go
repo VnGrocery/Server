@@ -85,7 +85,7 @@ func TestCommitCreatesPledge(t *testing.T) {
 		},
 	}, productRepositoryStub{
 		getByID: func(ctx context.Context, productID string) (domain.Product, error) {
-			return domain.Product{ProductID: productID, ShopID: "shop-1"}, nil
+			return domain.Product{ProductID: productID, ShopID: "shop-1", OwnerUserID: "user-1", Status: productStatusActive}, nil
 		},
 	}, productBatchRepositoryStub{}, nil)
 	service.now = func() time.Time { return fixedTime }
@@ -306,6 +306,84 @@ func TestCommitRejectsNonOwnerShop(t *testing.T) {
 	}
 }
 
+func TestCommitAllowsPublishedProduct(t *testing.T) {
+	service := newProductCommitService(t, domain.Product{
+		ProductID:   "product-1",
+		ShopID:      "shop-1",
+		OwnerUserID: "user-1",
+		Status:      productStatusPublished,
+	}, func(ctx context.Context, pledge domain.Pledge) error {
+		if pledge.ProductID != "product-1" {
+			t.Fatalf("unexpected product id: %s", pledge.ProductID)
+		}
+		return nil
+	})
+
+	_, err := service.Commit(context.Background(), CommitInput{
+		ShopID:          "shop-1",
+		ProductID:       "product-1",
+		BundleID:        "bundle-1",
+		CreatedByUserID: "user-1",
+		Score:           8.8,
+		Category:        "fresh_produce",
+		Confidence:      0.93,
+		ImageHash:       "hash-1",
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+}
+
+func TestCommitRejectsInactiveProduct(t *testing.T) {
+	for _, status := range []string{"", "draft", "archived", "deleted"} {
+		t.Run(status, func(t *testing.T) {
+			service := newProductCommitService(t, domain.Product{
+				ProductID:   "product-1",
+				ShopID:      "shop-1",
+				OwnerUserID: "user-1",
+				Status:      status,
+			}, nil)
+
+			_, err := service.Commit(context.Background(), CommitInput{
+				ShopID:          "shop-1",
+				ProductID:       "product-1",
+				BundleID:        "bundle-1",
+				CreatedByUserID: "user-1",
+				Score:           8.8,
+				Category:        "fresh_produce",
+				Confidence:      0.93,
+				ImageHash:       "hash-1",
+			})
+			if !errors.Is(err, ErrInvalidCommit) {
+				t.Fatalf("expected ErrInvalidCommit, got %v", err)
+			}
+		})
+	}
+}
+
+func TestCommitRejectsProductOwnerMismatch(t *testing.T) {
+	service := newProductCommitService(t, domain.Product{
+		ProductID:   "product-1",
+		ShopID:      "shop-1",
+		OwnerUserID: "user-2",
+		Status:      productStatusActive,
+	}, nil)
+
+	_, err := service.Commit(context.Background(), CommitInput{
+		ShopID:          "shop-1",
+		ProductID:       "product-1",
+		BundleID:        "bundle-1",
+		CreatedByUserID: "user-1",
+		Score:           8.8,
+		Category:        "fresh_produce",
+		Confidence:      0.93,
+		ImageHash:       "hash-1",
+	})
+	if !errors.Is(err, ErrShopOwnership) {
+		t.Fatalf("expected ErrShopOwnership, got %v", err)
+	}
+}
+
 func validBatchCommitInput() CommitInput {
 	return CommitInput{
 		ShopID:          "shop-1",
@@ -336,9 +414,30 @@ func newBatchCommitService(t *testing.T, batches productBatchRepositoryStub, sav
 		},
 	}, productRepositoryStub{
 		getByID: func(ctx context.Context, productID string) (domain.Product, error) {
-			return domain.Product{ProductID: productID, ShopID: "shop-1"}, nil
+			return domain.Product{ProductID: productID, ShopID: "shop-1", OwnerUserID: "user-1", Status: productStatusActive}, nil
 		},
 	}, batches, nil)
+}
+
+func newProductCommitService(t *testing.T, product domain.Product, save func(ctx context.Context, pledge domain.Pledge) error) *Service {
+	t.Helper()
+	if save == nil {
+		save = func(ctx context.Context, pledge domain.Pledge) error {
+			t.Fatal("save should not be called")
+			return nil
+		}
+	}
+	return NewService(pledgeRepositoryStub{
+		save: save,
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1"}, nil
+		},
+	}, productRepositoryStub{
+		getByID: func(ctx context.Context, productID string) (domain.Product, error) {
+			return product, nil
+		},
+	}, productBatchRepositoryStub{}, nil)
 }
 
 type shopRepositoryStub struct {

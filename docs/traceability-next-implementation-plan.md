@@ -272,7 +272,7 @@ Show batch context in buyer check results
 
 ## 8. Luong 5: Freshness history UI theo batch
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ### Backend da co
 
@@ -300,6 +300,25 @@ Trang thai: `todo`
   - source tam thoi la reporter/admin neu chua co field source
 
 ### Tests
+
+- `./gradlew :app:compileDevDebugKotlin`
+
+### Da lam
+
+- Them UI model `FreshnessHistoryPoint`.
+- Them mapper tu `ProductFreshnessReportResponse`.
+- Cap nhat `ProductDetailViewModel`:
+  - `selectedBatchId`
+  - `freshnessHistory`
+  - load freshness reports theo batch dang chon
+  - doi batch thi load lai history
+- Cap nhat `ProductDetailScreen`:
+  - batch card co selected state va click chon batch
+  - section `Lich su do tuoi theo lo`
+  - trend bars compact
+  - timeline/list hien score, category, confidence, comment, reporter va createdAt
+
+### Test da chay
 
 - `./gradlew :app:compileDevDebugKotlin`
 
@@ -530,4 +549,5 @@ Hoan thanh khi:
 - Da hoan thanh Luong 2: Android seller create pledge chon batch.
 - Da hoan thanh Luong 3: Backend validate buyer check batch consistency.
 - Da hoan thanh Luong 4: Android buyer/result hien batch info.
-- Luong tiep theo: Luong 5 Freshness history UI theo batch.
+- Da hoan thanh Luong 5: Freshness history UI theo batch.
+- Luong tiep theo: Luong 6 Backfill default batch.

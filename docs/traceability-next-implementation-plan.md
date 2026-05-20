@@ -330,7 +330,7 @@ Show batch freshness history
 
 ## 9. Luong 6: Backfill default batch
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ### Backend tasks
 
@@ -355,6 +355,31 @@ Trang thai: `todo`
 - Unit test logic backfill voi repo fake.
 - Dry-run khong save.
 - Full `go test ./...`.
+
+### Da lam
+
+- Tao service `internal/service/batchbackfill` de chay backfill idempotent va test bang fake repo.
+- Tao command `cmd/backfill-batches/main.go`.
+- Ho tro flags:
+  - `--dry-run`
+  - `--start-after`
+  - `--batch-size`
+  - `--default-status`
+- Ho tro wiring theo config:
+  - MongoDB khi `MONGODB_ENABLED=true`
+  - Firestore khi MongoDB disabled
+- Logic:
+  - list products
+  - neu product chua co batch thi tao `default-<productId>`
+  - `batchCode = DEFAULT-<productId>`
+  - normalize `FreshnessScore` ve percent cho `currentFreshness`
+  - gan pledge/report/buyer check cu vao default batch neu cung product va dang rong `batchId`
+  - khong overwrite record da co `batchId`
+
+### Test da chay
+
+- `go test ./internal/service/batchbackfill ./cmd/backfill-batches`
+- `go test ./...`
 
 ### Commit
 
@@ -550,4 +575,5 @@ Hoan thanh khi:
 - Da hoan thanh Luong 3: Backend validate buyer check batch consistency.
 - Da hoan thanh Luong 4: Android buyer/result hien batch info.
 - Da hoan thanh Luong 5: Freshness history UI theo batch.
-- Luong tiep theo: Luong 6 Backfill default batch.
+- Da hoan thanh Luong 6: Backfill default batch.
+- Luong tiep theo: Luong 7 Chuan hoa thang diem do tuoi.

@@ -1,6 +1,6 @@
 # Luong 06: Chuan hoa shop onboarding va verification
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ## Van de
 
@@ -57,15 +57,19 @@ Khuyen nghi: Chon B neu dang demo MVP, chon A neu chuan bi production.
 
 ## Da lam
 
-- Chua lam.
+- Chon policy B de khong pha flow demo/MVP: shop moi van `active`.
+- Them trust reason `unverified_new_shop` khi shop khong co pledge/review/check eligible.
+- Trust summary cua shop moi van co grade `risk`, score thap va reasons ro de UI khong hien verified badge dua tren status active.
+- Them test dam bao shop moi giu status `active` nhung trust summary co reason `unverified_new_shop`.
 
 ## Test da chay
 
-- Chua chay.
+- `go test ./internal/service/shop`
+- `go test ./...`
 
 ## Commit
 
-De xuat:
+Da commit:
 
 ```text
 Clarify shop verification status

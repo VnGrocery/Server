@@ -454,6 +454,46 @@ func TestListTrustSummaryFiltersIneligibleSignals(t *testing.T) {
 	}
 }
 
+func TestListTrustSummaryMarksNewShopUnverified(t *testing.T) {
+	service := NewService(shopRepositoryStub{
+		list: func(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
+			return []domain.Shop{{ShopID: "shop-1", Name: "New Shop", Address: "123 Main St", Status: ShopStatusActive}}, nil
+		},
+		save:    func(ctx context.Context, shop domain.Shop) error { return nil },
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) { return domain.Shop{}, nil },
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
+
+	result, err := service.List(context.Background(), ListInput{})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if len(result.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(result.Items))
+	}
+	summary := result.Items[0].TrustSummary
+	if summary.Score != 0 {
+		t.Fatalf("expected empty trust score to be 0, got %v", summary.Score)
+	}
+	if summary.Grade != "risk" {
+		t.Fatalf("expected risk grade for unverified shop, got %s", summary.Grade)
+	}
+	if !containsString(summary.Reasons, "unverified_new_shop") {
+		t.Fatalf("expected unverified_new_shop reason, got %v", summary.Reasons)
+	}
+	if result.Items[0].Shop.Status != ShopStatusActive {
+		t.Fatalf("expected policy B to keep shop active, got %s", result.Items[0].Shop.Status)
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
+
 func TestListPledgesFiltersByProductAndCategory(t *testing.T) {
 	service := NewService(shopRepositoryStub{
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {

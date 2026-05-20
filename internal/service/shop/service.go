@@ -1051,6 +1051,9 @@ func applyTrustScore(summary *TrustSummary, rating RatingSummary, pledges []doma
 	reasons = append(reasons, consistencyReasons...)
 	reasons = append(reasons, recencyReasons...)
 	reasons = append(reasons, coverageReasons...)
+	if len(pledges) == 0 && len(reviews) == 0 && len(checks) == 0 {
+		reasons = append(reasons, "unverified_new_shop")
+	}
 
 	summary.Score = round(score, 1)
 	summary.Grade = trustGrade(summary.Score)

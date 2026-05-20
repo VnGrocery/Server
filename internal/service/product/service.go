@@ -32,6 +32,7 @@ const (
 	FreshnessReportStatusActive   = "active"
 	FreshnessReportStatusFlagged  = "flagged"
 	FreshnessReportStatusRejected = "rejected"
+	BatchStatusActive             = "active"
 )
 
 type CreateInput struct {
@@ -161,6 +162,7 @@ type AuditLogger interface {
 type Service struct {
 	products repository.ProductRepository
 	reports  repository.ProductFreshnessReportRepository
+	batches  repository.ProductBatchRepository
 	shops    repository.ShopRepository
 	users    repository.UserRepository
 	audit    AuditLogger
@@ -176,6 +178,10 @@ func NewService(products repository.ProductRepository, reports repository.Produc
 		audit:    auditLogger,
 		now:      time.Now,
 	}
+}
+
+func (s *Service) SetProductBatchRepository(batches repository.ProductBatchRepository) {
+	s.batches = batches
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Product, error) {
@@ -499,13 +505,19 @@ func (s *Service) CreateFreshnessReport(ctx context.Context, input FreshnessRepo
 	if err != nil {
 		return domain.ProductFreshnessReport{}, err
 	}
+	batchID := strings.TrimSpace(input.BatchID)
+	if batchID != "" {
+		if err := s.validateFreshnessReportBatch(ctx, product.ShopID, product.ProductID, batchID); err != nil {
+			return domain.ProductFreshnessReport{}, err
+		}
+	}
 
 	now := s.now().UTC()
 	report := domain.ProductFreshnessReport{
 		ReportID:       uuid.NewString(),
 		ProductID:      product.ProductID,
 		ShopID:         product.ShopID,
-		BatchID:        strings.TrimSpace(input.BatchID),
+		BatchID:        batchID,
 		ReporterUserID: strings.TrimSpace(input.ReporterUserID),
 		Status:         FreshnessReportStatusActive,
 		Version:        1,
@@ -525,6 +537,29 @@ func (s *Service) CreateFreshnessReport(ctx context.Context, input FreshnessRepo
 		return domain.ProductFreshnessReport{}, err
 	}
 	return report, nil
+}
+
+func (s *Service) validateFreshnessReportBatch(ctx context.Context, shopID, productID, batchID string) error {
+	if s.batches == nil {
+		return fmt.Errorf("product batch repository is not configured")
+	}
+	batch, err := s.batches.GetByID(ctx, strings.TrimSpace(batchID))
+	if err != nil || strings.TrimSpace(batch.BatchID) == "" {
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrInvalidProduct, err)
+		}
+		return fmt.Errorf("%w: batchId not found", ErrInvalidProduct)
+	}
+	if batch.ShopID != strings.TrimSpace(shopID) {
+		return fmt.Errorf("%w: batchId does not belong to shop", ErrInvalidProduct)
+	}
+	if batch.ProductID != strings.TrimSpace(productID) {
+		return fmt.Errorf("%w: batchId does not belong to product", ErrInvalidProduct)
+	}
+	if strings.TrimSpace(batch.Status) != BatchStatusActive {
+		return fmt.Errorf("%w: batch is not active", ErrInvalidProduct)
+	}
+	return nil
 }
 
 func (s *Service) ModerateFreshnessReport(ctx context.Context, input ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error) {

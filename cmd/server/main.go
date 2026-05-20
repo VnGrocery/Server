@@ -273,6 +273,7 @@ func main() {
 		splitCommaSeparated(cfg.BootstrapAdminEmails)...,
 	)
 	productManager := productservice.NewService(productRepository, productFreshnessReportRepository, shopRepository, userRepository, auditLogger)
+	productManager.SetProductBatchRepository(productBatchRepository)
 	batchManager := batchservice.NewService(productBatchRepository, productRepository, shopRepository)
 	traceabilityManager := traceabilityservice.NewService(traceEventRepository, productBatchRepository, productRepository, shopRepository)
 	userAdminService := useradminservice.NewService(userRepository, authUserRepository, accountKeys, auditLogger)

@@ -80,6 +80,33 @@ func (s productFreshnessReportRepositoryStub) List(ctx context.Context, filter r
 	return nil, nil
 }
 
+type productBatchRepositoryStub struct {
+	save    func(ctx context.Context, batch domain.ProductBatch) error
+	getByID func(ctx context.Context, batchID string) (domain.ProductBatch, error)
+	list    func(ctx context.Context, filter repository.ProductBatchListFilter) ([]domain.ProductBatch, error)
+}
+
+func (s productBatchRepositoryStub) Save(ctx context.Context, batch domain.ProductBatch) error {
+	if s.save != nil {
+		return s.save(ctx, batch)
+	}
+	return nil
+}
+
+func (s productBatchRepositoryStub) GetByID(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+	if s.getByID != nil {
+		return s.getByID(ctx, batchID)
+	}
+	return domain.ProductBatch{}, nil
+}
+
+func (s productBatchRepositoryStub) List(ctx context.Context, filter repository.ProductBatchListFilter) ([]domain.ProductBatch, error) {
+	if s.list != nil {
+		return s.list(ctx, filter)
+	}
+	return nil, nil
+}
+
 type shopRepositoryStub struct {
 	getByID func(ctx context.Context, shopID string) (domain.Shop, error)
 }
@@ -248,6 +275,11 @@ func TestCreateFreshnessReport(t *testing.T) {
 			return domain.Shop{ShopID: shopID, Status: "active"}, nil
 		},
 	}, userRepositoryStub{}, auditLogger)
+	service.SetProductBatchRepository(productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{BatchID: batchID, ShopID: "shop-1", ProductID: "product-1", Status: BatchStatusActive}, nil
+		},
+	})
 
 	report, err := service.CreateFreshnessReport(context.Background(), FreshnessReportInput{
 		ProductID:      "product-1",
@@ -268,6 +300,104 @@ func TestCreateFreshnessReport(t *testing.T) {
 	}
 	if auditLogger.logHits != 1 {
 		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
+	}
+}
+
+func TestCreateFreshnessReportRejectsMissingBatch(t *testing.T) {
+	service := newFreshnessReportService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{}, nil
+		},
+	}, productFreshnessReportRepositoryStub{
+		save: func(ctx context.Context, report domain.ProductFreshnessReport) error {
+			t.Fatal("save should not be called")
+			return nil
+		},
+	})
+
+	_, err := service.CreateFreshnessReport(context.Background(), validFreshnessReportInput())
+	if !errors.Is(err, ErrInvalidProduct) {
+		t.Fatalf("expected ErrInvalidProduct, got %v", err)
+	}
+}
+
+func TestCreateFreshnessReportRejectsBatchFromDifferentProduct(t *testing.T) {
+	service := newFreshnessReportService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{BatchID: batchID, ShopID: "shop-1", ProductID: "product-2", Status: BatchStatusActive}, nil
+		},
+	}, productFreshnessReportRepositoryStub{
+		save: func(ctx context.Context, report domain.ProductFreshnessReport) error {
+			t.Fatal("save should not be called")
+			return nil
+		},
+	})
+
+	_, err := service.CreateFreshnessReport(context.Background(), validFreshnessReportInput())
+	if !errors.Is(err, ErrInvalidProduct) {
+		t.Fatalf("expected ErrInvalidProduct, got %v", err)
+	}
+}
+
+func TestCreateFreshnessReportRejectsBatchFromDifferentShop(t *testing.T) {
+	service := newFreshnessReportService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{BatchID: batchID, ShopID: "shop-2", ProductID: "product-1", Status: BatchStatusActive}, nil
+		},
+	}, productFreshnessReportRepositoryStub{
+		save: func(ctx context.Context, report domain.ProductFreshnessReport) error {
+			t.Fatal("save should not be called")
+			return nil
+		},
+	})
+
+	_, err := service.CreateFreshnessReport(context.Background(), validFreshnessReportInput())
+	if !errors.Is(err, ErrInvalidProduct) {
+		t.Fatalf("expected ErrInvalidProduct, got %v", err)
+	}
+}
+
+func TestCreateFreshnessReportRejectsInactiveBatch(t *testing.T) {
+	service := newFreshnessReportService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{BatchID: batchID, ShopID: "shop-1", ProductID: "product-1", Status: "recalled"}, nil
+		},
+	}, productFreshnessReportRepositoryStub{
+		save: func(ctx context.Context, report domain.ProductFreshnessReport) error {
+			t.Fatal("save should not be called")
+			return nil
+		},
+	})
+
+	_, err := service.CreateFreshnessReport(context.Background(), validFreshnessReportInput())
+	if !errors.Is(err, ErrInvalidProduct) {
+		t.Fatalf("expected ErrInvalidProduct, got %v", err)
+	}
+}
+
+func TestCreateFreshnessReportAllowsLegacyReportWithoutBatch(t *testing.T) {
+	service := newFreshnessReportService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			t.Fatal("batch lookup should not be called")
+			return domain.ProductBatch{}, nil
+		},
+	}, productFreshnessReportRepositoryStub{
+		save: func(ctx context.Context, report domain.ProductFreshnessReport) error {
+			if report.BatchID != "" {
+				t.Fatalf("expected empty batch id, got %q", report.BatchID)
+			}
+			return nil
+		},
+	})
+	input := validFreshnessReportInput()
+	input.BatchID = ""
+
+	report, err := service.CreateFreshnessReport(context.Background(), input)
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if report.BatchID != "" {
+		t.Fatalf("expected empty batch id, got %q", report.BatchID)
 	}
 }
 
@@ -298,6 +428,34 @@ func TestListFreshnessReportsFiltersActiveByProduct(t *testing.T) {
 	}
 	if len(reports) != 1 || reports[0].ReportID != "report-1" {
 		t.Fatalf("unexpected reports: %#v", reports)
+	}
+}
+
+func newFreshnessReportService(t *testing.T, batches productBatchRepositoryStub, reports productFreshnessReportRepositoryStub) *Service {
+	t.Helper()
+	service := NewService(productRepositoryStub{
+		getByID: func(ctx context.Context, productID string) (domain.Product, error) {
+			return domain.Product{ProductID: productID, ShopID: "shop-1", Status: ProductStatusActive}, nil
+		},
+	}, reports, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, Status: "active"}, nil
+		},
+	}, userRepositoryStub{}, nil)
+	service.SetProductBatchRepository(batches)
+	return service
+}
+
+func validFreshnessReportInput() FreshnessReportInput {
+	return FreshnessReportInput{
+		ProductID:      "product-1",
+		ShopID:         "shop-1",
+		BatchID:        "batch-1",
+		ReporterUserID: "buyer-1",
+		Score:          6.2,
+		Category:       "bruised_fruit",
+		Confidence:     0.86,
+		ImageHash:      "hash-1",
 	}
 }
 

@@ -29,6 +29,7 @@ const QRVersionV1 = "bundle_qr_v1"
 type IssueInput struct {
 	ShopID      string
 	ProductID   string
+	BatchID     string
 	BundleID    string
 	PledgeID    string
 	CreatedByID string
@@ -47,6 +48,7 @@ type Claims struct {
 	QRVersion string
 	ShopID    string
 	ProductID string
+	BatchID   string
 	BundleID  string
 	PledgeID  string
 	Nonce     string
@@ -110,6 +112,7 @@ func (s *Service) Issue(input IssueInput) (string, time.Time, error) {
 		"nonce":       uuid.NewString(),
 		"shopId":      shopID,
 		"productId":   strings.TrimSpace(input.ProductID),
+		"batchId":     strings.TrimSpace(input.BatchID),
 		"bundleId":    bundleID,
 		"pledgeId":    strings.TrimSpace(input.PledgeID),
 		"sellerId":    strings.TrimSpace(input.CreatedByID),
@@ -165,6 +168,7 @@ func (s *Service) VerifyAndConsume(ctx context.Context, input VerifyInput) (Clai
 	nonce := getString("nonce")
 	pledgeID := getString("pledgeId")
 	productID := getString("productId")
+	batchID := getString("batchId")
 	qrVersion := getString("qrVersion")
 	watermark := getString("watermark")
 	if bundleID == "" || shopID == "" || nonce == "" {
@@ -240,6 +244,7 @@ func (s *Service) VerifyAndConsume(ctx context.Context, input VerifyInput) (Clai
 		QRVersion: qrVersion,
 		ShopID:    shopID,
 		ProductID: productID,
+		BatchID:   batchID,
 		BundleID:  bundleID,
 		PledgeID:  pledgeID,
 		Nonce:     nonce,

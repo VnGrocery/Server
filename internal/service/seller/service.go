@@ -24,6 +24,7 @@ const PledgeStatusCommitted = "committed"
 type CommitInput struct {
 	ShopID          string
 	ProductID       string
+	BatchID         string
 	BundleID        string
 	CreatedByUserID string
 	Score           float64
@@ -109,6 +110,7 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 		PledgeID:        uuid.NewString(),
 		ShopID:          strings.TrimSpace(input.ShopID),
 		ProductID:       productID,
+		BatchID:         strings.TrimSpace(input.BatchID),
 		BundleID:        strings.TrimSpace(input.BundleID),
 		CreatedByUserID: strings.TrimSpace(input.CreatedByUserID),
 		Status:          PledgeStatusCommitted,

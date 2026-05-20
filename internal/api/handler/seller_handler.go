@@ -137,6 +137,7 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 	pledge, err := h.committer.Commit(c.Request.Context(), sellerservice.CommitInput{
 		ShopID:          request.ShopID,
 		ProductID:       request.ProductID,
+		BatchID:         request.BatchID,
 		BundleID:        request.BundleID,
 		CreatedByUserID: principal.UserID,
 		Score:           request.Score,
@@ -167,6 +168,7 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 		token, expiresAt, tokenErr := h.tokens.Issue(bundletokenservice.IssueInput{
 			ShopID:      pledge.ShopID,
 			ProductID:   pledge.ProductID,
+			BatchID:     pledge.BatchID,
 			BundleID:    pledge.BundleID,
 			PledgeID:    pledge.PledgeID,
 			CreatedByID: pledge.CreatedByUserID,
@@ -187,6 +189,7 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 		PledgeID:          pledge.PledgeID,
 		ShopID:            pledge.ShopID,
 		ProductID:         pledge.ProductID,
+		BatchID:           pledge.BatchID,
 		BundleID:          pledge.BundleID,
 		CreatedByUserID:   pledge.CreatedByUserID,
 		Status:            pledge.Status,
@@ -260,6 +263,7 @@ func (h *SellerHandler) ReissueBundleToken(c *gin.Context) {
 	token, expiresAt, err := h.tokens.Issue(bundletokenservice.IssueInput{
 		ShopID:      pledge.ShopID,
 		ProductID:   pledge.ProductID,
+		BatchID:     pledge.BatchID,
 		BundleID:    pledge.BundleID,
 		PledgeID:    pledge.PledgeID,
 		CreatedByID: pledge.CreatedByUserID,

@@ -89,6 +89,7 @@ type PledgeProofBundle struct {
 	PledgeID           string
 	ShopID             string
 	ProductID          string
+	BatchID            string
 	BundleID           string
 	Score              float64
 	Category           string
@@ -222,6 +223,7 @@ func buildProofBundle(pledge domain.Pledge, integrity PledgeIntegrityView) Pledg
 		PledgeID:           pledge.PledgeID,
 		ShopID:             pledge.ShopID,
 		ProductID:          pledge.ProductID,
+		BatchID:            pledge.BatchID,
 		BundleID:           pledge.BundleID,
 		Score:              pledge.Score,
 		Category:           pledge.Category,

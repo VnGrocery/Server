@@ -5,6 +5,7 @@ import "time"
 type SellerCommitRequest struct {
 	ShopID     string  `json:"shopId"`
 	ProductID  string  `json:"productId"`
+	BatchID    string  `json:"batchId"`
 	BundleID   string  `json:"bundleId"`
 	Score      float64 `json:"score"`
 	Category   string  `json:"category"`
@@ -17,6 +18,7 @@ type SellerCommitResponse struct {
 	PledgeID          string     `json:"pledgeId"`
 	ShopID            string     `json:"shopId"`
 	ProductID         string     `json:"productId,omitempty"`
+	BatchID           string     `json:"batchId,omitempty"`
 	BundleID          string     `json:"bundleId"`
 	CreatedByUserID   string     `json:"createdByUserId"`
 	Status            string     `json:"status"`
@@ -53,6 +55,7 @@ type PledgeResponse struct {
 	PledgeID          string     `json:"pledgeId"`
 	ShopID            string     `json:"shopId"`
 	ProductID         string     `json:"productId,omitempty"`
+	BatchID           string     `json:"batchId,omitempty"`
 	BundleID          string     `json:"bundleId"`
 	CreatedByUserID   string     `json:"createdByUserId"`
 	Status            string     `json:"status"`
@@ -99,6 +102,7 @@ type PledgeProofBundleResponse struct {
 	PledgeID           string                  `json:"pledgeId"`
 	ShopID             string                  `json:"shopId"`
 	ProductID          string                  `json:"productId,omitempty"`
+	BatchID            string                  `json:"batchId,omitempty"`
 	BundleID           string                  `json:"bundleId"`
 	Score              float64                 `json:"score"`
 	Category           string                  `json:"category"`

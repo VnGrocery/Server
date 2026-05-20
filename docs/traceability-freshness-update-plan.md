@@ -856,6 +856,27 @@ Test da chay:
 ./gradlew :app:compileDevDebugKotlin
 ```
 
+### Luong 6: Backend batch-aware seller pledge
+
+Trang thai: `done`
+
+Da lam:
+
+- Them `batchId` vao `Pledge` domain.
+- Them `batchId` vao seller commit request/response.
+- Them `batchId` vao pledge history response va pledge proof response.
+- Cap nhat seller service de luu `batchId` vao pledge.
+- Cap nhat seller handler de truyen `batchId` vao commit va bundle token issue.
+- Them `batchId` vao bundle token issue input va JWT claims.
+- Them `batchId` vao bundle token verify claims output.
+- Cap nhat shop proof bundle de expose `batchId`.
+
+Test da chay:
+
+```sh
+go test ./...
+```
+
 ## 11. Rủi ro va luu y
 
 - Them batchId vao token/QR co the lam QR cu khong tuong thich. Can giu fallback cho QR cu khong co batchId.

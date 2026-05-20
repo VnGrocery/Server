@@ -6,6 +6,7 @@ type Pledge struct {
 	PledgeID          string     `firestore:"pledgeId"`
 	ShopID            string     `firestore:"shopId"`
 	ProductID         string     `firestore:"productId"`
+	BatchID           string     `firestore:"batchId"`
 	BundleID          string     `firestore:"bundleId"`
 	CreatedByUserID   string     `firestore:"createdByUserId"`
 	Status            string     `firestore:"status"`

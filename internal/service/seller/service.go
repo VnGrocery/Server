@@ -12,6 +12,7 @@ import (
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
 	"vngrocery/internal/service/audit"
+	batchsvc "vngrocery/internal/service/batch"
 )
 
 var ErrInvalidCommit = errors.New("invalid seller commit request")
@@ -46,6 +47,7 @@ type Service struct {
 	pledges   repository.PledgeRepository
 	shops     repository.ShopRepository
 	products  repository.ProductRepository
+	batches   repository.ProductBatchRepository
 	audit     AuditLogger
 	integrity IntegrityManager
 	now       func() time.Time
@@ -60,11 +62,12 @@ type IntegrityManager interface {
 	SyncPledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error)
 }
 
-func NewService(pledges repository.PledgeRepository, shops repository.ShopRepository, products repository.ProductRepository, auditLogger AuditLogger) *Service {
+func NewService(pledges repository.PledgeRepository, shops repository.ShopRepository, products repository.ProductRepository, batches repository.ProductBatchRepository, auditLogger AuditLogger) *Service {
 	return &Service{
 		pledges:  pledges,
 		shops:    shops,
 		products: products,
+		batches:  batches,
 		audit:    auditLogger,
 		now:      time.Now,
 	}
@@ -104,13 +107,22 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 			return domain.Pledge{}, fmt.Errorf("%w: productId does not belong to shop", ErrInvalidCommit)
 		}
 	}
+	batchID := strings.TrimSpace(input.BatchID)
+	if batchID != "" {
+		if productID == "" {
+			return domain.Pledge{}, fmt.Errorf("%w: productId is required when batchId is provided", ErrInvalidCommit)
+		}
+		if err := s.validateBatch(ctx, strings.TrimSpace(input.ShopID), productID, batchID, strings.TrimSpace(input.CreatedByUserID)); err != nil {
+			return domain.Pledge{}, err
+		}
+	}
 
 	now := s.now().UTC()
 	pledge := domain.Pledge{
 		PledgeID:        uuid.NewString(),
 		ShopID:          strings.TrimSpace(input.ShopID),
 		ProductID:       productID,
-		BatchID:         strings.TrimSpace(input.BatchID),
+		BatchID:         batchID,
 		BundleID:        strings.TrimSpace(input.BundleID),
 		CreatedByUserID: strings.TrimSpace(input.CreatedByUserID),
 		Status:          PledgeStatusCommitted,
@@ -159,6 +171,32 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 	}
 
 	return pledge, nil
+}
+
+func (s *Service) validateBatch(ctx context.Context, shopID, productID, batchID, sellerUserID string) error {
+	if s.batches == nil {
+		return fmt.Errorf("product batch repository is not configured")
+	}
+	batch, err := s.batches.GetByID(ctx, batchID)
+	if err != nil || strings.TrimSpace(batch.BatchID) == "" {
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrInvalidCommit, err)
+		}
+		return fmt.Errorf("%w: batchId not found", ErrInvalidCommit)
+	}
+	if batch.ShopID != shopID {
+		return fmt.Errorf("%w: batchId does not belong to shop", ErrInvalidCommit)
+	}
+	if batch.ProductID != productID {
+		return fmt.Errorf("%w: batchId does not belong to product", ErrInvalidCommit)
+	}
+	if batch.OwnerUserID != "" && batch.OwnerUserID != sellerUserID {
+		return ErrShopOwnership
+	}
+	if strings.TrimSpace(batch.Status) != batchsvc.StatusActive {
+		return fmt.Errorf("%w: batch is not active", ErrInvalidCommit)
+	}
+	return nil
 }
 
 func (s *Service) GetPledgeForSeller(ctx context.Context, shopID, pledgeID, sellerUserID string) (domain.Pledge, error) {

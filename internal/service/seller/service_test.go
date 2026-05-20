@@ -9,6 +9,7 @@ import (
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
 	"vngrocery/internal/service/audit"
+	batchsvc "vngrocery/internal/service/batch"
 )
 
 type pledgeRepositoryStub struct {
@@ -86,7 +87,7 @@ func TestCommitCreatesPledge(t *testing.T) {
 		getByID: func(ctx context.Context, productID string) (domain.Product, error) {
 			return domain.Product{ProductID: productID, ShopID: "shop-1"}, nil
 		},
-	}, nil)
+	}, productBatchRepositoryStub{}, nil)
 	service.now = func() time.Time { return fixedTime }
 
 	pledge, err := service.Commit(context.Background(), CommitInput{
@@ -107,6 +108,126 @@ func TestCommitCreatesPledge(t *testing.T) {
 	}
 }
 
+func TestCommitCreatesPledgeWithActiveBatch(t *testing.T) {
+	service := newBatchCommitService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{
+				BatchID:     batchID,
+				ShopID:      "shop-1",
+				ProductID:   "product-1",
+				OwnerUserID: "user-1",
+				Status:      batchsvc.StatusActive,
+			}, nil
+		},
+	}, func(ctx context.Context, pledge domain.Pledge) error {
+		if pledge.BatchID != "batch-1" {
+			t.Fatalf("unexpected batch id: %s", pledge.BatchID)
+		}
+		if pledge.ProductID != "product-1" {
+			t.Fatalf("unexpected product id: %s", pledge.ProductID)
+		}
+		return nil
+	})
+
+	pledge, err := service.Commit(context.Background(), validBatchCommitInput())
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if pledge.BatchID != "batch-1" {
+		t.Fatalf("expected batch id in response, got %s", pledge.BatchID)
+	}
+}
+
+func TestCommitRejectsMissingBatch(t *testing.T) {
+	service := newBatchCommitService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{}, errors.New("not found")
+		},
+	}, nil)
+
+	_, err := service.Commit(context.Background(), validBatchCommitInput())
+	if !errors.Is(err, ErrInvalidCommit) {
+		t.Fatalf("expected ErrInvalidCommit, got %v", err)
+	}
+}
+
+func TestCommitRejectsBatchProductMismatch(t *testing.T) {
+	service := newBatchCommitService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{
+				BatchID:     batchID,
+				ShopID:      "shop-1",
+				ProductID:   "product-2",
+				OwnerUserID: "user-1",
+				Status:      batchsvc.StatusActive,
+			}, nil
+		},
+	}, nil)
+
+	_, err := service.Commit(context.Background(), validBatchCommitInput())
+	if !errors.Is(err, ErrInvalidCommit) {
+		t.Fatalf("expected ErrInvalidCommit, got %v", err)
+	}
+}
+
+func TestCommitRejectsBatchShopMismatch(t *testing.T) {
+	service := newBatchCommitService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{
+				BatchID:     batchID,
+				ShopID:      "shop-2",
+				ProductID:   "product-1",
+				OwnerUserID: "user-1",
+				Status:      batchsvc.StatusActive,
+			}, nil
+		},
+	}, nil)
+
+	_, err := service.Commit(context.Background(), validBatchCommitInput())
+	if !errors.Is(err, ErrInvalidCommit) {
+		t.Fatalf("expected ErrInvalidCommit, got %v", err)
+	}
+}
+
+func TestCommitRejectsInactiveBatch(t *testing.T) {
+	for _, status := range []string{batchsvc.StatusSoldOut, batchsvc.StatusExpired, batchsvc.StatusRecalled, batchsvc.StatusDeleted} {
+		t.Run(status, func(t *testing.T) {
+			service := newBatchCommitService(t, productBatchRepositoryStub{
+				getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+					return domain.ProductBatch{
+						BatchID:     batchID,
+						ShopID:      "shop-1",
+						ProductID:   "product-1",
+						OwnerUserID: "user-1",
+						Status:      status,
+					}, nil
+				},
+			}, nil)
+
+			_, err := service.Commit(context.Background(), validBatchCommitInput())
+			if !errors.Is(err, ErrInvalidCommit) {
+				t.Fatalf("expected ErrInvalidCommit, got %v", err)
+			}
+		})
+	}
+}
+
+func TestCommitRejectsBatchWithoutProduct(t *testing.T) {
+	service := newBatchCommitService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			t.Fatal("batch lookup should not run without product id")
+			return domain.ProductBatch{}, nil
+		},
+	}, nil)
+
+	input := validBatchCommitInput()
+	input.ProductID = ""
+	_, err := service.Commit(context.Background(), input)
+	if !errors.Is(err, ErrInvalidCommit) {
+		t.Fatalf("expected ErrInvalidCommit, got %v", err)
+	}
+}
+
 func TestCommitRejectsInvalidInput(t *testing.T) {
 	service := NewService(pledgeRepositoryStub{
 		save: func(ctx context.Context, pledge domain.Pledge) error {
@@ -117,7 +238,7 @@ func TestCommitRejectsInvalidInput(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, nil
 		},
-	}, productRepositoryStub{}, nil)
+	}, productRepositoryStub{}, productBatchRepositoryStub{}, nil)
 
 	_, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "",
@@ -143,7 +264,7 @@ func TestCommitRejectsMissingShop(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{}, errors.New("not found")
 		},
-	}, productRepositoryStub{}, nil)
+	}, productRepositoryStub{}, productBatchRepositoryStub{}, nil)
 
 	_, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",
@@ -169,7 +290,7 @@ func TestCommitRejectsNonOwnerShop(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "owner-2"}, nil
 		},
-	}, productRepositoryStub{}, nil)
+	}, productRepositoryStub{}, productBatchRepositoryStub{}, nil)
 
 	_, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",
@@ -183,6 +304,41 @@ func TestCommitRejectsNonOwnerShop(t *testing.T) {
 	if !errors.Is(err, ErrShopOwnership) {
 		t.Fatalf("expected ErrShopOwnership, got %v", err)
 	}
+}
+
+func validBatchCommitInput() CommitInput {
+	return CommitInput{
+		ShopID:          "shop-1",
+		ProductID:       "product-1",
+		BatchID:         "batch-1",
+		BundleID:        "bundle-1",
+		CreatedByUserID: "user-1",
+		Score:           8.8,
+		Category:        "fresh_produce",
+		Confidence:      0.93,
+		ImageHash:       "hash-1",
+	}
+}
+
+func newBatchCommitService(t *testing.T, batches productBatchRepositoryStub, save func(ctx context.Context, pledge domain.Pledge) error) *Service {
+	t.Helper()
+	if save == nil {
+		save = func(ctx context.Context, pledge domain.Pledge) error {
+			t.Fatal("save should not be called")
+			return nil
+		}
+	}
+	return NewService(pledgeRepositoryStub{
+		save: save,
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1"}, nil
+		},
+	}, productRepositoryStub{
+		getByID: func(ctx context.Context, productID string) (domain.Product, error) {
+			return domain.Product{ProductID: productID, ShopID: "shop-1"}, nil
+		},
+	}, batches, nil)
 }
 
 type shopRepositoryStub struct {
@@ -220,6 +376,25 @@ func (s productRepositoryStub) List(ctx context.Context, filter repository.Produ
 	return nil, errors.New("not implemented")
 }
 
+type productBatchRepositoryStub struct {
+	getByID func(ctx context.Context, batchID string) (domain.ProductBatch, error)
+}
+
+func (s productBatchRepositoryStub) Save(ctx context.Context, batch domain.ProductBatch) error {
+	return nil
+}
+
+func (s productBatchRepositoryStub) GetByID(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+	if s.getByID == nil {
+		return domain.ProductBatch{}, errors.New("not implemented")
+	}
+	return s.getByID(ctx, batchID)
+}
+
+func (s productBatchRepositoryStub) List(ctx context.Context, filter repository.ProductBatchListFilter) ([]domain.ProductBatch, error) {
+	return nil, errors.New("not implemented")
+}
+
 type auditLoggerStub struct {
 	log     func(ctx context.Context, input audit.Input) error
 	logHits int
@@ -249,7 +424,7 @@ func TestCommitWritesAuditLog(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1"}, nil
 		},
-	}, productRepositoryStub{}, auditLogger)
+	}, productRepositoryStub{}, productBatchRepositoryStub{}, auditLogger)
 
 	if _, err := service.Commit(context.Background(), CommitInput{
 		ShopID:          "shop-1",
@@ -281,7 +456,7 @@ func TestGetPledgeForSeller(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "seller-1"}, nil
 		},
-	}, productRepositoryStub{}, nil)
+	}, productRepositoryStub{}, productBatchRepositoryStub{}, nil)
 
 	pledge, err := service.GetPledgeForSeller(context.Background(), "shop-1", "pledge-1", "seller-1")
 	if err != nil {
@@ -302,7 +477,7 @@ func TestGetPledgeForSellerRejectsOwnerMismatch(t *testing.T) {
 		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
 			return domain.Shop{ShopID: shopID, OwnerUserID: "seller-2"}, nil
 		},
-	}, productRepositoryStub{}, nil)
+	}, productRepositoryStub{}, productBatchRepositoryStub{}, nil)
 
 	_, err := service.GetPledgeForSeller(context.Background(), "shop-1", "pledge-1", "seller-1")
 	if !errors.Is(err, ErrShopOwnership) {

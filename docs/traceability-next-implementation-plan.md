@@ -1,0 +1,484 @@
+# Ke hoach tiep theo: hoan thien batch, freshness history va traceability
+
+## 0. Quy tac thuc hien
+
+- Lam theo tung luong nho, moi luong co code, test va commit rieng.
+- Xong luong nao cap nhat trang thai vao file nay truoc khi commit.
+- Khong stage/commit cac thay doi ngoai pham vi, dac biet `.gitignore` va `test.sh` neu dang la thay doi rieng cua nguoi dung.
+- Neu test khong chay duoc, ghi ro ly do va test da chay.
+- Uu tien sua cac lo hong logic backend truoc UI nang cao.
+
+## 1. Muc tieu
+
+Hoan thien cac phan con thieu sau khi da co nen tang batch:
+
+- Seller tao cam ket phai chon batch that.
+- Backend phai validate batch khi seller commit pledge.
+- Buyer check phai validate batch khop token va pledge.
+- Product detail phai xem duoc lich su do tuoi theo batch.
+- Du lieu cu phai co default batch qua backfill.
+- Them trace event/timeline nguon goc cho moi batch.
+
+## 2. Van de hien tai
+
+### 2.1 Seller UI chua chon batch
+
+Android da co DTO/repository batch, backend da nhan `batchId`, nhung man hinh seller create pledge hien chi chon shop + product. Vi vay pledge moi co the van khong gan batch neu UI khong gui batch.
+
+### 2.2 Seller commit backend chua validate batch
+
+Backend hien luu `batchId` vao pledge, nhung chua kiem tra:
+
+- batch co ton tai khong
+- batch co thuoc dung shop/product khong
+- batch co active khong
+- batch co expired/recalled khong
+
+### 2.3 Buyer check chua validate batch consistency
+
+Buyer check da luu `batchId`, token da co claim `batchId`, pledge da co `batchId`, nhung service chua chan cac truong hop mismatch:
+
+- request `batchId` khac token `batchId`
+- pledge `batchId` khac token `batchId`
+- pledge `batchId` khac request `batchId`
+
+### 2.4 Product detail chua co freshness history
+
+Product detail moi chi hien batch cards. Chua co:
+
+- danh sach lan kiem tra do tuoi theo batch
+- chart
+- timeline freshness
+- warning neu diem giam bat thuong
+
+### 2.5 Chua co migration/backfill
+
+Du lieu cu khong co batch nen can default batch cho moi product va gan lai pledge/report/check cu.
+
+### 2.6 Chua co TraceEvent
+
+Chua co entity va API cho timeline nguon goc: origin, slaughter, packaging, shipping, received, storage check, recall.
+
+## 3. Thu tu uu tien
+
+1. Backend validate seller commit batch.
+2. Android seller create pledge chon batch.
+3. Backend validate buyer check batch consistency.
+4. Android buyer/result hien batch info ro hon.
+5. Freshness history UI theo batch.
+6. Backfill default batch.
+7. TraceEvent backend.
+8. TraceEvent Android UI.
+9. Trust/proof UI polish.
+
+## 4. Luong 1: Backend validate seller commit batch
+
+Trang thai: `done`
+
+### Backend tasks
+
+- Inject `ProductBatchRepository` vao `seller.Service`.
+- Cap nhat constructor `seller.NewService`.
+- Cap nhat `cmd/server/main.go` de truyen `productBatchRepository`.
+- Khi `CommitInput.BatchID` khong rong:
+  - load batch theo `batchId`
+  - batch phai thuoc `shopId`
+  - batch phai thuoc `productId`
+  - batch owner phai la seller
+  - batch status phai la `active`
+- Neu batch khong active:
+  - `sold_out`, `expired`, `recalled`, `deleted` deu reject.
+- Neu `productId` rong nhung `batchId` co ton tai:
+  - co the derive `productId` tu batch hoac reject. Khuyen nghi: reject de API ro rang trong MVP.
+
+### Tests
+
+- Seller commit thanh cong voi active batch.
+- Reject batch khong ton tai.
+- Reject batch khac product.
+- Reject batch khac shop.
+- Reject batch expired/recalled.
+- Full `go test ./...`.
+
+### Da lam
+
+- Inject `ProductBatchRepository` vao `seller.Service`.
+- Cap nhat `seller.NewService` va `cmd/server/main.go` de truyen repository batch.
+- Validate `batchId` khi seller commit:
+  - bat buoc co `productId` neu co `batchId`
+  - batch phai ton tai
+  - batch phai thuoc dung shop/product
+  - batch owner phai khop seller neu co owner
+  - batch status phai la `active`
+- Them test cho active batch, missing batch, product mismatch, shop mismatch, inactive batch va batch khong co product.
+
+### Test da chay
+
+- `go test ./internal/service/seller ./cmd/server`
+- `go test ./...`
+
+### Commit
+
+Commit message de xuat:
+
+```text
+Validate seller pledge batches
+```
+
+## 5. Luong 2: Android seller create pledge chon batch
+
+Trang thai: `todo`
+
+### Android tasks
+
+- Inject `ProductBatchRepository` vao `SellerCreatePledgeViewModel`.
+- Them state:
+  - `batches`
+  - `selectedBatchId`
+- Khi chon product:
+  - load batches active cua product.
+  - auto select batch dau tien neu co.
+- Trong `SellerCreatePledgeScreen`:
+  - them dropdown `Lo hang`.
+  - hien batch code, freshness, expiry.
+  - disable nut chup/commit neu chua co batch.
+- Khi commit:
+  - gui `batchId` trong `SellerCommitRequest`.
+- QR payload:
+  - da co `batchId`, dam bao lay tu response hoac selected batch.
+
+### Tests
+
+- `./gradlew :app:compileDevDebugKotlin`
+- Manual flow:
+  - tao product
+  - tao batch
+  - tao pledge chon batch
+  - QR co batchId
+
+### Commit
+
+```text
+Require batch selection for seller pledges
+```
+
+## 6. Luong 3: Backend validate buyer check batch consistency
+
+Trang thai: `todo`
+
+### Backend tasks
+
+- Trong buyer service:
+  - lay `batchId` tu request.
+  - lay `batchId` tu token claims.
+  - lay `batchId` tu pledge neu co.
+- Rule:
+  - neu request va token deu co batchId nhung khac nhau -> reject.
+  - neu pledge va token deu co batchId nhung khac nhau -> reject.
+  - neu pledge va request deu co batchId nhung khac nhau -> reject.
+  - neu chi token co batchId -> dung token batchId.
+  - neu chi pledge co batchId -> dung pledge batchId.
+  - neu khong co batchId -> cho fallback cho QR cu.
+- Them helper `resolveBatchIDForCheck`.
+- Ghi reason/log neu mismatch.
+
+### Tests
+
+- Buyer check pass khi request/token/pledge batch khop.
+- Reject request batch khac token batch.
+- Reject pledge batch khac token batch.
+- Fallback QR cu khong batch van pass.
+- Replay retry van tra result co batchId.
+- Full `go test ./...`.
+
+### Commit
+
+```text
+Validate buyer check batch consistency
+```
+
+## 7. Luong 4: Android buyer/result hien batch info
+
+Trang thai: `todo`
+
+### Android tasks
+
+- `BuyerCheckResponse` da co `batchId`; them hien thi trong `BuyerCheckResultScreen`.
+- Neu co batchId:
+  - hien "Lo hang: <batchId>" hoac batchCode neu load duoc.
+- Can nhac load batch detail sau buyer check:
+  - shopId, productId, batchId -> `ProductBatchRepository.getBatch`.
+- Hien:
+  - batchCode
+  - currentFreshness
+  - expiry
+  - status
+
+### Tests
+
+- `./gradlew :app:compileDevDebugKotlin`
+
+### Commit
+
+```text
+Show batch context in buyer check results
+```
+
+## 8. Luong 5: Freshness history UI theo batch
+
+Trang thai: `todo`
+
+### Backend da co
+
+- `GET /v1/shops/:shopId/products/:productId/freshness-reports?batchId=...`
+
+### Android tasks
+
+- Tao UI model:
+  - `FreshnessHistoryPoint`
+- Tao mapper tu `ProductFreshnessReportResponse`.
+- Cap nhat `ProductDetailViewModel`:
+  - selected batch
+  - freshness reports cua selected batch
+  - load reports khi selected batch thay doi
+- Cap nhat `ProductDetailScreen`:
+  - batch selector
+  - list/timeline freshness reports
+  - compact chart bang Compose Canvas hoac progress trend don gian
+- Hien:
+  - score
+  - category
+  - confidence
+  - comment
+  - createdAt
+  - source tam thoi la reporter/admin neu chua co field source
+
+### Tests
+
+- `./gradlew :app:compileDevDebugKotlin`
+
+### Commit
+
+```text
+Show batch freshness history
+```
+
+## 9. Luong 6: Backfill default batch
+
+Trang thai: `todo`
+
+### Backend tasks
+
+- Tao `cmd/backfill-batches/main.go`.
+- Flags:
+  - `--dry-run`
+  - `--start-after`
+  - `--batch-size`
+  - `--default-status`
+- Logic:
+  - list products.
+  - neu product chua co batch thi tao default batch.
+  - `batchCode = DEFAULT-<productId>`.
+  - `currentFreshness = product.FreshnessScore` sau khi chuan hoa scale.
+  - gan pledge cu vao default batch neu pledge.ProductID khop.
+  - gan freshness report cu vao default batch.
+  - gan buyer check cu vao default batch neu productId khop.
+- Khong overwrite batchId neu da co.
+
+### Tests
+
+- Unit test logic backfill voi repo fake.
+- Dry-run khong save.
+- Full `go test ./...`.
+
+### Commit
+
+```text
+Add default batch backfill
+```
+
+## 10. Luong 7: Chuan hoa thang diem do tuoi
+
+Trang thai: `todo`
+
+### Van de
+
+He thong dang co diem 0-10 cho AI/seller pledge, trong khi batch `currentFreshness` dang validate 0-100. Can chuan hoa truoc khi data lon.
+
+### Quyet dinh de xuat
+
+- AI score va pledge score tiep tuc dung 0-10.
+- Batch current freshness dung 0-100 percentage.
+- Khi tao batch tu product/AI score:
+  - neu input <= 10, co the convert sang `score * 10` hoac reject tuy API.
+- UI phai ghi ro:
+  - `Score AI` cho 0-10.
+  - `Độ tươi %` cho 0-100.
+
+### Backend tasks
+
+- Them helper normalize freshness percent.
+- Validate ro field nao 0-10, field nao 0-100.
+- Cap nhat docs/DTO comments neu can.
+
+### Android tasks
+
+- Doi label UI:
+  - "Score AI" cho pledge/check.
+  - "Độ tươi %" cho batch.
+
+### Tests
+
+- Unit tests normalize helper.
+- `go test ./...`
+- `./gradlew :app:compileDevDebugKotlin`
+
+### Commit
+
+```text
+Clarify freshness score scales
+```
+
+## 11. Luong 8: TraceEvent backend foundation
+
+Trang thai: `todo`
+
+### Domain
+
+Them `TraceEvent`:
+
+```go
+type TraceEvent struct {
+    EventID      string
+    BatchID      string
+    ProductID    string
+    ShopID       string
+    ActorUserID  string
+    Type         string
+    Title        string
+    Description  string
+    LocationName string
+    Latitude     float64
+    Longitude    float64
+    Temperature  *float64
+    Humidity     *float64
+    ImageCID     string
+    ImageHash    string
+    DataHash     string
+    Status       string
+    OccurredAt   time.Time
+    CreatedAt    time.Time
+}
+```
+
+### Repository
+
+- `TraceEventRepository`
+- Firestore implementation.
+- Mongo implementation.
+- Filter by `shopId`, `productId`, `batchId`, `type`.
+
+### Service
+
+- `traceability.Service`
+- `CreateTraceEvent`
+- `ListTraceEvents`
+- Validate:
+  - batch exists
+  - owner can create event
+  - public can list active events
+
+### API
+
+- Public:
+  - `GET /v1/shops/:shopId/products/:productId/batches/:batchId/trace-events`
+- Seller:
+  - `POST /v1/shops/:shopId/products/:productId/batches/:batchId/trace-events`
+
+### Tests
+
+- service tests
+- handler tests
+- router test
+- `go test ./...`
+
+### Commit
+
+```text
+Add trace event backend foundation
+```
+
+## 12. Luong 9: Android trace timeline UI
+
+Trang thai: `todo`
+
+### Android tasks
+
+- DTO:
+  - `TraceEventDTO.kt`
+- API:
+  - `getTraceEvents`
+  - `createTraceEvent`
+- Repository:
+  - `TraceabilityRepository`
+- UI model:
+  - `TraceEvent`
+- Product detail:
+  - tab/section `Nguon goc`
+  - timeline vertical
+- Seller:
+  - basic form add trace event for batch
+
+### Tests
+
+- `./gradlew :app:compileDevDebugKotlin`
+
+### Commit
+
+```text
+Show trace timeline for batches
+```
+
+## 13. Luong 10: Proof/trust UI polish
+
+Trang thai: `todo`
+
+### Android tasks
+
+- Store detail:
+  - bo card hard-code "Cam ket chat luong dat 8.5+"
+  - hien latest pledge that tu API.
+- Proof viewer:
+  - load `getPledgeProof`
+  - hien proof status, hash, tx, block.
+- Trust breakdown:
+  - hien pledge/review/buyerCheck/consistency/recency/coverage.
+
+### Tests
+
+- `./gradlew :app:compileDevDebugKotlin`
+
+### Commit
+
+```text
+Add proof and trust breakdown UI
+```
+
+## 14. Definition of Done cho giai doan tiep theo
+
+Hoan thanh khi:
+
+- Seller khong the tao pledge cho batch sai/xoa/expired/recalled.
+- Seller UI bat buoc chon batch active khi tao pledge.
+- Buyer check bi reject neu batch trong request/token/pledge khong khop.
+- Buyer result hien batch context.
+- Product detail hien freshness history theo selected batch.
+- Du lieu cu co default batch qua backfill.
+- TraceEvent backend va UI timeline co MVP.
+- Full backend test pass.
+- Android compile pass.
+
+## 15. Trang thai thuc hien
+
+- Da hoan thanh Luong 1: Backend validate seller commit batch.
+- Luong tiep theo: Luong 2 Android seller create pledge chon batch.

@@ -272,7 +272,7 @@ func main() {
 	batchManager := batchservice.NewService(productBatchRepository, productRepository, shopRepository)
 	userAdminService := useradminservice.NewService(userRepository, authUserRepository, accountKeys, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, buyerCheckRepository, shopReviewRepository, userRepository, auditLogger)
-	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, productRepository, auditLogger)
+	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, productRepository, productBatchRepository, auditLogger)
 	shopManager.SetPledgeIntegrityReader(integrityAdapter{service: integrityManager})
 	shopManager.SetShopIntegrityManager(integrityManager)
 	sellerCommitService.SetIntegrityManager(integrityManager)

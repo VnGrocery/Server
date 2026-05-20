@@ -127,7 +127,7 @@ Validate seller pledge batches
 
 ## 5. Luong 2: Android seller create pledge chon batch
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ### Android tasks
 
@@ -155,6 +155,20 @@ Trang thai: `todo`
   - tao batch
   - tao pledge chon batch
   - QR co batchId
+
+### Da lam
+
+- Inject `ProductBatchRepository` vao `SellerCreatePledgeViewModel`.
+- Them state `batches` va `selectedBatchId`.
+- Load danh sach batch `active` khi load/chon product.
+- Auto select batch active dau tien neu co.
+- Them dropdown `Lo hang` trong `SellerCreatePledgeScreen`.
+- Disable buoc chup/commit neu chua co batch active.
+- Gui `batchId` trong `SellerCommitRequest` va giu `batchId` trong QR payload tu response.
+
+### Test da chay
+
+- `./gradlew :app:compileDevDebugKotlin`
 
 ### Commit
 
@@ -481,4 +495,5 @@ Hoan thanh khi:
 ## 15. Trang thai thuc hien
 
 - Da hoan thanh Luong 1: Backend validate seller commit batch.
-- Luong tiep theo: Luong 2 Android seller create pledge chon batch.
+- Da hoan thanh Luong 2: Android seller create pledge chon batch.
+- Luong tiep theo: Luong 3 Backend validate buyer check batch consistency.

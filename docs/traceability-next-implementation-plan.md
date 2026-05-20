@@ -550,7 +550,7 @@ Add trace event backend foundation
 
 ## 12. Luong 9: Android trace timeline UI
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ### Android tasks
 
@@ -570,6 +570,30 @@ Trang thai: `todo`
   - basic form add trace event for batch
 
 ### Tests
+
+- `./gradlew :app:compileDevDebugKotlin`
+
+### Da lam
+
+- Them DTO:
+  - `TraceEventResponse`
+  - `TraceEventListResponse`
+  - `CreateTraceEventRequest`
+- Them API:
+  - `getTraceEvents`
+  - `createTraceEvent`
+- Them `TraceabilityRepository`.
+- Them UI model `TraceEvent` va mapper tu `TraceEventResponse`.
+- Cap nhat `ProductDetailViewModel`:
+  - load trace events theo selected batch
+  - reload trace events khi doi batch
+  - tao trace event va reload timeline
+- Cap nhat `ProductDetailScreen`:
+  - section `Nguon goc theo lo`
+  - timeline vertical cho trace events
+  - dialog seller co ban de them trace event cho batch dang chon
+
+### Test da chay
 
 - `./gradlew :app:compileDevDebugKotlin`
 
@@ -628,4 +652,5 @@ Hoan thanh khi:
 - Da hoan thanh Luong 6: Backfill default batch.
 - Da hoan thanh Luong 7: Chuan hoa thang diem do tuoi.
 - Da hoan thanh Luong 8: TraceEvent backend foundation.
-- Luong tiep theo: Luong 9 Android trace timeline UI.
+- Da hoan thanh Luong 9: Android trace timeline UI.
+- Luong tiep theo: Luong 10 Proof/trust UI polish.

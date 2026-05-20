@@ -877,6 +877,26 @@ Test da chay:
 go test ./...
 ```
 
+### Luong 7: Android batch-aware seller pledge DTO and QR
+
+Trang thai: `done`
+
+Da lam:
+
+- Them `batchId` vao `SellerCommitRequest`.
+- Them `batchId` vao `SellerCommitResponse`.
+- Them `batchId` vao `PledgeResponse`.
+- Them `batchId` vao `PledgeProofBundleResponse`.
+- Them `batchId` vao `VNMeatQrPayload`.
+- Cap nhat QR URI parse/render de giu `batchId`.
+- Cap nhat seller create pledge ViewModel de dua `batchId` tu response vao QR payload.
+
+Test da chay:
+
+```sh
+./gradlew :app:compileDevDebugKotlin
+```
+
 ## 11. Rủi ro va luu y
 
 - Them batchId vao token/QR co the lam QR cu khong tuong thich. Can giu fallback cho QR cu khong co batchId.

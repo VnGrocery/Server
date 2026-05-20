@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
@@ -303,6 +304,93 @@ func TestCreateFreshnessReport(t *testing.T) {
 	}
 }
 
+func TestCreateFreshnessReportSyncsBatchFreshness(t *testing.T) {
+	now := time.Date(2026, 5, 21, 9, 30, 0, 0, time.UTC)
+	var savedBatch domain.ProductBatch
+	service := newFreshnessReportService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{
+				BatchID:          batchID,
+				ShopID:           "shop-1",
+				ProductID:        "product-1",
+				OwnerUserID:      "seller-1",
+				BatchCode:        "BATCH-001",
+				CurrentFreshness: 91,
+				CurrentCategory:  "fresh_produce",
+				Status:           BatchStatusActive,
+				Version:          3,
+				CreatedAt:        now.Add(-24 * time.Hour),
+				UpdatedAt:        now.Add(-24 * time.Hour),
+			}, nil
+		},
+		save: func(ctx context.Context, batch domain.ProductBatch) error {
+			savedBatch = batch
+			return nil
+		},
+	}, productFreshnessReportRepositoryStub{})
+	service.now = func() time.Time { return now }
+
+	report, err := service.CreateFreshnessReport(context.Background(), FreshnessReportInput{
+		ProductID:      "product-1",
+		ShopID:         "shop-1",
+		BatchID:        "batch-1",
+		ReporterUserID: "buyer-1",
+		Score:          8.2,
+		Category:       "good_storage",
+		Confidence:     0.86,
+		ImageHash:      "hash-1",
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if report.ReportID == "" {
+		t.Fatal("expected report id")
+	}
+	if savedBatch.BatchID != "batch-1" {
+		t.Fatalf("expected saved batch, got %#v", savedBatch)
+	}
+	if savedBatch.CurrentFreshness != 82 {
+		t.Fatalf("expected current freshness 82, got %v", savedBatch.CurrentFreshness)
+	}
+	if savedBatch.CurrentCategory != "good_storage" {
+		t.Fatalf("expected current category from report, got %q", savedBatch.CurrentCategory)
+	}
+	if savedBatch.Version != 4 {
+		t.Fatalf("expected batch version 4, got %d", savedBatch.Version)
+	}
+	if !savedBatch.UpdatedAt.Equal(now) {
+		t.Fatalf("expected batch updatedAt to report time, got %v", savedBatch.UpdatedAt)
+	}
+	if savedBatch.BatchCode != "BATCH-001" || savedBatch.OwnerUserID != "seller-1" {
+		t.Fatalf("expected existing batch fields preserved, got %#v", savedBatch)
+	}
+}
+
+func TestCreateFreshnessReportReturnsErrorWhenBatchFreshnessSyncFails(t *testing.T) {
+	reportSaved := false
+	service := newFreshnessReportService(t, productBatchRepositoryStub{
+		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
+			return domain.ProductBatch{BatchID: batchID, ShopID: "shop-1", ProductID: "product-1", Status: BatchStatusActive, Version: 1}, nil
+		},
+		save: func(ctx context.Context, batch domain.ProductBatch) error {
+			return errors.New("save batch failed")
+		},
+	}, productFreshnessReportRepositoryStub{
+		save: func(ctx context.Context, report domain.ProductFreshnessReport) error {
+			reportSaved = true
+			return nil
+		},
+	})
+
+	_, err := service.CreateFreshnessReport(context.Background(), validFreshnessReportInput())
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !reportSaved {
+		t.Fatal("expected report to be saved before batch sync failure")
+	}
+}
+
 func TestCreateFreshnessReportRejectsMissingBatch(t *testing.T) {
 	service := newFreshnessReportService(t, productBatchRepositoryStub{
 		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
@@ -380,6 +468,10 @@ func TestCreateFreshnessReportAllowsLegacyReportWithoutBatch(t *testing.T) {
 		getByID: func(ctx context.Context, batchID string) (domain.ProductBatch, error) {
 			t.Fatal("batch lookup should not be called")
 			return domain.ProductBatch{}, nil
+		},
+		save: func(ctx context.Context, batch domain.ProductBatch) error {
+			t.Fatal("batch save should not be called")
+			return nil
 		},
 	}, productFreshnessReportRepositoryStub{
 		save: func(ctx context.Context, report domain.ProductFreshnessReport) error {

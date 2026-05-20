@@ -1,6 +1,6 @@
 # Luong 02: Dong bo current freshness cua batch
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ## Van de
 
@@ -58,15 +58,25 @@ Sau MVP co the them derived endpoint tinh current freshness tu report/check moi 
 
 ## Da lam
 
-- Chua lam.
+- Khi freshness report active co `batchId` duoc tao, backend sync lai batch da validate:
+  - `CurrentFreshness = report.Score * 10`
+  - `CurrentCategory = report.Category`
+  - tang `Version`
+  - `UpdatedAt = report.CreatedAt`
+- Giu nguyen cac field batch khac khi save lai batch.
+- Buyer check chua update batch truc tiep theo policy MVP trong file nay.
+- Report khong co `batchId` khong lookup/sync batch, giu fallback legacy.
+- Luu y hien tai chua co transaction cross-repo: report duoc save truoc, sau do moi sync batch. Neu save batch loi, service tra error nhung report co the da duoc luu.
+- Them test cho sync score 0-10 sang percent 0-100, category, version, updatedAt, preserve field cu, no-batch fallback va loi batch sync.
 
 ## Test da chay
 
-- Chua chay.
+- `go test ./internal/service/product`
+- `go test ./...`
 
 ## Commit
 
-De xuat:
+Da commit:
 
 ```text
 Sync batch freshness from reports

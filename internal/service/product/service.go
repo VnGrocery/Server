@@ -506,8 +506,11 @@ func (s *Service) CreateFreshnessReport(ctx context.Context, input FreshnessRepo
 		return domain.ProductFreshnessReport{}, err
 	}
 	batchID := strings.TrimSpace(input.BatchID)
+	var batch domain.ProductBatch
 	if batchID != "" {
-		if err := s.validateFreshnessReportBatch(ctx, product.ShopID, product.ProductID, batchID); err != nil {
+		var err error
+		batch, err = s.validateFreshnessReportBatch(ctx, product.ShopID, product.ProductID, batchID)
+		if err != nil {
 			return domain.ProductFreshnessReport{}, err
 		}
 	}
@@ -533,33 +536,49 @@ func (s *Service) CreateFreshnessReport(ctx context.Context, input FreshnessRepo
 	if err := s.reports.Save(ctx, report); err != nil {
 		return domain.ProductFreshnessReport{}, err
 	}
+	if batchID != "" {
+		if err := s.syncBatchFreshnessFromReport(ctx, batch, report); err != nil {
+			return domain.ProductFreshnessReport{}, err
+		}
+	}
 	if err := s.logReportMutation(ctx, report.ReporterUserID, report.ReportID, report.Version, "product_freshness_report.created", audit.MutationPayload{After: report}, "created"); err != nil {
 		return domain.ProductFreshnessReport{}, err
 	}
 	return report, nil
 }
 
-func (s *Service) validateFreshnessReportBatch(ctx context.Context, shopID, productID, batchID string) error {
+func (s *Service) validateFreshnessReportBatch(ctx context.Context, shopID, productID, batchID string) (domain.ProductBatch, error) {
 	if s.batches == nil {
-		return fmt.Errorf("product batch repository is not configured")
+		return domain.ProductBatch{}, fmt.Errorf("product batch repository is not configured")
 	}
 	batch, err := s.batches.GetByID(ctx, strings.TrimSpace(batchID))
 	if err != nil || strings.TrimSpace(batch.BatchID) == "" {
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrInvalidProduct, err)
+			return domain.ProductBatch{}, fmt.Errorf("%w: %v", ErrInvalidProduct, err)
 		}
-		return fmt.Errorf("%w: batchId not found", ErrInvalidProduct)
+		return domain.ProductBatch{}, fmt.Errorf("%w: batchId not found", ErrInvalidProduct)
 	}
 	if batch.ShopID != strings.TrimSpace(shopID) {
-		return fmt.Errorf("%w: batchId does not belong to shop", ErrInvalidProduct)
+		return domain.ProductBatch{}, fmt.Errorf("%w: batchId does not belong to shop", ErrInvalidProduct)
 	}
 	if batch.ProductID != strings.TrimSpace(productID) {
-		return fmt.Errorf("%w: batchId does not belong to product", ErrInvalidProduct)
+		return domain.ProductBatch{}, fmt.Errorf("%w: batchId does not belong to product", ErrInvalidProduct)
 	}
 	if strings.TrimSpace(batch.Status) != BatchStatusActive {
-		return fmt.Errorf("%w: batch is not active", ErrInvalidProduct)
+		return domain.ProductBatch{}, fmt.Errorf("%w: batch is not active", ErrInvalidProduct)
 	}
-	return nil
+	return batch, nil
+}
+
+func (s *Service) syncBatchFreshnessFromReport(ctx context.Context, batch domain.ProductBatch, report domain.ProductFreshnessReport) error {
+	if s.batches == nil {
+		return fmt.Errorf("product batch repository is not configured")
+	}
+	batch.CurrentFreshness = report.Score * 10
+	batch.CurrentCategory = strings.TrimSpace(report.Category)
+	batch.Version++
+	batch.UpdatedAt = report.CreatedAt
+	return s.batches.Save(ctx, batch)
 }
 
 func (s *Service) ModerateFreshnessReport(ctx context.Context, input ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error) {

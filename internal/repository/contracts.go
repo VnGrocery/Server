@@ -98,6 +98,7 @@ type BuyerCheckListFilter struct {
 	ShopID         string
 	BundleID       string
 	ProductID      string
+	BatchID        string
 	BuyerUserID    string
 	Status         string
 	Verdict        string

@@ -897,6 +897,26 @@ Test da chay:
 ./gradlew :app:compileDevDebugKotlin
 ```
 
+### Luong 8: Backend batch-aware buyer check
+
+Trang thai: `done`
+
+Da lam:
+
+- Them `batchId` vao `BuyerCheck` domain.
+- Them `batchId` vao `BuyerCheckResponse`.
+- Them `batchId` vao admin buyer-check filter.
+- Cap nhat Firestore/Mongo buyer check repositories de filter theo `batchId`.
+- Cap nhat buyer service de lay `batchId` tu request hoac bundle token claims.
+- Cap nhat buyer service de luu `batchId` vao persisted buyer check.
+- Cap nhat buyer handler de nhan multipart field `batchId` va tra `batchId` trong response.
+
+Test da chay:
+
+```sh
+go test ./...
+```
+
 ## 11. Rủi ro va luu y
 
 - Them batchId vao token/QR co the lam QR cu khong tuong thich. Can giu fallback cho QR cu khong co batchId.

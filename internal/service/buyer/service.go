@@ -28,6 +28,7 @@ const (
 
 type CheckInput struct {
 	PledgeID       string
+	BatchID        string
 	BundleID       string
 	BundleToken    string
 	LocationStatus string
@@ -52,6 +53,7 @@ type ListInput struct {
 	ShopID         string
 	BundleID       string
 	ProductID      string
+	BatchID        string
 	BuyerUserID    string
 	Status         string
 	Verdict        string
@@ -73,6 +75,7 @@ type CheckResult struct {
 	CheckID          string
 	ShopID           string
 	ProductID        string
+	BatchID          string
 	BundleID         string
 	PolicyVersion    string
 	HasPledge        bool
@@ -199,6 +202,10 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	if pledgeID == "" && strings.TrimSpace(tokenClaims.PledgeID) != "" {
 		pledgeID = strings.TrimSpace(tokenClaims.PledgeID)
 	}
+	batchID := strings.TrimSpace(input.BatchID)
+	if batchID == "" {
+		batchID = strings.TrimSpace(tokenClaims.BatchID)
+	}
 
 	var pledge domain.Pledge
 	if s.pledges == nil {
@@ -224,6 +231,7 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 		result := standaloneQualityResult(scored, bundleID, locationStatus)
 		result.ShopID = tokenClaims.ShopID
 		result.ProductID = tokenClaims.ProductID
+		result.BatchID = batchID
 		result.BuyerUserID = buyerUserID
 		result.ImageHash = strings.TrimSpace(input.ImageHash)
 		result.ImageCID = strings.TrimSpace(input.ImageCID)
@@ -231,6 +239,10 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	}
 
 	result := comparePledge(pledge, scored, locationStatus)
+	if batchID == "" {
+		batchID = strings.TrimSpace(pledge.BatchID)
+	}
+	result.BatchID = batchID
 	result.BuyerUserID = buyerUserID
 	result.ImageHash = strings.TrimSpace(input.ImageHash)
 	result.ImageCID = strings.TrimSpace(input.ImageCID)
@@ -322,6 +334,7 @@ func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error)
 		ShopID:         strings.TrimSpace(input.ShopID),
 		BundleID:       strings.TrimSpace(input.BundleID),
 		ProductID:      strings.TrimSpace(input.ProductID),
+		BatchID:        strings.TrimSpace(input.BatchID),
 		BuyerUserID:    strings.TrimSpace(input.BuyerUserID),
 		Status:         strings.TrimSpace(input.Status),
 		Verdict:        strings.TrimSpace(input.Verdict),
@@ -407,6 +420,7 @@ func comparePledge(pledge domain.Pledge, scored visionservice.ScoreResult, locat
 	return CheckResult{
 		ShopID:           pledge.ShopID,
 		ProductID:        pledge.ProductID,
+		BatchID:          pledge.BatchID,
 		BundleID:         pledge.BundleID,
 		PolicyVersion:    policyVersionV1,
 		HasPledge:        true,
@@ -455,6 +469,7 @@ func (r CheckResult) toBuyerCheck(checkID string, createdAt time.Time) domain.Bu
 		CheckID:          checkID,
 		ShopID:           r.ShopID,
 		ProductID:        r.ProductID,
+		BatchID:          r.BatchID,
 		BundleID:         r.BundleID,
 		PledgeID:         r.PledgeID,
 		BuyerUserID:      r.BuyerUserID,
@@ -551,6 +566,7 @@ func checkToResult(check domain.BuyerCheck) CheckResult {
 		CheckID:          check.CheckID,
 		ShopID:           check.ShopID,
 		ProductID:        check.ProductID,
+		BatchID:          check.BatchID,
 		BundleID:         check.BundleID,
 		PolicyVersion:    check.PolicyVersion,
 		HasPledge:        strings.TrimSpace(check.PledgeID) != "",

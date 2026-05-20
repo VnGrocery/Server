@@ -84,6 +84,9 @@ func (r *BuyerCheckRepository) List(ctx context.Context, filter repository.Buyer
 		if strings.TrimSpace(filter.ProductID) != "" && check.ProductID != strings.TrimSpace(filter.ProductID) {
 			continue
 		}
+		if strings.TrimSpace(filter.BatchID) != "" && check.BatchID != strings.TrimSpace(filter.BatchID) {
+			continue
+		}
 		if strings.TrimSpace(filter.BuyerUserID) != "" && check.BuyerUserID != strings.TrimSpace(filter.BuyerUserID) {
 			continue
 		}

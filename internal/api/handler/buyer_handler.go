@@ -54,6 +54,7 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 	}
 
 	pledgeID := c.PostForm("pledgeId")
+	batchID := c.PostForm("batchId")
 	bundleID := c.PostForm("bundleId")
 	bundleToken := c.PostForm("bundleToken")
 	locationStatus := c.PostForm("locationStatus")
@@ -85,6 +86,7 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 
 	result, err := h.checker.Check(c.Request.Context(), buyerservice.CheckInput{
 		PledgeID:       pledgeID,
+		BatchID:        batchID,
 		BundleID:       bundleID,
 		BundleToken:    bundleToken,
 		LocationStatus: locationStatus,
@@ -121,6 +123,7 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		CheckID:          result.CheckID,
 		ShopID:           result.ShopID,
 		ProductID:        result.ProductID,
+		BatchID:          result.BatchID,
 		BundleID:         result.BundleID,
 		BuyerUserID:      result.BuyerUserID,
 		Status:           buyerservice.BuyerCheckStatusCompleted,
@@ -189,6 +192,7 @@ func (h *BuyerHandler) Moderate(c *gin.Context) {
 		CheckID:           check.CheckID,
 		ShopID:            check.ShopID,
 		ProductID:         check.ProductID,
+		BatchID:           check.BatchID,
 		BundleID:          check.BundleID,
 		BuyerUserID:       check.BuyerUserID,
 		Status:            check.Status,
@@ -254,6 +258,7 @@ func (h *BuyerHandler) ListAdmin(c *gin.Context) {
 		ShopID:         c.Query("shopId"),
 		BundleID:       c.Query("bundleId"),
 		ProductID:      c.Query("productId"),
+		BatchID:        c.Query("batchId"),
 		BuyerUserID:    c.Query("buyerUserId"),
 		Status:         c.Query("status"),
 		Verdict:        c.Query("verdict"),
@@ -274,6 +279,7 @@ func (h *BuyerHandler) ListAdmin(c *gin.Context) {
 			CheckID:           check.CheckID,
 			ShopID:            check.ShopID,
 			ProductID:         check.ProductID,
+			BatchID:           check.BatchID,
 			BundleID:          check.BundleID,
 			BuyerUserID:       check.BuyerUserID,
 			Status:            check.Status,

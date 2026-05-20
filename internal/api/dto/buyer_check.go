@@ -6,6 +6,7 @@ type BuyerCheckResponse struct {
 	CheckID           string     `json:"checkId,omitempty"`
 	ShopID            string     `json:"shopId,omitempty"`
 	ProductID         string     `json:"productId,omitempty"`
+	BatchID           string     `json:"batchId,omitempty"`
 	BundleID          string     `json:"bundleId,omitempty"`
 	BuyerUserID       string     `json:"buyerUserId,omitempty"`
 	Status            string     `json:"status,omitempty"`

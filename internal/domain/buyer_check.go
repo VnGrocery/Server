@@ -6,6 +6,7 @@ type BuyerCheck struct {
 	CheckID           string     `firestore:"checkId"`
 	ShopID            string     `firestore:"shopId"`
 	ProductID         string     `firestore:"productId"`
+	BatchID           string     `firestore:"batchId"`
 	BundleID          string     `firestore:"bundleId"`
 	PledgeID          string     `firestore:"pledgeId"`
 	BuyerUserID       string     `firestore:"buyerUserId"`

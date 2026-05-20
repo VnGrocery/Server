@@ -42,6 +42,9 @@ func (r *BuyerCheckRepository) List(ctx context.Context, filter repository.Buyer
 	if filter.ProductID != "" {
 		query["productId"] = filter.ProductID
 	}
+	if filter.BatchID != "" {
+		query["batchId"] = filter.BatchID
+	}
 	if filter.BuyerUserID != "" {
 		query["buyerUserId"] = filter.BuyerUserID
 	}

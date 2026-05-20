@@ -6,6 +6,7 @@ type ProductFreshnessReport struct {
 	ReportID          string     `firestore:"reportId"`
 	ProductID         string     `firestore:"productId"`
 	ShopID            string     `firestore:"shopId"`
+	BatchID           string     `firestore:"batchId"`
 	ReporterUserID    string     `firestore:"reporterUserId"`
 	Status            string     `firestore:"status"`
 	Version           int        `firestore:"version"`

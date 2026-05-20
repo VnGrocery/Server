@@ -54,6 +54,7 @@ type ProductListResponse struct {
 }
 
 type CreateProductFreshnessReportRequest struct {
+	BatchID    string  `json:"batchId"`
 	Score      float64 `json:"score"`
 	Category   string  `json:"category"`
 	Confidence float64 `json:"confidence"`
@@ -72,6 +73,7 @@ type ProductFreshnessReportResponse struct {
 	ReportID          string     `json:"reportId"`
 	ProductID         string     `json:"productId"`
 	ShopID            string     `json:"shopId"`
+	BatchID           string     `json:"batchId,omitempty"`
 	ReporterUserID    string     `json:"reporterUserId"`
 	Status            string     `json:"status"`
 	Version           int        `json:"version"`

@@ -23,7 +23,7 @@ type ProductService interface {
 	List(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error)
 	CreateFreshnessReport(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error)
 	ModerateFreshnessReport(ctx context.Context, input productsvc.ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error)
-	ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error)
+	ListFreshnessReports(ctx context.Context, shopID, productID, batchID string) ([]domain.ProductFreshnessReport, error)
 	ListFreshnessReportsAdmin(ctx context.Context, input productsvc.ListFreshnessReportAdminInput) (productsvc.ListFreshnessReportAdminResult, error)
 }
 
@@ -249,6 +249,7 @@ func (h *ProductHandler) CreateFreshnessReport(c *gin.Context) {
 	report, err := h.products.CreateFreshnessReport(c.Request.Context(), productsvc.FreshnessReportInput{
 		ShopID:         c.Param("shopId"),
 		ProductID:      c.Param("productId"),
+		BatchID:        request.BatchID,
 		ReporterUserID: principal.UserID,
 		Score:          request.Score,
 		Category:       request.Category,
@@ -265,7 +266,7 @@ func (h *ProductHandler) CreateFreshnessReport(c *gin.Context) {
 }
 
 func (h *ProductHandler) ListFreshnessReports(c *gin.Context) {
-	reports, err := h.products.ListFreshnessReports(c.Request.Context(), c.Param("shopId"), c.Param("productId"))
+	reports, err := h.products.ListFreshnessReports(c.Request.Context(), c.Param("shopId"), c.Param("productId"), c.Query("batchId"))
 	if err != nil {
 		h.writeError(c, err)
 		return
@@ -306,6 +307,7 @@ func (h *ProductHandler) ListFreshnessReportsAdmin(c *gin.Context) {
 		ReportID:       c.Query("reportId"),
 		ShopID:         c.Query("shopId"),
 		ProductID:      c.Query("productId"),
+		BatchID:        c.Query("batchId"),
 		ReporterUserID: c.Query("reporterUserId"),
 		Status:         c.Query("status"),
 		CreatedAfter:   createdAfter,
@@ -384,6 +386,7 @@ func toProductFreshnessReportResponse(report domain.ProductFreshnessReport) dto.
 		ReportID:          report.ReportID,
 		ProductID:         report.ProductID,
 		ShopID:            report.ShopID,
+		BatchID:           report.BatchID,
 		ReporterUserID:    report.ReporterUserID,
 		Status:            report.Status,
 		Version:           report.Version,

@@ -817,6 +817,26 @@ Test da chay:
 ./gradlew :app:compileDevDebugKotlin
 ```
 
+### Luong 4: Backend freshness reports by batch
+
+Trang thai: `done`
+
+Da lam:
+
+- Them `batchId` vao `ProductFreshnessReport` domain.
+- Them `batchId` vao create request va response DTO.
+- Them `batchId` vao `ProductFreshnessReportListFilter`.
+- Cap nhat Firestore/Mongo freshness report repositories de filter theo `batchId`.
+- Cap nhat product service de luu `batchId` khi tao freshness report.
+- Cap nhat API list freshness reports de ho tro query `?batchId=...`.
+- Cap nhat handler/router tests va product service tests.
+
+Test da chay:
+
+```sh
+go test ./...
+```
+
 ## 11. Rủi ro va luu y
 
 - Them batchId vao token/QR co the lam QR cu khong tuong thich. Can giu fallback cho QR cu khong co batchId.

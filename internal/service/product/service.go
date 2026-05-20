@@ -115,6 +115,7 @@ type ListInput struct {
 type FreshnessReportInput struct {
 	ProductID      string
 	ShopID         string
+	BatchID        string
 	ReporterUserID string
 	Score          float64
 	Category       string
@@ -137,6 +138,7 @@ type ListFreshnessReportAdminInput struct {
 	ReportID       string
 	ShopID         string
 	ProductID      string
+	BatchID        string
 	ReporterUserID string
 	Status         string
 	CreatedAfter   time.Time
@@ -503,6 +505,7 @@ func (s *Service) CreateFreshnessReport(ctx context.Context, input FreshnessRepo
 		ReportID:       uuid.NewString(),
 		ProductID:      product.ProductID,
 		ShopID:         product.ShopID,
+		BatchID:        strings.TrimSpace(input.BatchID),
 		ReporterUserID: strings.TrimSpace(input.ReporterUserID),
 		Status:         FreshnessReportStatusActive,
 		Version:        1,
@@ -573,7 +576,7 @@ func (s *Service) ModerateFreshnessReport(ctx context.Context, input ModerateFre
 	return report, nil
 }
 
-func (s *Service) ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error) {
+func (s *Service) ListFreshnessReports(ctx context.Context, shopID, productID, batchID string) ([]domain.ProductFreshnessReport, error) {
 	if strings.TrimSpace(shopID) == "" || strings.TrimSpace(productID) == "" {
 		return nil, fmt.Errorf("%w: shopId and productId are required", ErrInvalidProduct)
 	}
@@ -583,13 +586,18 @@ func (s *Service) ListFreshnessReports(ctx context.Context, shopID, productID st
 	if _, err := s.GetByID(ctx, shopID, productID); err != nil {
 		return nil, err
 	}
-	reports, err := s.reports.ListByProductID(ctx, strings.TrimSpace(productID))
+	reports, err := s.reports.List(ctx, repository.ProductFreshnessReportListFilter{
+		ShopID:    strings.TrimSpace(shopID),
+		ProductID: strings.TrimSpace(productID),
+		BatchID:   strings.TrimSpace(batchID),
+		Status:    FreshnessReportStatusActive,
+	})
 	if err != nil {
 		return nil, err
 	}
 	active := make([]domain.ProductFreshnessReport, 0, len(reports))
 	for _, report := range reports {
-		if report.ShopID == strings.TrimSpace(shopID) && report.Status == FreshnessReportStatusActive {
+		if report.ShopID == strings.TrimSpace(shopID) && report.ProductID == strings.TrimSpace(productID) && report.Status == FreshnessReportStatusActive {
 			active = append(active, report)
 		}
 	}
@@ -620,6 +628,7 @@ func (s *Service) ListFreshnessReportsAdmin(ctx context.Context, input ListFresh
 		ReportID:       strings.TrimSpace(input.ReportID),
 		ShopID:         strings.TrimSpace(input.ShopID),
 		ProductID:      strings.TrimSpace(input.ProductID),
+		BatchID:        strings.TrimSpace(input.BatchID),
 		ReporterUserID: strings.TrimSpace(input.ReporterUserID),
 		Status:         strings.TrimSpace(input.Status),
 		CreatedAfter:   input.CreatedAfter,

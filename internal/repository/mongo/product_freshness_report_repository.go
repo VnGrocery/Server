@@ -39,6 +39,9 @@ func (r *ProductFreshnessReportRepository) List(ctx context.Context, filter repo
 	if filter.ProductID != "" {
 		query["productId"] = filter.ProductID
 	}
+	if filter.BatchID != "" {
+		query["batchId"] = filter.BatchID
+	}
 	if filter.ReporterUserID != "" {
 		query["reporterUserId"] = filter.ReporterUserID
 	}

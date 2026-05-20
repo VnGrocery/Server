@@ -79,6 +79,9 @@ func (r *ProductFreshnessReportRepository) List(ctx context.Context, filter repo
 		if strings.TrimSpace(filter.ProductID) != "" && report.ProductID != strings.TrimSpace(filter.ProductID) {
 			continue
 		}
+		if strings.TrimSpace(filter.BatchID) != "" && report.BatchID != strings.TrimSpace(filter.BatchID) {
+			continue
+		}
 		if strings.TrimSpace(filter.ReporterUserID) != "" && report.ReporterUserID != strings.TrimSpace(filter.ReporterUserID) {
 			continue
 		}

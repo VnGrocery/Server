@@ -238,7 +238,7 @@ func TestCreateFreshnessReport(t *testing.T) {
 		},
 	}, productFreshnessReportRepositoryStub{
 		save: func(ctx context.Context, report domain.ProductFreshnessReport) error {
-			if report.ProductID != "product-1" || report.ShopID != "shop-1" || report.ReporterUserID != "buyer-1" || report.Status != FreshnessReportStatusActive || report.Version != 1 {
+			if report.ProductID != "product-1" || report.ShopID != "shop-1" || report.BatchID != "batch-1" || report.ReporterUserID != "buyer-1" || report.Status != FreshnessReportStatusActive || report.Version != 1 {
 				t.Fatalf("unexpected report: %#v", report)
 			}
 			return nil
@@ -252,6 +252,7 @@ func TestCreateFreshnessReport(t *testing.T) {
 	report, err := service.CreateFreshnessReport(context.Background(), FreshnessReportInput{
 		ProductID:      "product-1",
 		ShopID:         "shop-1",
+		BatchID:        "batch-1",
 		ReporterUserID: "buyer-1",
 		Score:          6.2,
 		Category:       "bruised_fruit",
@@ -276,10 +277,13 @@ func TestListFreshnessReportsFiltersActiveByProduct(t *testing.T) {
 			return domain.Product{ProductID: productID, ShopID: "shop-1", Status: ProductStatusActive}, nil
 		},
 	}, productFreshnessReportRepositoryStub{
-		listByProductID: func(ctx context.Context, productID string) ([]domain.ProductFreshnessReport, error) {
+		list: func(ctx context.Context, filter repository.ProductFreshnessReportListFilter) ([]domain.ProductFreshnessReport, error) {
+			if filter.ProductID != "product-1" || filter.BatchID != "batch-1" || filter.Status != FreshnessReportStatusActive {
+				t.Fatalf("unexpected filter: %+v", filter)
+			}
 			return []domain.ProductFreshnessReport{
-				{ReportID: "report-1", ProductID: productID, ShopID: "shop-1", Status: FreshnessReportStatusActive},
-				{ReportID: "report-2", ProductID: productID, ShopID: "shop-1", Status: "deleted"},
+				{ReportID: "report-1", ProductID: filter.ProductID, ShopID: "shop-1", BatchID: filter.BatchID, Status: FreshnessReportStatusActive},
+				{ReportID: "report-2", ProductID: filter.ProductID, ShopID: "shop-1", BatchID: filter.BatchID, Status: "deleted"},
 			}, nil
 		},
 	}, shopRepositoryStub{
@@ -288,7 +292,7 @@ func TestListFreshnessReportsFiltersActiveByProduct(t *testing.T) {
 		},
 	}, userRepositoryStub{}, nil)
 
-	reports, err := service.ListFreshnessReports(context.Background(), "shop-1", "product-1")
+	reports, err := service.ListFreshnessReports(context.Background(), "shop-1", "product-1", "batch-1")
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}

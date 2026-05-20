@@ -110,6 +110,7 @@ type ProductFreshnessReportListFilter struct {
 	ReportID       string
 	ShopID         string
 	ProductID      string
+	BatchID        string
 	ReporterUserID string
 	Status         string
 	CreatedAfter   time.Time

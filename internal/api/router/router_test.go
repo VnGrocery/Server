@@ -801,11 +801,12 @@ func (productHandlerStub) ModerateFreshnessReport(ctx context.Context, input pro
 	}, nil
 }
 
-func (productHandlerStub) ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error) {
+func (productHandlerStub) ListFreshnessReports(ctx context.Context, shopID, productID, batchID string) ([]domain.ProductFreshnessReport, error) {
 	return []domain.ProductFreshnessReport{{
 		ReportID:  "report-1",
 		ProductID: productID,
 		ShopID:    shopID,
+		BatchID:   batchID,
 		Status:    productservice.FreshnessReportStatusActive,
 		Version:   1,
 	}}, nil

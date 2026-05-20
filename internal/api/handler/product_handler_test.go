@@ -26,7 +26,7 @@ type productServiceAdapter struct {
 	list                      func(ctx context.Context, input productsvc.ListInput) ([]domain.Product, error)
 	createFreshnessReport     func(ctx context.Context, input productsvc.FreshnessReportInput) (domain.ProductFreshnessReport, error)
 	moderateFreshnessReport   func(ctx context.Context, input productsvc.ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error)
-	listFreshnessReports      func(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error)
+	listFreshnessReports      func(ctx context.Context, shopID, productID, batchID string) ([]domain.ProductFreshnessReport, error)
 	listFreshnessReportsAdmin func(ctx context.Context, input productsvc.ListFreshnessReportAdminInput) (productsvc.ListFreshnessReportAdminResult, error)
 }
 
@@ -66,8 +66,8 @@ func (s productServiceAdapter) ModerateFreshnessReport(ctx context.Context, inpu
 	return s.moderateFreshnessReport(ctx, input)
 }
 
-func (s productServiceAdapter) ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error) {
-	return s.listFreshnessReports(ctx, shopID, productID)
+func (s productServiceAdapter) ListFreshnessReports(ctx context.Context, shopID, productID, batchID string) ([]domain.ProductFreshnessReport, error) {
+	return s.listFreshnessReports(ctx, shopID, productID, batchID)
 }
 
 func (s productServiceAdapter) ListFreshnessReportsAdmin(ctx context.Context, input productsvc.ListFreshnessReportAdminInput) (productsvc.ListFreshnessReportAdminResult, error) {
@@ -194,6 +194,7 @@ func TestCreateProductFreshnessReport(t *testing.T) {
 				ReportID:       "report-1",
 				ShopID:         input.ShopID,
 				ProductID:      input.ProductID,
+				BatchID:        input.BatchID,
 				ReporterUserID: input.ReporterUserID,
 				Status:         productsvc.FreshnessReportStatusActive,
 				Version:        1,
@@ -214,7 +215,7 @@ func TestCreateProductFreshnessReport(t *testing.T) {
 		handler.CreateFreshnessReport(c)
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/shops/shop-1/products/product-1/freshness-reports", bytes.NewBufferString(`{"score":6.2,"category":"bruised_fruit","confidence":0.86,"comment":"Bruised","imageHash":"hash-1"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/shops/shop-1/products/product-1/freshness-reports", bytes.NewBufferString(`{"batchId":"batch-1","score":6.2,"category":"bruised_fruit","confidence":0.86,"comment":"Bruised","imageHash":"hash-1"}`))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -227,9 +228,9 @@ func TestCreateProductFreshnessReport(t *testing.T) {
 func TestListProductFreshnessReports(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := NewProductHandler(productServiceAdapter{
-		listFreshnessReports: func(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error) {
-			if shopID != "shop-1" || productID != "product-1" {
-				t.Fatalf("unexpected list report input: shop=%s product=%s", shopID, productID)
+		listFreshnessReports: func(ctx context.Context, shopID, productID, batchID string) ([]domain.ProductFreshnessReport, error) {
+			if shopID != "shop-1" || productID != "product-1" || batchID != "batch-1" {
+				t.Fatalf("unexpected list report input: shop=%s product=%s batch=%s", shopID, productID, batchID)
 			}
 			return []domain.ProductFreshnessReport{{ReportID: "report-1", ShopID: shopID, ProductID: productID, Status: productsvc.FreshnessReportStatusActive}}, nil
 		},
@@ -238,7 +239,7 @@ func TestListProductFreshnessReports(t *testing.T) {
 	router := gin.New()
 	router.GET("/v1/shops/:shopId/products/:productId/freshness-reports", handler.ListFreshnessReports)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/shops/shop-1/products/product-1/freshness-reports", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/shops/shop-1/products/product-1/freshness-reports?batchId=batch-1", nil)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 

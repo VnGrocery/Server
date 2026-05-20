@@ -605,7 +605,7 @@ Show trace timeline for batches
 
 ## 13. Luong 10: Proof/trust UI polish
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ### Android tasks
 
@@ -619,6 +619,25 @@ Trang thai: `todo`
   - hien pledge/review/buyerCheck/consistency/recency/coverage.
 
 ### Tests
+
+- `./gradlew :app:compileDevDebugKotlin`
+
+### Da lam
+
+- Store detail:
+  - bo card hard-code `Cam ket chat luong dat 8.5+`
+  - load latest pledge tu `getPledges`
+  - hien score/category/proof headline theo pledge that
+- Proof viewer:
+  - them `PledgeRepository.getPledgeProof`
+  - load `getPledgeProof` cho latest pledge
+  - dialog hien proof status, data hash, tx hash, block va batchId
+- Trust breakdown:
+  - mo rong UI model `Shop` voi trust breakdown fields tu `trustSummary`
+  - them tab `Do tin cay`
+  - hien pledge/review/buyerCheck/consistency/recency/coverage va count buyer check/risk
+
+### Test da chay
 
 - `./gradlew :app:compileDevDebugKotlin`
 
@@ -653,4 +672,5 @@ Hoan thanh khi:
 - Da hoan thanh Luong 7: Chuan hoa thang diem do tuoi.
 - Da hoan thanh Luong 8: TraceEvent backend foundation.
 - Da hoan thanh Luong 9: Android trace timeline UI.
-- Luong tiep theo: Luong 10 Proof/trust UI polish.
+- Da hoan thanh Luong 10: Proof/trust UI polish.
+- Tat ca luong trong file nay da hoan thanh.

@@ -917,6 +917,23 @@ Test da chay:
 go test ./...
 ```
 
+### Luong 9: Android batch-aware buyer check
+
+Trang thai: `done`
+
+Da lam:
+
+- Them `batchId` vao `BuyerCheckResponse`.
+- Cap nhat Retrofit buyer check multipart request de gui `batchId`.
+- Cap nhat `BuyerRepository.checkImage` de nhan `batchId`.
+- Cap nhat `AIFreshnessViewModel` de gui `batchId` tu pledge khi co.
+
+Test da chay:
+
+```sh
+./gradlew :app:compileDevDebugKotlin
+```
+
 ## 11. Rủi ro va luu y
 
 - Them batchId vao token/QR co the lam QR cu khong tuong thich. Can giu fallback cho QR cu khong co batchId.

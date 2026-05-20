@@ -392,6 +392,228 @@ func TestCheckWithoutPledgeReturnsStandaloneQuality(t *testing.T) {
 	}
 }
 
+func TestCheckKeepsBatchWhenRequestTokenAndPledgeMatch(t *testing.T) {
+	service := NewService(
+		pledgeRepositoryStub{
+			getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+				return domain.Pledge{
+					PledgeID:  pledgeID,
+					ShopID:    "shop-1",
+					ProductID: "product-1",
+					BatchID:   "batch-1",
+					BundleID:  "bundle-1",
+					Score:     8.5,
+					Category:  "fresh_produce",
+				}, nil
+			},
+		},
+		buyerCheckRepositoryStub{
+			save: func(ctx context.Context, check domain.BuyerCheck) error {
+				if check.BatchID != "batch-1" {
+					t.Fatalf("unexpected persisted batch id: %s", check.BatchID)
+				}
+				return nil
+			},
+		},
+		userRepositoryStub{},
+		scorerStub{
+			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
+				return visionservice.ScoreResult{Score: 8.2, Category: "fresh_produce", Confidence: 0.9}, nil
+			},
+		},
+		nil,
+	)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{
+		verifyAndConsume: func(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error) {
+			return bundletokenservice.Claims{
+				ShopID:    "shop-1",
+				ProductID: "product-1",
+				BatchID:   "batch-1",
+				BundleID:  input.ExpectedBundleID,
+				PledgeID:  input.ExpectedPledgeID,
+			}, nil
+		},
+	})
+
+	result, err := service.Check(context.Background(), CheckInput{
+		PledgeID:    "pledge-1",
+		BatchID:     "batch-1",
+		BundleID:    "bundle-1",
+		BundleToken: "token-1",
+		BuyerUserID: "buyer-1",
+		Image:       buyerTestImage("buyer.jpg"),
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.BatchID != "batch-1" {
+		t.Fatalf("expected result batch id, got %s", result.BatchID)
+	}
+}
+
+func TestCheckRejectsRequestBatchMismatchWithToken(t *testing.T) {
+	service := NewService(
+		pledgeRepositoryStub{},
+		buyerCheckRepositoryStub{},
+		userRepositoryStub{},
+		scorerStub{
+			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
+				t.Fatal("score should not run when batch ids mismatch")
+				return visionservice.ScoreResult{}, nil
+			},
+		},
+		nil,
+	)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{
+		verifyAndConsume: func(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error) {
+			return bundletokenservice.Claims{
+				ShopID:   "shop-1",
+				BatchID:  "batch-token",
+				BundleID: input.ExpectedBundleID,
+			}, nil
+		},
+	})
+
+	_, err := service.Check(context.Background(), CheckInput{
+		BatchID:     "batch-request",
+		BundleID:    "bundle-1",
+		BundleToken: "token-1",
+		BuyerUserID: "buyer-1",
+		Image:       buyerTestImage("buyer.jpg"),
+	})
+	if !errors.Is(err, ErrInvalidCheck) {
+		t.Fatalf("expected ErrInvalidCheck, got %v", err)
+	}
+}
+
+func TestCheckRejectsPledgeBatchMismatchWithToken(t *testing.T) {
+	service := NewService(
+		pledgeRepositoryStub{
+			getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+				return domain.Pledge{
+					PledgeID: pledgeID,
+					BatchID:  "batch-pledge",
+					BundleID: "bundle-1",
+					Score:    8.5,
+					Category: "fresh_produce",
+				}, nil
+			},
+		},
+		buyerCheckRepositoryStub{},
+		userRepositoryStub{},
+		scorerStub{
+			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
+				t.Fatal("score should not run when pledge batch mismatches token")
+				return visionservice.ScoreResult{}, nil
+			},
+		},
+		nil,
+	)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{
+		verifyAndConsume: func(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error) {
+			return bundletokenservice.Claims{
+				BatchID:  "batch-token",
+				BundleID: input.ExpectedBundleID,
+				PledgeID: input.ExpectedPledgeID,
+			}, nil
+		},
+	})
+
+	_, err := service.Check(context.Background(), CheckInput{
+		PledgeID:    "pledge-1",
+		BundleID:    "bundle-1",
+		BundleToken: "token-1",
+		BuyerUserID: "buyer-1",
+		Image:       buyerTestImage("buyer.jpg"),
+	})
+	if !errors.Is(err, ErrInvalidCheck) {
+		t.Fatalf("expected ErrInvalidCheck, got %v", err)
+	}
+}
+
+func TestCheckRejectsPledgeBatchMismatchWithRequest(t *testing.T) {
+	service := NewService(
+		pledgeRepositoryStub{
+			getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+				return domain.Pledge{
+					PledgeID: pledgeID,
+					BatchID:  "batch-pledge",
+					BundleID: "bundle-1",
+					Score:    8.5,
+					Category: "fresh_produce",
+				}, nil
+			},
+		},
+		buyerCheckRepositoryStub{},
+		userRepositoryStub{},
+		scorerStub{
+			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
+				t.Fatal("score should not run when pledge batch mismatches request")
+				return visionservice.ScoreResult{}, nil
+			},
+		},
+		nil,
+	)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{
+		verifyAndConsume: func(ctx context.Context, input bundletokenservice.VerifyInput) (bundletokenservice.Claims, error) {
+			return bundletokenservice.Claims{
+				BundleID: input.ExpectedBundleID,
+				PledgeID: input.ExpectedPledgeID,
+			}, nil
+		},
+	})
+
+	_, err := service.Check(context.Background(), CheckInput{
+		PledgeID:    "pledge-1",
+		BatchID:     "batch-request",
+		BundleID:    "bundle-1",
+		BundleToken: "token-1",
+		BuyerUserID: "buyer-1",
+		Image:       buyerTestImage("buyer.jpg"),
+	})
+	if !errors.Is(err, ErrInvalidCheck) {
+		t.Fatalf("expected ErrInvalidCheck, got %v", err)
+	}
+}
+
+func TestCheckAllowsLegacyQRCodeWithoutBatch(t *testing.T) {
+	service := NewService(
+		pledgeRepositoryStub{
+			getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+				return domain.Pledge{
+					PledgeID: pledgeID,
+					BundleID: "bundle-1",
+					Score:    8.5,
+					Category: "fresh_produce",
+				}, nil
+			},
+		},
+		buyerCheckRepositoryStub{},
+		userRepositoryStub{},
+		scorerStub{
+			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
+				return visionservice.ScoreResult{Score: 8.2, Category: "fresh_produce", Confidence: 0.9}, nil
+			},
+		},
+		nil,
+	)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{})
+
+	result, err := service.Check(context.Background(), CheckInput{
+		PledgeID:    "pledge-1",
+		BundleID:    "bundle-1",
+		BundleToken: "token-1",
+		BuyerUserID: "buyer-1",
+		Image:       buyerTestImage("buyer.jpg"),
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if result.BatchID != "" {
+		t.Fatalf("expected empty batch id for legacy QR, got %s", result.BatchID)
+	}
+}
+
 func TestCheckRejectsWhenQuotaExceeded(t *testing.T) {
 	service := NewService(
 		pledgeRepositoryStub{},
@@ -474,6 +696,7 @@ func TestCheckReturnsExistingWhenBundleTokenReplayedWithSameImage(t *testing.T) 
 						CheckID:          "check-1",
 						ShopID:           "shop-1",
 						ProductID:        "product-1",
+						BatchID:          "batch-1",
 						BundleID:         "bundle-1",
 						PledgeID:         "pledge-1",
 						BuyerUserID:      "buyer-1",
@@ -526,7 +749,14 @@ func TestCheckReturnsExistingWhenBundleTokenReplayedWithSameImage(t *testing.T) 
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-	if result.CheckID != "check-1" || !result.Trusted {
+	if result.CheckID != "check-1" || result.BatchID != "batch-1" || !result.Trusted {
 		t.Fatalf("unexpected replay fallback result: %#v", result)
+	}
+}
+
+func buyerTestImage(filename string) visionservice.ImageInput {
+	return visionservice.ImageInput{
+		Filename: filename,
+		Content:  bytes.NewBuffer([]byte("fake")),
 	}
 }

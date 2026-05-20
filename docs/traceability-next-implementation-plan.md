@@ -178,7 +178,7 @@ Require batch selection for seller pledges
 
 ## 6. Luong 3: Backend validate buyer check batch consistency
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ### Backend tasks
 
@@ -204,6 +204,23 @@ Trang thai: `todo`
 - Fallback QR cu khong batch van pass.
 - Replay retry van tra result co batchId.
 - Full `go test ./...`.
+
+### Da lam
+
+- Them helper `resolveBatchIDForCheck`.
+- Validate mismatch giua request/token/pledge truoc khi cham diem AI va truoc khi persist buyer check.
+- Rule fallback:
+  - request va token khac nhau thi reject
+  - pledge va token khac nhau thi reject
+  - pledge va request khac nhau thi reject
+  - uu tien token batchId, sau do pledge batchId, sau do request batchId
+  - QR cu khong co batchId van pass
+- Dam bao replay retry tra lai result co `batchId` tu check da luu.
+
+### Test da chay
+
+- `go test ./internal/service/buyer`
+- `go test ./...`
 
 ### Commit
 
@@ -496,4 +513,5 @@ Hoan thanh khi:
 
 - Da hoan thanh Luong 1: Backend validate seller commit batch.
 - Da hoan thanh Luong 2: Android seller create pledge chon batch.
-- Luong tiep theo: Luong 3 Backend validate buyer check batch consistency.
+- Da hoan thanh Luong 3: Backend validate buyer check batch consistency.
+- Luong tiep theo: Luong 4 Android buyer/result hien batch info.

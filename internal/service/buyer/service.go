@@ -202,12 +202,11 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	if pledgeID == "" && strings.TrimSpace(tokenClaims.PledgeID) != "" {
 		pledgeID = strings.TrimSpace(tokenClaims.PledgeID)
 	}
-	batchID := strings.TrimSpace(input.BatchID)
-	if batchID == "" {
-		batchID = strings.TrimSpace(tokenClaims.BatchID)
-	}
+	requestBatchID := strings.TrimSpace(input.BatchID)
+	tokenBatchID := strings.TrimSpace(tokenClaims.BatchID)
 
 	var pledge domain.Pledge
+	hasPledge := false
 	if s.pledges == nil {
 		if pledgeID != "" {
 			return CheckResult{}, fmt.Errorf("pledge repository is not configured")
@@ -220,6 +219,12 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 		if strings.TrimSpace(pledge.BundleID) != bundleID {
 			return CheckResult{}, fmt.Errorf("%w: bundleId does not match pledge", ErrInvalidCheck)
 		}
+		hasPledge = true
+	}
+
+	batchID, err := resolveBatchIDForCheck(requestBatchID, tokenBatchID, pledge, hasPledge)
+	if err != nil {
+		return CheckResult{}, err
 	}
 
 	scored, err := s.scorer.Score(ctx, input.Image)
@@ -239,9 +244,6 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	}
 
 	result := comparePledge(pledge, scored, locationStatus)
-	if batchID == "" {
-		batchID = strings.TrimSpace(pledge.BatchID)
-	}
 	result.BatchID = batchID
 	result.BuyerUserID = buyerUserID
 	result.ImageHash = strings.TrimSpace(input.ImageHash)
@@ -437,6 +439,34 @@ func comparePledge(pledge domain.Pledge, scored visionservice.ScoreResult, locat
 		LocationStatus:   locationStatus,
 		CategoryMatch:    categoryMatch,
 		Reasons:          reasons,
+	}
+}
+
+func resolveBatchIDForCheck(requestBatchID, tokenBatchID string, pledge domain.Pledge, hasPledge bool) (string, error) {
+	requestBatchID = strings.TrimSpace(requestBatchID)
+	tokenBatchID = strings.TrimSpace(tokenBatchID)
+	pledgeBatchID := ""
+	if hasPledge {
+		pledgeBatchID = strings.TrimSpace(pledge.BatchID)
+	}
+
+	if requestBatchID != "" && tokenBatchID != "" && requestBatchID != tokenBatchID {
+		return "", fmt.Errorf("%w: request batchId does not match token", ErrInvalidCheck)
+	}
+	if hasPledge && pledgeBatchID != "" && tokenBatchID != "" && pledgeBatchID != tokenBatchID {
+		return "", fmt.Errorf("%w: pledge batchId does not match token", ErrInvalidCheck)
+	}
+	if hasPledge && pledgeBatchID != "" && requestBatchID != "" && pledgeBatchID != requestBatchID {
+		return "", fmt.Errorf("%w: pledge batchId does not match request", ErrInvalidCheck)
+	}
+
+	switch {
+	case tokenBatchID != "":
+		return tokenBatchID, nil
+	case pledgeBatchID != "":
+		return pledgeBatchID, nil
+	default:
+		return requestBatchID, nil
 	}
 }
 

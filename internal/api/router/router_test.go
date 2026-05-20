@@ -22,6 +22,7 @@ import (
 	productservice "vngrocery/internal/service/product"
 	sellerservice "vngrocery/internal/service/seller"
 	shopservice "vngrocery/internal/service/shop"
+	traceabilityservice "vngrocery/internal/service/traceability"
 	useradminservice "vngrocery/internal/service/useradmin"
 	visionservice "vngrocery/internal/service/vision"
 )
@@ -35,6 +36,7 @@ func newTestDependencies(verifier testVerifier) Dependencies {
 		EventLogHandler:     handler.NewEventLogHandler(eventLogUsecaseStub{}),
 		ProductHandler:      handler.NewProductHandler(productHandlerStub{}),
 		ProductBatchHandler: handler.NewProductBatchHandler(productBatchHandlerStub{}),
+		TraceEventHandler:   handler.NewTraceEventHandler(traceEventRouteStub{}),
 		SellerHandler:       handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:        handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		ShopHandler:         handler.NewShopHandler(shopHandlerStub{}),
@@ -311,6 +313,41 @@ func TestRouterProductListPublic(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestRouterTraceEventListPublic(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/shops/shop-1/products/product-1/batches/batch-1/trace-events", nil)
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestRouterTraceEventCreateProtected(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	engine := New(newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, authservice.ErrUnauthorized
+		},
+	}))
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/shops/shop-1/products/product-1/batches/batch-1/trace-events", bytes.NewBufferString(`{"type":"origin","title":"Origin"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	engine.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
 	}
 }
 
@@ -884,5 +921,33 @@ func (productBatchHandlerStub) List(ctx context.Context, input batchservice.List
 		ShopID:    input.ShopID,
 		Status:    batchservice.StatusActive,
 		Version:   1,
+	}}, nil
+}
+
+type traceEventRouteStub struct{}
+
+func (traceEventRouteStub) CreateTraceEvent(ctx context.Context, input traceabilityservice.CreateTraceEventInput) (domain.TraceEvent, error) {
+	return domain.TraceEvent{
+		EventID:     "event-1",
+		BatchID:     input.BatchID,
+		ProductID:   input.ProductID,
+		ShopID:      input.ShopID,
+		ActorUserID: input.ActorUserID,
+		Type:        input.Type,
+		Title:       input.Title,
+		Status:      traceabilityservice.StatusActive,
+		OccurredAt:  input.OccurredAt,
+	}, nil
+}
+
+func (traceEventRouteStub) ListTraceEvents(ctx context.Context, input traceabilityservice.ListTraceEventsInput) ([]domain.TraceEvent, error) {
+	return []domain.TraceEvent{{
+		EventID:   "event-1",
+		BatchID:   input.BatchID,
+		ProductID: input.ProductID,
+		ShopID:    input.ShopID,
+		Type:      "origin",
+		Title:     "Origin",
+		Status:    traceabilityservice.StatusActive,
 	}}, nil
 }

@@ -20,6 +20,7 @@ type Dependencies struct {
 	MediaHandler              *handler.MediaHandler
 	ProductHandler            *handler.ProductHandler
 	ProductBatchHandler       *handler.ProductBatchHandler
+	TraceEventHandler         *handler.TraceEventHandler
 	SellerHandler             *handler.SellerHandler
 	BuyerHandler              *handler.BuyerHandler
 	ShopHandler               *handler.ShopHandler
@@ -99,6 +100,7 @@ func New(deps Dependencies) *gin.Engine {
 		v1.GET("/shops/:shopId/products/:productId", deps.ProductHandler.GetByID)
 		v1.GET("/shops/:shopId/products/:productId/batches", deps.ProductBatchHandler.List)
 		v1.GET("/shops/:shopId/products/:productId/batches/:batchId", deps.ProductBatchHandler.GetByID)
+		v1.GET("/shops/:shopId/products/:productId/batches/:batchId/trace-events", deps.TraceEventHandler.List)
 		v1.GET("/shops/:shopId/products/:productId/freshness-reports", deps.ProductHandler.ListFreshnessReports)
 		v1.GET("/shops/:shopId/reviews", deps.ShopHandler.ListReviews)
 		v1.GET("/me", deps.AuthMiddleware.Handle(), deps.AuthHandler.Me)
@@ -110,6 +112,7 @@ func New(deps Dependencies) *gin.Engine {
 		v1.POST("/shops/:shopId/products/:productId/batches", deps.AuthMiddleware.Handle(), deps.ProductBatchHandler.Create)
 		v1.PUT("/shops/:shopId/products/:productId/batches/:batchId", deps.AuthMiddleware.Handle(), deps.ProductBatchHandler.Update)
 		v1.DELETE("/shops/:shopId/products/:productId/batches/:batchId", deps.AuthMiddleware.Handle(), deps.ProductBatchHandler.Delete)
+		v1.POST("/shops/:shopId/products/:productId/batches/:batchId/trace-events", deps.AuthMiddleware.Handle(), deps.TraceEventHandler.Create)
 		v1.POST("/shops/:shopId/products/:productId/freshness-reports", deps.AuthMiddleware.Handle(), deps.ProductHandler.CreateFreshnessReport)
 		v1.PUT("/shops/:shopId", deps.AuthMiddleware.Handle(), deps.ShopHandler.Update)
 		v1.PUT("/shops/:shopId/products/:productId", deps.AuthMiddleware.Handle(), deps.ProductHandler.Update)

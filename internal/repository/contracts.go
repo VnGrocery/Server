@@ -25,6 +25,14 @@ type ProductBatchListFilter struct {
 	OwnerUserID string
 }
 
+type TraceEventListFilter struct {
+	ShopID    string
+	ProductID string
+	BatchID   string
+	Type      string
+	Status    string
+}
+
 type UserListFilter struct {
 	Status string
 	Role   string
@@ -68,6 +76,12 @@ type ProductBatchRepository interface {
 	Save(ctx context.Context, batch domain.ProductBatch) error
 	GetByID(ctx context.Context, batchID string) (domain.ProductBatch, error)
 	List(ctx context.Context, filter ProductBatchListFilter) ([]domain.ProductBatch, error)
+}
+
+type TraceEventRepository interface {
+	Save(ctx context.Context, event domain.TraceEvent) error
+	GetByID(ctx context.Context, eventID string) (domain.TraceEvent, error)
+	List(ctx context.Context, filter TraceEventListFilter) ([]domain.TraceEvent, error)
 }
 
 type ProductFreshnessReportRepository interface {

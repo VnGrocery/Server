@@ -451,7 +451,7 @@ Clarify freshness score scales
 
 ## 11. Luong 8: TraceEvent backend foundation
 
-Trang thai: `todo`
+Trang thai: `done`
 
 ### Domain
 
@@ -510,6 +510,36 @@ type TraceEvent struct {
 - service tests
 - handler tests
 - router test
+- `go test ./...`
+
+### Da lam
+
+- Them domain `TraceEvent`.
+- Them `TraceEventRepository` vao repository contracts.
+- Them collection `trace_events`.
+- Them repository:
+  - Firestore `TraceEventRepository`
+  - Mongo `TraceEventRepository`
+- Them `traceability.Service`:
+  - `CreateTraceEvent`
+  - `ListTraceEvents`
+  - validate batch/shop/product ton tai
+  - validate seller owner khi create
+  - public list chi lay active events
+- Them DTO va handler:
+  - `CreateTraceEventRequest`
+  - `TraceEventResponse`
+  - `TraceEventListResponse`
+  - `TraceEventHandler`
+- Them routes:
+  - `GET /v1/shops/:shopId/products/:productId/batches/:batchId/trace-events`
+  - `POST /v1/shops/:shopId/products/:productId/batches/:batchId/trace-events`
+- Wire repository/service/handler vao `cmd/server/main.go`.
+- Them service tests, handler tests va router route tests.
+
+### Test da chay
+
+- `go test ./internal/service/traceability ./internal/api/handler ./internal/api/router ./cmd/server`
 - `go test ./...`
 
 ### Commit
@@ -597,4 +627,5 @@ Hoan thanh khi:
 - Da hoan thanh Luong 5: Freshness history UI theo batch.
 - Da hoan thanh Luong 6: Backfill default batch.
 - Da hoan thanh Luong 7: Chuan hoa thang diem do tuoi.
-- Luong tiep theo: Luong 8 TraceEvent backend foundation.
+- Da hoan thanh Luong 8: TraceEvent backend foundation.
+- Luong tiep theo: Luong 9 Android trace timeline UI.

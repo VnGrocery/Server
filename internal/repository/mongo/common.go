@@ -25,6 +25,7 @@ const (
 	buyerChecksCollection             = firestorecollections.BuyerChecksCollection
 	shopReviewsCollection             = firestorecollections.ShopReviewsCollection
 	eventLogsCollection               = firestorecollections.EventLogsCollection
+	traceEventsCollection             = firestorecollections.TraceEventsCollection
 )
 
 func saveByID(ctx context.Context, collection *mongo.Collection, id string, value any) error {

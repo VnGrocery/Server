@@ -14,4 +14,5 @@ const (
 	BuyerChecksCollection             = "buyer_checks"
 	ShopReviewsCollection             = "shop_reviews"
 	EventLogsCollection               = "event_logs"
+	TraceEventsCollection             = "trace_events"
 )

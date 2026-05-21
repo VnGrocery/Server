@@ -315,7 +315,7 @@ Thay phan nen map-like bang OpenStreetMap that bang `osmdroid`, khong can Google
 
 ## 9.1 Luong 5a: Tach map UI thanh fallback va OSM adapter
 
-Trang thai: `pending`
+Trang thai: `done`
 
 ### Muc tieu
 
@@ -343,7 +343,14 @@ Giam rui ro khi them OSM bang cach tach phan map hien tai thanh fallback rieng, 
 
 ### Ket qua da lam
 
-- Chua thuc hien.
+- Doi loi goi map chinh sang `ExploreMapSurface`.
+- Doi map-like UI hien tai thanh `FallbackExploreMap`.
+- Giu chung input `shops`, `selectedShopId`, `onSelectShop` de luong sau gan `OsmExploreMap`.
+- Chua them dependency osmdroid trong luong nay de giu commit nho va build on dinh.
+
+### Test da chay
+
+- `./gradlew assembleDevDebug`
 
 ## 9.2 Luong 5b: Them osmdroid MapView va marker
 

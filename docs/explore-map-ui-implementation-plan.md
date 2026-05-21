@@ -399,7 +399,7 @@ Render OpenStreetMap that va marker shop that trong tab Kham pha.
 
 ## 9.3 Luong 5c: OSM fallback, cache va production note
 
-Trang thai: `pending`
+Trang thai: `done`
 
 ### Muc tieu
 
@@ -424,7 +424,15 @@ Dam bao OSM integration khong lam app mong manh va co ghi chu dung cho productio
 
 ### Ket qua da lam
 
-- Chua thuc hien.
+- Them flag `UseOpenStreetMap` de co the quay ve map-like fallback nhanh neu can debug/offline.
+- `ExploreMapSurface` chi render OSM khi flag bat va co shop co toa do; nguoc lai dung fallback map-like.
+- Cau hinh osmdroid cache trong `context.cacheDir/osmdroid`.
+- Giu production note trong plan: dev/MVP dung tile public nhe, production can tile provider rieng hoac self-host.
+- Khong can API key; build van doc lap voi Google services.
+
+### Test da chay
+
+- `./gradlew assembleDevDebug`
 
 ## 10. Luong 6: Polish UI va accessibility
 

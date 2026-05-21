@@ -354,7 +354,7 @@ Giam rui ro khi them OSM bang cach tach phan map hien tai thanh fallback rieng, 
 
 ## 9.2 Luong 5b: Them osmdroid MapView va marker
 
-Trang thai: `pending`
+Trang thai: `done`
 
 ### Muc tieu
 
@@ -384,7 +384,18 @@ Render OpenStreetMap that va marker shop that trong tab Kham pha.
 
 ### Ket qua da lam
 
-- Chua thuc hien.
+- Them dependency `org.osmdroid:osmdroid-android:6.1.18`.
+- Them `OsmExploreMap` bang `AndroidView` bridge toi `MapView`.
+- Cau hinh tile source `MAPNIK`, multi-touch, zoom va center.
+- Set user-agent cho osmdroid bang package name.
+- Render marker cho shop co toa do.
+- Tap marker cap nhat selected shop preview va hien info window.
+- Giu fallback map-like khi khong co shop co toa do.
+- Search/filter tiep tuc dieu khien danh sach marker vi OSM nhan cung `filteredShops`.
+
+### Test da chay
+
+- `./gradlew assembleDevDebug`
 
 ## 9.3 Luong 5c: OSM fallback, cache va production note
 

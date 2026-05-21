@@ -204,7 +204,7 @@ Nguoi dung loc nhanh shop theo ten, dia chi va trust.
 
 ## 8. Luong 4: Location permission va fallback
 
-Trang thai: `pending`
+Trang thai: `done`
 
 ### Muc tieu
 
@@ -237,7 +237,17 @@ Ho tro trai nghiem gan toi nhung khong phu thuoc bat buoc vao location.
 
 ### Ket qua da lam
 
-- Chua thuc hien.
+- Them permission `ACCESS_COARSE_LOCATION` va `ACCESS_FINE_LOCATION` vao Android manifest.
+- Them request permission trong tab Kham pha khi nguoi dung can sap xep `Gan ban`.
+- Doc last known location tu `LocationManager` neu da co quyen.
+- Sap xep filter `Gan ban` theo khoang cach haversine tu vi tri nguoi dung khi co du lieu.
+- Neu chua co quyen/khong lay duoc GPS, giu fallback center TP.HCM va hien banner trong bottom sheet.
+- Hien khoang cach tren shop list khi co user location.
+- Khong tu dong hoi permission lien tuc; chi hoi khi nguoi dung bam nut bat vi tri.
+
+### Test da chay
+
+- `./gradlew assembleDevDebug`
 
 ## 9. Luong 5: Google Maps Compose integration
 

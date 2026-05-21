@@ -151,7 +151,7 @@ Co giao dien map demo duoc nghiep vu ma chua phu thuoc Google Maps API key.
 
 ## 7. Luong 3: Search va filter tren map
 
-Trang thai: `pending`
+Trang thai: `done`
 
 ### Muc tieu
 
@@ -186,7 +186,21 @@ Nguoi dung loc nhanh shop theo ten, dia chi va trust.
 
 ### Ket qua da lam
 
-- Chua thuc hien.
+- Doi filter sang enum ro nghia gom `Tat ca`, `Gan ban`, `Uy tin cao`, `Co cam ket`, `Nhieu danh gia`.
+- Search theo ten, dia chi va mo ta shop.
+- Filter cap nhat dong thoi marker tren map va list trong bottom sheet.
+- Selected shop tu dong clear neu khong con nam trong ket qua filter/search.
+- Them summary so luong shop va mo ta filter dang ap dung.
+- Them empty state ro ly do va nut xoa search khi dang co tu khoa.
+- Sort rieng theo tung filter:
+  - `Gan ban` dung khoang cach tu center mac dinh TP.HCM.
+  - `Nhieu danh gia` uu tien rating count.
+  - `Co cam ket` uu tien pledge count.
+  - mac dinh uu tien trust score.
+
+### Test da chay
+
+- `./gradlew assembleDevDebug`
 
 ## 8. Luong 4: Location permission va fallback
 

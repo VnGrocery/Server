@@ -251,7 +251,7 @@ Ho tro trai nghiem gan toi nhung khong phu thuoc bat buoc vao location.
 
 ## 9. Luong 5: Google Maps Compose integration
 
-Trang thai: `pending`
+Trang thai: `blocked`
 
 ### Muc tieu
 
@@ -289,11 +289,17 @@ Thay map-like UI bang Google Maps that khi da co API key va dependency.
 
 ### Ket qua da lam
 
-- Chua thuc hien.
+- Chua thuc hien vi chua co Google Maps API key va chua quyet dinh noi luu key.
+- Khong them dependency `maps-compose` de tranh lam build phu thuoc key/SDK khi chua san sang.
+- Tiep tuc giu map-like UI lam fallback chay duoc.
+
+### Test da chay
+
+- Khong chay test cho luong nay vi chua thay doi code.
 
 ## 10. Luong 6: Polish UI va accessibility
 
-Trang thai: `pending`
+Trang thai: `done`
 
 ### Muc tieu
 
@@ -320,7 +326,16 @@ Lam UI map du dung cho demo/san pham ma khong anh huong logic.
 
 ### Ket qua da lam
 
-- Chua thuc hien.
+- Doi marker positioning sang responsive theo kich thuoc map thay vi offset co dinh.
+- Them state marker selected bang kich thuoc/outline noi bat.
+- Them state marker thieu toa do bang mau xam rieng va fallback point.
+- Them content description cho marker, selected shop preview va shop list item.
+- Giu score/trust label tren marker de khong chi phu thuoc vao mau.
+- Dam bao text trong shop list/preview gioi han max line va ellipsis.
+
+### Test da chay
+
+- `./gradlew assembleDevDebug`
 
 ## 11. Commit plan
 

@@ -30,7 +30,8 @@ Ket qua mong muon:
   - so danh gia
   - pledge moi nhat neu co
 - Khong chan nguoi dung neu chua co location permission.
-- Neu chua tich hop Google Maps API key, dung map-like UI truoc de demo nghiep vu va giam rui ro.
+- Uu tien OpenStreetMap/osmdroid thay vi Google Maps de tranh API key, billing va phu thuoc Google Play Services.
+- Map-like UI hien tai la fallback bat buoc neu OSM tile loi, thieu toa do hoac emulator khong tai duoc tile.
 
 ## 3. Hien trang can kiem tra
 
@@ -40,7 +41,7 @@ Trang thai: `done`
 - `ShopResponse` da co `latitude`, `longitude`.
 - `ExploreViewModel`/repository da load shop that tu API.
 - Chua co location permission flow.
-- Chua co dependency Google Maps Compose.
+- Chua co dependency osmdroid/OpenStreetMap.
 - Chua co bottom sheet map/list.
 
 ## 4. Thu tu uu tien
@@ -51,7 +52,8 @@ Trang thai: `done`
 4. Them bottom sheet danh sach shop + selected shop preview.
 5. Them search/filter tren map.
 6. Them location permission va fallback location.
-7. Sau khi UI on dinh, tich hop Google Maps Compose neu co API key.
+7. Sau khi UI on dinh, tich hop OpenStreetMap/osmdroid.
+8. Giu map-like UI lam fallback neu OSM khong kha dung.
 
 ## 5. Luong 1: Audit du lieu shop location va trust
 
@@ -249,53 +251,162 @@ Ho tro trai nghiem gan toi nhung khong phu thuoc bat buoc vao location.
 
 - `./gradlew assembleDevDebug`
 
-## 9. Luong 5: Google Maps Compose integration
+## 9. Luong 5: OpenStreetMap/osmdroid integration
 
-Trang thai: `blocked`
+Trang thai: `pending`
 
 ### Muc tieu
 
-Thay map-like UI bang Google Maps that khi da co API key va dependency.
+Thay phan nen map-like bang OpenStreetMap that bang `osmdroid`, khong can Google Maps API key.
 
 ### Dieu kien bat dau
 
-- Da co Google Maps API key.
-- Da quyet dinh noi luu key:
-  - `local.properties`
-  - manifest placeholder
-  - hoac BuildConfig theo flavor.
 - MVP map-like UI da pass build va manual flow.
+- Xac dinh tile policy:
+  - MVP/dev co the dung tile public mac dinh cua OSM voi user-agent ro rang.
+  - Production can tile provider rieng hoac self-host, khong abuse public tile server.
 
 ### Tasks
 
-- Them dependency `maps-compose`.
-- Them config API key khong commit secret.
-- Render `GoogleMap`.
-- Render `Marker` theo shop.
+- Them dependency `osmdroid-android`.
+- Them cau hinh user-agent/cache cho osmdroid.
+- Tao composable bridge Android View:
+  - `OsmExploreMap`
+  - `rememberMapViewWithLifecycle` neu can quan ly lifecycle.
+- Render `MapView` voi center mac dinh TP.HCM hoac user location neu co.
+- Render marker theo `ShopResponse.latitude/longitude`.
+- Marker mau/icon theo trust score neu osmdroid cho phep custom drawable; neu khong, dung default marker + title/snippet.
 - Dong bo tap marker voi selected shop preview.
 - Giu bottom sheet va filter logic tu luong 2/3.
+- Giu map-like fallback:
+  - khi khong co shop co toa do
+  - khi map view loi render
+  - khi muon chay offline/dev khong can tile
 
 ### Acceptance criteria
 
-- Map Google render khong blank.
-- Marker shop render dung.
+- OSM map render khong blank tren emulator/may that co internet.
+- Marker shop co toa do render dung tren OSM.
+- Shop thieu toa do khong lam crash, van nam trong bottom sheet.
+- Tap marker cap nhat selected shop preview.
 - Search/filter van hoat dong.
-- Khong commit API key that.
+- Khong can commit API key.
+- Map-like UI van la fallback co the bat lai nhanh neu OSM gap loi.
 
 ### Tests
 
 - `./gradlew assembleDevDebug`
-- Manual tren emulator co Google Play services.
+- Manual tren emulator/may that co internet:
+  - vao tab Kham pha
+  - thay OSM tile
+  - tap marker
+  - search/filter
+  - tap shop preview vao detail
+- Manual fallback:
+  - data shop thieu toa do hoac tat OSM flag neu co.
 
 ### Ket qua da lam
 
-- Chua thuc hien vi chua co Google Maps API key va chua quyet dinh noi luu key.
-- Khong them dependency `maps-compose` de tranh lam build phu thuoc key/SDK khi chua san sang.
-- Tiep tuc giu map-like UI lam fallback chay duoc.
+- Chua thuc hien.
 
 ### Test da chay
 
-- Khong chay test cho luong nay vi chua thay doi code.
+- Chua chay.
+
+## 9.1 Luong 5a: Tach map UI thanh fallback va OSM adapter
+
+Trang thai: `pending`
+
+### Muc tieu
+
+Giam rui ro khi them OSM bang cach tach phan map hien tai thanh fallback rieng, sau do moi bridge MapView.
+
+### Tasks
+
+- Doi `ExploreMapCanvas` hien tai thanh `FallbackExploreMap`.
+- Tao interface/composable input chung:
+  - shops
+  - selectedShopId
+  - onSelectShop
+- Tao `ExploreMapSurface` de quyet dinh render fallback hay OSM.
+- Chua them osmdroid o luong nay neu muon commit nho.
+
+### Acceptance criteria
+
+- UI hien tai khong doi hanh vi.
+- Build pass.
+- Code san sang gan `OsmExploreMap`.
+
+### Tests
+
+- `./gradlew assembleDevDebug`
+
+### Ket qua da lam
+
+- Chua thuc hien.
+
+## 9.2 Luong 5b: Them osmdroid MapView va marker
+
+Trang thai: `pending`
+
+### Muc tieu
+
+Render OpenStreetMap that va marker shop that trong tab Kham pha.
+
+### Tasks
+
+- Them dependency osmdroid.
+- Them AndroidView cho `MapView`.
+- Set tile source, zoom, center va multi-touch.
+- Them marker cho shop co toa do.
+- Marker click set selected shop va consume event.
+- Clear/update overlays khi list filter thay doi.
+- Quan ly lifecycle neu can de tranh memory leak.
+
+### Acceptance criteria
+
+- OSM tile render.
+- Marker update theo search/filter.
+- Tap marker cap nhat preview.
+- Build pass.
+
+### Tests
+
+- `./gradlew assembleDevDebug`
+- Manual tren emulator/may that co internet.
+
+### Ket qua da lam
+
+- Chua thuc hien.
+
+## 9.3 Luong 5c: OSM fallback, cache va production note
+
+Trang thai: `pending`
+
+### Muc tieu
+
+Dam bao OSM integration khong lam app mong manh va co ghi chu dung cho production.
+
+### Tasks
+
+- Them flag/fallback de quay ve map-like UI khi can.
+- Hien empty/fallback khi khong co shop co toa do.
+- Ghi note trong plan ve tile server production.
+- Kiem tra app van build neu khong co API key nao.
+
+### Acceptance criteria
+
+- Khong co API key van build/run.
+- Co fallback ro.
+- Plan ghi ro production tile provider/self-host.
+
+### Tests
+
+- `./gradlew assembleDevDebug`
+
+### Ket qua da lam
+
+- Chua thuc hien.
 
 ## 10. Luong 6: Polish UI va accessibility
 
@@ -343,14 +454,18 @@ Lam UI map du dung cho demo/san pham ma khong anh huong logic.
 - Commit 2: `Redesign explore tab as map view`
 - Commit 3: `Add explore map search filters`
 - Commit 4: `Add location fallback for explore map`
-- Commit 5: `Integrate Google Maps for explore`
+- Commit 5a: `Prepare explore map fallback adapter`
+- Commit 5b: `Integrate OpenStreetMap for explore`
+- Commit 5c: `Harden explore OSM fallback`
 - Commit 6: `Polish explore map interactions`
 
 Moi commit phai cap nhat `Trang thai` va `Ket qua da lam` cua luong tuong ung trong file nay truoc khi commit.
 
 ## 12. Rui ro va cach giam rui ro
 
-- Google Maps API key thieu hoac sai: lam map-like UI truoc.
+- OSM public tile policy: dev/MVP dung nhe; production dung tile provider rieng hoac self-host.
+- OSM tile loi/network loi: giu map-like UI fallback.
+- osmdroid la Android View, khong Compose-native: can bridge bang `AndroidView` va quan ly lifecycle can than.
 - Shop thieu toa do: fallback sang list/bottom sheet va khong render marker sai.
 - Permission location gay crash: location la optional, khong chan flow.
 - UI map qua nang: giu logic search/filter trong ViewModel/composable nho, tranh gom het vao mot file qua lon.

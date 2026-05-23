@@ -140,6 +140,11 @@ func (s *Service) UpdateRole(ctx context.Context, input UpdateRoleInput) (domain
 	if user.Version != input.ExpectedVersion {
 		return domain.User{}, ErrVersionConflict
 	}
+	if user.Role == RoleAdmin && user.Status == StatusActive && role != RoleAdmin {
+		if err := s.ensureAnotherActiveAdmin(ctx, user.UserID); err != nil {
+			return domain.User{}, err
+		}
+	}
 
 	before := user
 	user.Role = role
@@ -178,6 +183,11 @@ func (s *Service) UpdateStatus(ctx context.Context, input UpdateStatusInput) (do
 	}
 	if user.Version != input.ExpectedVersion {
 		return domain.User{}, ErrVersionConflict
+	}
+	if user.Role == RoleAdmin && user.Status == StatusActive && status != StatusActive {
+		if err := s.ensureAnotherActiveAdmin(ctx, user.UserID); err != nil {
+			return domain.User{}, err
+		}
 	}
 	authUser, err := s.authUsers.GetByID(ctx, user.UserID)
 	if err != nil || authUser.UserID == "" {
@@ -227,6 +237,19 @@ func (s *Service) ensureAdmin(ctx context.Context, userID string) error {
 		return ErrForbidden
 	}
 	return nil
+}
+
+func (s *Service) ensureAnotherActiveAdmin(ctx context.Context, currentUserID string) error {
+	admins, err := s.users.List(ctx, repository.UserListFilter{Role: RoleAdmin, Status: StatusActive})
+	if err != nil {
+		return err
+	}
+	for _, admin := range admins {
+		if strings.TrimSpace(admin.UserID) != strings.TrimSpace(currentUserID) {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: cannot remove the last active admin", ErrInvalidUser)
 }
 
 func (s *Service) logMutation(ctx context.Context, actorUserID string, user domain.User, action string, before domain.User) error {

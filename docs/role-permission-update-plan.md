@@ -365,6 +365,8 @@ Trang thai: Done - `AuthRequired` da load current user tu DB khi co `UserReposit
 
 ### Phase 3: Admin safety
 
+Trang thai: Done - admin role/status update da chan viec demote hoac suspend/delete active admin cuoi cung.
+
 - Admin role update chi cho `admin/user`.
 - Them last-active-admin protection.
 

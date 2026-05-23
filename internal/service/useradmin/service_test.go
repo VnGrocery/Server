@@ -137,6 +137,65 @@ func TestUpdateRoleRejectsNonAdmin(t *testing.T) {
 	}
 }
 
+func TestUpdateRoleRejectsDemotingLastActiveAdmin(t *testing.T) {
+	service := NewService(userRepositoryStub{
+		getByID: func(ctx context.Context, userID string) (domain.User, error) {
+			return domain.User{UserID: userID, Role: RoleAdmin, Status: StatusActive, Version: 1}, nil
+		},
+		list: func(ctx context.Context, filter repository.UserListFilter) ([]domain.User, error) {
+			if filter.Role != RoleAdmin || filter.Status != StatusActive {
+				t.Fatalf("unexpected filter: %+v", filter)
+			}
+			return []domain.User{{UserID: "admin-1", Role: RoleAdmin, Status: StatusActive}}, nil
+		},
+	}, authUserRepositoryStub{}, nil, nil)
+
+	_, err := service.UpdateRole(context.Background(), UpdateRoleInput{
+		ActorUserID:     "admin-1",
+		TargetUserID:    "admin-1",
+		ExpectedVersion: 1,
+		Role:            RoleUser,
+	})
+	if !errors.Is(err, ErrInvalidUser) {
+		t.Fatalf("expected ErrInvalidUser, got %v", err)
+	}
+}
+
+func TestUpdateRoleAllowsDemotingAdminWhenAnotherActiveAdminExists(t *testing.T) {
+	var saved domain.User
+	service := NewService(userRepositoryStub{
+		getByID: func(ctx context.Context, userID string) (domain.User, error) {
+			if userID == "admin-2" {
+				return domain.User{UserID: userID, Role: RoleAdmin, Status: StatusActive, Version: 1}, nil
+			}
+			return domain.User{UserID: userID, Role: RoleAdmin, Status: StatusActive, Version: 2}, nil
+		},
+		list: func(ctx context.Context, filter repository.UserListFilter) ([]domain.User, error) {
+			return []domain.User{
+				{UserID: "admin-1", Role: RoleAdmin, Status: StatusActive},
+				{UserID: "admin-2", Role: RoleAdmin, Status: StatusActive},
+			}, nil
+		},
+		save: func(ctx context.Context, user domain.User) error {
+			saved = user
+			return nil
+		},
+	}, authUserRepositoryStub{}, nil, nil)
+
+	user, err := service.UpdateRole(context.Background(), UpdateRoleInput{
+		ActorUserID:     "admin-2",
+		TargetUserID:    "admin-1",
+		ExpectedVersion: 2,
+		Role:            RoleUser,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if user.Role != RoleUser || saved.Role != RoleUser {
+		t.Fatalf("expected user role, user=%#v saved=%#v", user, saved)
+	}
+}
+
 func TestListUsers(t *testing.T) {
 	service := NewService(userRepositoryStub{
 		getByID: func(ctx context.Context, userID string) (domain.User, error) {
@@ -225,6 +284,35 @@ func TestUpdateStatusUpdatesUserAndAuthUser(t *testing.T) {
 	}
 	if auditLogger.logHits != 1 {
 		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
+	}
+}
+
+func TestUpdateStatusRejectsSuspendingLastActiveAdmin(t *testing.T) {
+	service := NewService(userRepositoryStub{
+		getByID: func(ctx context.Context, userID string) (domain.User, error) {
+			return domain.User{UserID: userID, Role: RoleAdmin, Status: StatusActive, Version: 1}, nil
+		},
+		list: func(ctx context.Context, filter repository.UserListFilter) ([]domain.User, error) {
+			if filter.Role != RoleAdmin || filter.Status != StatusActive {
+				t.Fatalf("unexpected filter: %+v", filter)
+			}
+			return []domain.User{{UserID: "admin-1", Role: RoleAdmin, Status: StatusActive}}, nil
+		},
+	}, authUserRepositoryStub{
+		getByID: func(ctx context.Context, userID string) (domain.AuthUser, error) {
+			t.Fatal("auth user lookup should not happen after last-admin rejection")
+			return domain.AuthUser{}, nil
+		},
+	}, nil, nil)
+
+	_, err := service.UpdateStatus(context.Background(), UpdateStatusInput{
+		ActorUserID:     "admin-1",
+		TargetUserID:    "admin-1",
+		ExpectedVersion: 1,
+		Status:          StatusSuspended,
+	})
+	if !errors.Is(err, ErrInvalidUser) {
+		t.Fatalf("expected ErrInvalidUser, got %v", err)
 	}
 }
 

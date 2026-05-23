@@ -474,6 +474,53 @@ Lam UI map du dung cho demo/san pham ma khong anh huong logic.
 
 - `./gradlew assembleDevDebug`
 
+## 10.1 Luong 7: Nut ve vi tri hien tai va dia chi mac dinh
+
+Trang thai: `done`
+
+### Muc tieu
+
+Nguoi dung co the dua map ve vi tri hien tai ro rang, khong phai dua vao gesture hoac filter `Gan ban`. Dia chi/mac dinh khu vuc tren map uu tien dia chi hien tai cua user khi app lay duoc location.
+
+### Tasks
+
+- Them nut noi tren map de xin quyen/lien ket ve vi tri hien tai.
+- Khi bam nut:
+  - neu da co quyen location, lay `lastKnownLocation` va center map ve user.
+  - neu chua co quyen, mo permission request.
+  - clear selected shop de map khong tiep tuc center vao marker dang chon.
+- Lay dia chi hien tai bang Android `Geocoder` khi co toa do user.
+- Hien fallback `Vi tri hien tai` neu co toa do nhung khong reverse geocode duoc.
+- Giu fallback xem shop/map khi khong co location permission.
+
+### Acceptance criteria
+
+- Co nut vi tri hien tai tren tab Kham pha.
+- Bam nut khi chua cap quyen se xin quyen location.
+- Bam nut khi da co quyen se dua map ve vi tri user neu lay duoc location.
+- UI hien dia chi hien tai/fallback thay vi chi phu thuoc trung tam TP.HCM.
+- Build pass.
+
+### Tests
+
+- `./gradlew assembleDevDebug`
+- Manual:
+  - bam nut khi chua cap quyen.
+  - bam nut khi da cap quyen.
+  - emulator khong co last known location.
+
+### Ket qua da lam
+
+- Them `CurrentLocationMapButton` noi tren map.
+- Dung lai permission flow hien co cho nut vi tri hien tai.
+- Khi lay duoc location, clear selected shop de `OsmExploreMap` center ve user.
+- Them reverse geocode bang `Geocoder` va hien dia chi hien tai trong control tren map.
+- Co fallback text neu thiet bi khong tra ve dia chi.
+
+### Test da chay
+
+- `./gradlew assembleDevDebug`
+
 ## 11. Commit plan
 
 - Commit 1: `Audit explore shop location data`
@@ -484,6 +531,7 @@ Lam UI map du dung cho demo/san pham ma khong anh huong logic.
 - Commit 5b: `Integrate OpenStreetMap for explore`
 - Commit 5c: `Harden explore OSM fallback`
 - Commit 6: `Polish explore map interactions`
+- Commit 7: `Add explore current location control`
 
 Moi commit phai cap nhat `Trang thai` va `Ket qua da lam` cua luong tuong ung trong file nay truoc khi commit.
 

@@ -387,6 +387,8 @@ Trang thai: Done - da them `GET /v1/me/capabilities` de frontend quyet dinh buye
 
 ### Phase 6: Migration
 
+Trang thai: Done - da them command `cmd/migrate-user-roles` co dry-run mac dinh, `-apply`, va `-map-unknown` de map legacy `seller/buyer` ve `user`.
+
 - Dry-run role migration.
 - Map `seller/buyer` ve `user`.
 - Verify user co shop van vao seller UI duoc qua capabilities.

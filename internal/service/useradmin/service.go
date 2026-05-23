@@ -22,11 +22,11 @@ var (
 )
 
 const (
-	RoleAdmin       = "admin"
-	RoleUser        = "user"
-	StatusActive    = "active"
-	StatusSuspended = "suspended"
-	StatusDeleted   = "deleted"
+	RoleAdmin       = domain.RoleAdmin
+	RoleUser        = domain.RoleUser
+	StatusActive    = domain.UserStatusActive
+	StatusSuspended = domain.UserStatusSuspended
+	StatusDeleted   = domain.UserStatusDeleted
 )
 
 type UpdateRoleInput struct {
@@ -119,8 +119,8 @@ func (s *Service) UpdateRole(ctx context.Context, input UpdateRoleInput) (domain
 	if strings.TrimSpace(input.ActorUserID) == "" || strings.TrimSpace(input.TargetUserID) == "" {
 		return domain.User{}, fmt.Errorf("%w: actorUserId and targetUserId are required", ErrInvalidUser)
 	}
-	role := strings.TrimSpace(input.Role)
-	if role != RoleAdmin && role != RoleUser {
+	role, err := domain.NormalizeRole(input.Role)
+	if err != nil {
 		return domain.User{}, fmt.Errorf("%w: unsupported role", ErrInvalidUser)
 	}
 	if input.ExpectedVersion <= 0 {
@@ -158,8 +158,8 @@ func (s *Service) UpdateStatus(ctx context.Context, input UpdateStatusInput) (do
 	if strings.TrimSpace(input.ActorUserID) == "" || strings.TrimSpace(input.TargetUserID) == "" {
 		return domain.User{}, fmt.Errorf("%w: actorUserId and targetUserId are required", ErrInvalidUser)
 	}
-	status := strings.TrimSpace(input.Status)
-	if status != StatusActive && status != StatusSuspended && status != StatusDeleted {
+	status, err := domain.NormalizeUserStatus(input.Status)
+	if err != nil {
 		return domain.User{}, fmt.Errorf("%w: unsupported status", ErrInvalidUser)
 	}
 	if input.ExpectedVersion <= 0 {

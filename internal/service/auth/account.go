@@ -365,10 +365,10 @@ func (s *AccountService) roleForNewUser(email string) string {
 	normalized := strings.ToLower(strings.TrimSpace(email))
 	if normalized != "" && s.bootstrapAdmins != nil {
 		if _, ok := s.bootstrapAdmins[normalized]; ok {
-			return "admin"
+			return domain.RoleAdmin
 		}
 	}
-	return "user"
+	return domain.RoleUser
 }
 
 func (s *AccountService) Refresh(ctx context.Context, refreshToken string) (AuthResult, error) {

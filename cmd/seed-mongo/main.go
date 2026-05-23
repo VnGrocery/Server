@@ -271,11 +271,11 @@ func buildAccounts(password string, now time.Time) ([]seedAccount, error) {
 		role        string
 		offset      time.Duration
 	}{
-		{adminID, "admin@vnmeat.test", "VNMeat Admin", "Admin", "VNMeat", "admin", -96 * time.Hour},
-		{sellerID, "seller@vnmeat.test", "Nguyen Minh Seller", "Minh", "Nguyen", "seller", -72 * time.Hour},
-		{seller2ID, "seller2@vnmeat.test", "Tran An Seller", "An", "Tran", "seller", -60 * time.Hour},
-		{buyerID, "buyer@vnmeat.test", "Le Bao Buyer", "Bao", "Le", "buyer", -48 * time.Hour},
-		{buyer2ID, "buyer2@vnmeat.test", "Pham Linh Buyer", "Linh", "Pham", "buyer", -44 * time.Hour},
+		{adminID, "admin@vnmeat.test", "VNMeat Admin", "Admin", "VNMeat", domain.RoleAdmin, -96 * time.Hour},
+		{sellerID, "seller@vnmeat.test", "Nguyen Minh Seller", "Minh", "Nguyen", domain.RoleUser, -72 * time.Hour},
+		{seller2ID, "seller2@vnmeat.test", "Tran An Seller", "An", "Tran", domain.RoleUser, -60 * time.Hour},
+		{buyerID, "buyer@vnmeat.test", "Le Bao Buyer", "Bao", "Le", domain.RoleUser, -48 * time.Hour},
+		{buyer2ID, "buyer2@vnmeat.test", "Pham Linh Buyer", "Linh", "Pham", domain.RoleUser, -44 * time.Hour},
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -701,11 +701,11 @@ func buildBuyerChecks(now time.Time) []domain.BuyerCheck {
 
 func buildEvents(now time.Time) []audit.Input {
 	return []audit.Input{
-		{ActorUserID: adminID, ResourceType: "account", ResourceID: adminID, ResourceVersion: 1, Action: "account.created", Status: "created", Payload: map[string]any{"role": "admin", "email": "admin@vnmeat.test"}},
-		{ActorUserID: sellerID, ResourceType: "account", ResourceID: sellerID, ResourceVersion: 1, Action: "account.created", Status: "created", Payload: map[string]any{"role": "seller", "email": "seller@vnmeat.test"}},
-		{ActorUserID: seller2ID, ResourceType: "account", ResourceID: seller2ID, ResourceVersion: 1, Action: "account.created", Status: "created", Payload: map[string]any{"role": "seller", "email": "seller2@vnmeat.test"}},
-		{ActorUserID: buyerID, ResourceType: "account", ResourceID: buyerID, ResourceVersion: 1, Action: "account.created", Status: "created", Payload: map[string]any{"role": "buyer", "email": "buyer@vnmeat.test"}},
-		{ActorUserID: buyer2ID, ResourceType: "account", ResourceID: buyer2ID, ResourceVersion: 1, Action: "account.created", Status: "created", Payload: map[string]any{"role": "buyer", "email": "buyer2@vnmeat.test"}},
+		{ActorUserID: adminID, ResourceType: "account", ResourceID: adminID, ResourceVersion: 1, Action: "account.created", Status: "created", Payload: map[string]any{"role": domain.RoleAdmin, "email": "admin@vnmeat.test"}},
+		{ActorUserID: sellerID, ResourceType: "account", ResourceID: sellerID, ResourceVersion: 1, Action: "account.created", Status: "created", Payload: map[string]any{"role": domain.RoleUser, "email": "seller@vnmeat.test"}},
+		{ActorUserID: seller2ID, ResourceType: "account", ResourceID: seller2ID, ResourceVersion: 1, Action: "account.created", Status: "created", Payload: map[string]any{"role": domain.RoleUser, "email": "seller2@vnmeat.test"}},
+		{ActorUserID: buyerID, ResourceType: "account", ResourceID: buyerID, ResourceVersion: 1, Action: "account.created", Status: "created", Payload: map[string]any{"role": domain.RoleUser, "email": "buyer@vnmeat.test"}},
+		{ActorUserID: buyer2ID, ResourceType: "account", ResourceID: buyer2ID, ResourceVersion: 1, Action: "account.created", Status: "created", Payload: map[string]any{"role": domain.RoleUser, "email": "buyer2@vnmeat.test"}},
 		{ActorUserID: sellerID, ResourceType: "shop", ResourceID: shopID, ResourceVersion: 1, Action: "shop.created", Status: "active", Payload: map[string]any{"name": "VNMeat Ben Thanh"}},
 		{ActorUserID: seller2ID, ResourceType: "shop", ResourceID: shop2ID, ResourceVersion: 1, Action: "shop.created", Status: "active", Payload: map[string]any{"name": "VNMeat Thao Dien"}},
 		{ActorUserID: sellerID, ResourceType: "product", ResourceID: productID, ResourceVersion: 1, Action: "product.created", Status: "active", Payload: map[string]any{"shopId": shopID, "name": "Bo My Ribeye cat steak"}},

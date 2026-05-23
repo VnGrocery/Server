@@ -485,7 +485,7 @@ func (s *Service) ensureAdmin(ctx context.Context, userID string) error {
 	if err != nil {
 		return ErrForbidden
 	}
-	if !strings.EqualFold(strings.TrimSpace(user.Role), "admin") {
+	if !strings.EqualFold(strings.TrimSpace(user.Role), domain.RoleAdmin) {
 		return ErrForbidden
 	}
 	return nil

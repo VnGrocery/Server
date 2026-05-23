@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
 )
 
@@ -45,7 +46,7 @@ func (m *AdminRequired) Handle() gin.HandlerFunc {
 			return
 		}
 
-		if !strings.EqualFold(strings.TrimSpace(user.Role), "admin") {
+		if !strings.EqualFold(strings.TrimSpace(user.Role), domain.RoleAdmin) {
 			c.JSON(http.StatusForbidden, gin.H{
 				"error": "admin access required",
 			})

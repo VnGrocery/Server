@@ -372,6 +372,8 @@ Trang thai: Done - admin role/status update da chan viec demote hoac suspend/del
 
 ### Phase 4: Ownership hardening
 
+Trang thai: Done - da audit ownership checks hien co va bo sung regression test cho product create cross-owner.
+
 - Audit seller endpoints.
 - Bo sung test ownership.
 - Dam bao shop/product/batch/pledge khong the cross-owner mutation.

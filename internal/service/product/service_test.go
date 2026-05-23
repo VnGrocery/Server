@@ -180,6 +180,30 @@ func TestCreateProduct(t *testing.T) {
 	}
 }
 
+func TestCreateProductRejectsNonOwner(t *testing.T) {
+	service := NewService(productRepositoryStub{
+		save: func(ctx context.Context, product domain.Product) error {
+			t.Fatal("save should not be called for non-owner")
+			return nil
+		},
+	}, productFreshnessReportRepositoryStub{}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "owner-1", Status: ProductStatusActive}, nil
+		},
+	}, userRepositoryStub{}, nil)
+
+	_, err := service.Create(context.Background(), CreateInput{
+		ShopID:      "shop-1",
+		OwnerUserID: "user-2",
+		Name:        "Apple",
+		Price:       10000,
+		Currency:    "vnd",
+	})
+	if !errors.Is(err, ErrForbidden) {
+		t.Fatalf("expected ErrForbidden, got %v", err)
+	}
+}
+
 func TestUpdateProductRejectsVersionConflict(t *testing.T) {
 	service := NewService(productRepositoryStub{
 		save: func(ctx context.Context, product domain.Product) error {

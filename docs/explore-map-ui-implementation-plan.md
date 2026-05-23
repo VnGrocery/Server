@@ -612,6 +612,55 @@ Danh sach shop o tab Kham pha co the keo xuong de thu gon khi nguoi dung muon xe
 
 - `./gradlew assembleDevDebug`
 
+## 10.4 Luong 10: Ket qua tim kiem noi duoi thanh search
+
+Trang thai: `done`
+
+### Muc tieu
+
+Khi nguoi dung nhap tu khoa o tab Kham pha, ket qua shop can hien ngay ben duoi thanh tim kiem theo kieu Google Maps, de chon nhanh shop tren map ma khong phai keo bottom sheet.
+
+### Tasks
+
+- Hien dropdown ket qua khi `searchQuery` khong rong.
+- Ket qua dung chung `filteredShops` de dong bo search/filter/map/list.
+- Moi row hien:
+  - icon shop
+  - ten shop
+  - dia chi ngan
+  - trust label
+- Gioi han so ket qua hien thi ban dau de khong che het map.
+- Tap ket qua se select shop va center map den marker qua `selectedShopId`.
+- Hien empty state nho neu khong co ket qua.
+
+### Acceptance criteria
+
+- Go tu khoa vao search thi thay ket qua ngay duoi thanh search.
+- Tap ket qua se highlight/center shop tren map va hien preview.
+- Bottom sheet va marker van dong bo voi search/filter.
+- Build pass, khong co warning Material deprecated.
+
+### Tests
+
+- `./gradlew assembleDevDebug`
+- Manual:
+  - search theo ten shop.
+  - search theo dia chi.
+  - search khong co ket qua.
+  - tap mot ket qua tim kiem.
+
+### Ket qua da lam
+
+- Them `SearchResultDropdown` vao `ExploreMapControls`.
+- Them `SearchResultRow` hien shop, dia chi va trust label.
+- Gioi han 5 ket qua dau va thong bao so ket qua con lai.
+- Tap result set `selectedShopId`, giup map center den shop va selected preview hien len.
+- Dung `HorizontalDivider` de tranh warning deprecated.
+
+### Test da chay
+
+- `./gradlew assembleDevDebug`
+
 ## 11. Commit plan
 
 - Commit 1: `Audit explore shop location data`
@@ -625,6 +674,7 @@ Danh sach shop o tab Kham pha co the keo xuong de thu gon khi nguoi dung muon xe
 - Commit 7: `Add explore current location control`
 - Commit 8: `Request location permission on first main entry`
 - Commit 9: `Make explore shop sheet draggable`
+- Commit 10: `Show explore search results dropdown`
 
 Moi commit phai cap nhat `Trang thai` va `Ket qua da lam` cua luong tuong ung trong file nay truoc khi commit.
 

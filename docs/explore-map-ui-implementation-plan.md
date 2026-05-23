@@ -567,6 +567,51 @@ App chu dong xin quyen location mot lan khi user vao man hinh chinh lan dau, de 
 
 - `./gradlew assembleDevDebug`
 
+## 10.3 Luong 9: Bottom sheet shop co the keo thu gon
+
+Trang thai: `done`
+
+### Muc tieu
+
+Danh sach shop o tab Kham pha co the keo xuong de thu gon khi nguoi dung muon xem map rong hon, dac biet khi thao tac bang chuot tren emulator.
+
+### Tasks
+
+- Them drag state theo truc doc cho `ShopBottomSheet`.
+- Dinh nghia hai trang thai:
+  - expanded: sheet cao day du de xem danh sach.
+  - collapsed: chi con phan dau sheet/handle.
+- Snap sheet ve expanded/collapsed khi tha chuot/tay.
+- Giu `LazyColumn` shop list va cac action hien co.
+- Them content description cho handle drag.
+
+### Acceptance criteria
+
+- Keo sheet xuong se thu gon.
+- Keo sheet len se mo lai.
+- Danh sach shop van scroll/xem/mo shop binh thuong.
+- Build pass.
+
+### Tests
+
+- `./gradlew assembleDevDebug`
+- Manual:
+  - keo sheet xuong bang chuot tren emulator.
+  - keo sheet len de mo lai.
+  - scroll danh sach shop.
+  - bam `Xem` vao chi tiet shop.
+
+### Ket qua da lam
+
+- Them `Modifier.draggable` cho `ShopBottomSheet`.
+- Them offset snap giua expanded va collapsed.
+- Doi sheet sang chieu cao on dinh `280.dp` va peek height `56.dp`.
+- Giu handle tren sheet va them content description cho hanh vi keo.
+
+### Test da chay
+
+- `./gradlew assembleDevDebug`
+
 ## 11. Commit plan
 
 - Commit 1: `Audit explore shop location data`
@@ -579,6 +624,7 @@ App chu dong xin quyen location mot lan khi user vao man hinh chinh lan dau, de 
 - Commit 6: `Polish explore map interactions`
 - Commit 7: `Add explore current location control`
 - Commit 8: `Request location permission on first main entry`
+- Commit 9: `Make explore shop sheet draggable`
 
 Moi commit phai cap nhat `Trang thai` va `Ket qua da lam` cua luong tuong ung trong file nay truoc khi commit.
 

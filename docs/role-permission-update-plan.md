@@ -357,6 +357,8 @@ Trang thai: Done - da them role/status constants, cap nhat cac check admin dung 
 
 ### Phase 2: Middleware active user
 
+Trang thai: Done - `AuthRequired` da load current user tu DB khi co `UserRepository`, reject suspended/deleted user, va expose current user cho middleware tiep theo.
+
 - Auth middleware load user tu DB.
 - Protected route reject suspended/deleted user.
 - Admin middleware dung current user tu context.

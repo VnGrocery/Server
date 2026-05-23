@@ -7,17 +7,25 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"vngrocery/internal/domain"
+	"vngrocery/internal/repository"
 	authservice "vngrocery/internal/service/auth"
 )
 
 const principalContextKey = "auth.principal"
+const userContextKey = "auth.user"
 
 type AuthRequired struct {
 	verifier authservice.Verifier
+	users    repository.UserRepository
 }
 
-func NewAuthRequired(verifier authservice.Verifier) *AuthRequired {
-	return &AuthRequired{verifier: verifier}
+func NewAuthRequired(verifier authservice.Verifier, users ...repository.UserRepository) *AuthRequired {
+	var userRepo repository.UserRepository
+	if len(users) > 0 {
+		userRepo = users[0]
+	}
+	return &AuthRequired{verifier: verifier, users: userRepo}
 }
 
 func (m *AuthRequired) Handle() gin.HandlerFunc {
@@ -45,6 +53,27 @@ func (m *AuthRequired) Handle() gin.HandlerFunc {
 			return
 		}
 
+		if m.users != nil {
+			user, err := m.users.GetByID(c.Request.Context(), strings.TrimSpace(principal.UserID))
+			if err != nil || user.UserID == "" {
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"error": authservice.ErrUnauthorized.Error(),
+				})
+				c.Abort()
+				return
+			}
+			if !domain.IsActiveUser(user) {
+				c.JSON(http.StatusForbidden, gin.H{
+					"error": "account is not active",
+				})
+				c.Abort()
+				return
+			}
+			principal.Email = user.Email
+			principal.Role = user.Role
+			c.Set(userContextKey, user)
+		}
+
 		c.Set(principalContextKey, principal)
 		c.Next()
 	}
@@ -58,6 +87,16 @@ func GetPrincipal(c *gin.Context) (authservice.Principal, bool) {
 
 	principal, ok := value.(authservice.Principal)
 	return principal, ok
+}
+
+func GetUser(c *gin.Context) (domain.User, bool) {
+	value, ok := c.Get(userContextKey)
+	if !ok {
+		return domain.User{}, false
+	}
+
+	user, ok := value.(domain.User)
+	return user, ok
 }
 
 func extractBearerToken(header string) (string, error) {

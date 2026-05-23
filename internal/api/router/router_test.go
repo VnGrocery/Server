@@ -40,7 +40,7 @@ func newTestDependencies(verifier testVerifier) Dependencies {
 		SellerHandler:       handler.NewSellerHandler(sellerScorerStub{}, sellerCommitStub{}),
 		BuyerHandler:        handler.NewBuyerHandler(buyerCheckRouteStub{}),
 		ShopHandler:         handler.NewShopHandler(shopHandlerStub{}),
-		AuthMiddleware:      middleware.NewAuthRequired(verifier),
+		AuthMiddleware:      middleware.NewAuthRequired(verifier, routerUserRepoStub{}),
 		AdminMiddleware:     middleware.NewAdminRequired(routerUserRepoStub{}),
 	}
 }

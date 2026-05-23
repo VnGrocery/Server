@@ -129,11 +129,79 @@ func (s stubUserRepo) List(ctx context.Context, filter repository.UserListFilter
 	return nil, nil
 }
 
+func TestAuthRequiredLoadsActiveUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	middleware := NewAuthRequired(stubVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{UserID: "user-1", Email: "stale@example.com", Role: domain.RoleAdmin}, nil
+		},
+	}, stubUserRepo{
+		getByID: func(ctx context.Context, userID string) (domain.User, error) {
+			return domain.User{UserID: userID, Email: "current@example.com", Role: domain.RoleUser, Status: domain.UserStatusActive}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/protected", middleware.Handle(), func(c *gin.Context) {
+		user, ok := GetUser(c)
+		if !ok {
+			t.Fatal("user should exist in request context")
+		}
+		principal, ok := GetPrincipal(c)
+		if !ok {
+			t.Fatal("principal should exist in request context")
+		}
+		if principal.Email != "current@example.com" || principal.Role != domain.RoleUser {
+			t.Fatalf("principal should use current user data, got %+v", principal)
+		}
+		if user.Email != "current@example.com" || user.Role != domain.RoleUser {
+			t.Fatalf("unexpected user: %+v", user)
+		}
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer good-token")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+}
+
+func TestAuthRequiredRejectsSuspendedUser(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	middleware := NewAuthRequired(stubVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{UserID: "user-1"}, nil
+		},
+	}, stubUserRepo{
+		getByID: func(ctx context.Context, userID string) (domain.User, error) {
+			return domain.User{UserID: userID, Role: domain.RoleUser, Status: domain.UserStatusSuspended}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/protected", middleware.Handle(), func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer good-token")
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d", rec.Code)
+	}
+}
+
 func TestAdminRequiredRejectsNonAdmin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	middleware := NewAdminRequired(stubUserRepo{
 		getByID: func(ctx context.Context, userID string) (domain.User, error) {
-			return domain.User{UserID: userID, Role: "seller"}, nil
+			return domain.User{UserID: userID, Role: domain.RoleUser}, nil
 		},
 	})
 
@@ -158,7 +226,7 @@ func TestAdminRequiredAllowsAdmin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	middleware := NewAdminRequired(stubUserRepo{
 		getByID: func(ctx context.Context, userID string) (domain.User, error) {
-			return domain.User{UserID: userID, Role: "admin"}, nil
+			return domain.User{UserID: userID, Role: domain.RoleAdmin}, nil
 		},
 	})
 

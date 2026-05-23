@@ -289,7 +289,7 @@ func main() {
 	bundleTokenService.StartCleanup(context.Background(), 10*time.Minute, 500)
 	buyerCheckService.SetBundleTokenVerifier(bundleTokenService)
 	buyerCheckService.SetObserver(metrics)
-	authMiddleware := middleware.NewAuthRequired(jwtService)
+	authMiddleware := middleware.NewAuthRequired(jwtService, userRepository)
 	adminMiddleware := middleware.NewAdminRequired(userRepository)
 	healthHandler := handler.NewHealthHandler()
 	docsHandler := handler.NewDocsHandler()

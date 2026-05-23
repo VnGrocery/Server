@@ -37,13 +37,17 @@ func (m *AdminRequired) Handle() gin.HandlerFunc {
 			return
 		}
 
-		user, err := m.users.GetByID(c.Request.Context(), strings.TrimSpace(principal.UserID))
-		if err != nil || user.UserID == "" {
-			c.JSON(http.StatusForbidden, gin.H{
-				"error": "access denied",
-			})
-			c.Abort()
-			return
+		user, ok := GetUser(c)
+		if !ok {
+			var err error
+			user, err = m.users.GetByID(c.Request.Context(), strings.TrimSpace(principal.UserID))
+			if err != nil || user.UserID == "" {
+				c.JSON(http.StatusForbidden, gin.H{
+					"error": "access denied",
+				})
+				c.Abort()
+				return
+			}
 		}
 
 		if !strings.EqualFold(strings.TrimSpace(user.Role), domain.RoleAdmin) {

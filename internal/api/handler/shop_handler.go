@@ -39,6 +39,56 @@ func NewShopHandler(shops ShopService) *ShopHandler {
 	return &ShopHandler{shops: shops}
 }
 
+func (h *ShopHandler) Capabilities(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+
+	role := principal.Role
+	if user, ok := middleware.GetUser(c); ok {
+		role = user.Role
+	}
+	if role == domain.RoleAdmin {
+		c.JSON(http.StatusOK, dto.CapabilitiesResponse{
+			Role:             role,
+			CanUseBuyerMode:  false,
+			CanUseSellerMode: false,
+			OwnedShopIDs:     []string{},
+			Admin:            true,
+		})
+		return
+	}
+
+	result, err := h.shops.List(c.Request.Context(), shopsvc.ListInput{
+		Page:               1,
+		PageSize:           100,
+		OwnerUserID:        principal.UserID,
+		IncludeAllStatuses: false,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+
+	shopIDs := make([]string, 0, len(result.Items))
+	for _, item := range result.Items {
+		if item.Shop.ShopID != "" {
+			shopIDs = append(shopIDs, item.Shop.ShopID)
+		}
+	}
+
+	c.JSON(http.StatusOK, dto.CapabilitiesResponse{
+		Role:             role,
+		CanUseBuyerMode:  true,
+		CanUseSellerMode: len(shopIDs) > 0,
+		OwnedShopCount:   len(shopIDs),
+		OwnedShopIDs:     shopIDs,
+		Admin:            false,
+	})
+}
+
 func (h *ShopHandler) Create(c *gin.Context) {
 	principal, ok := middleware.GetPrincipal(c)
 	if !ok {

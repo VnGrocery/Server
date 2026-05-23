@@ -380,6 +380,8 @@ Trang thai: Done - da audit ownership checks hien co va bo sung regression test 
 
 ### Phase 5: Capabilities endpoint
 
+Trang thai: Done - da them `GET /v1/me/capabilities` de frontend quyet dinh buyer/seller/admin mode dua tren role va shop ownership.
+
 - Them `/v1/me/capabilities`.
 - Frontend dung endpoint nay de hien buyer/seller/admin mode.
 

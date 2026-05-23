@@ -14,6 +14,15 @@ type MeResponse struct {
 	Version     int    `json:"version"`
 }
 
+type CapabilitiesResponse struct {
+	Role             string   `json:"role"`
+	CanUseBuyerMode  bool     `json:"canUseBuyerMode"`
+	CanUseSellerMode bool     `json:"canUseSellerMode"`
+	OwnedShopCount   int      `json:"ownedShopCount"`
+	OwnedShopIDs     []string `json:"ownedShopIds"`
+	Admin            bool     `json:"admin"`
+}
+
 type DeleteResponse struct {
 	UserID string `json:"userId"`
 	Status string `json:"status"`

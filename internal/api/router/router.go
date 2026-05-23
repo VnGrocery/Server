@@ -104,6 +104,7 @@ func New(deps Dependencies) *gin.Engine {
 		v1.GET("/shops/:shopId/products/:productId/freshness-reports", deps.ProductHandler.ListFreshnessReports)
 		v1.GET("/shops/:shopId/reviews", deps.ShopHandler.ListReviews)
 		v1.GET("/me", deps.AuthMiddleware.Handle(), deps.AuthHandler.Me)
+		v1.GET("/me/capabilities", deps.AuthMiddleware.Handle(), deps.ShopHandler.Capabilities)
 		v1.PATCH("/me", deps.AuthMiddleware.Handle(), deps.AuthHandler.UpdateMe)
 		v1.POST("/me/password", deps.AuthMiddleware.Handle(), deps.AuthHandler.ChangePassword)
 		v1.POST("/shops", deps.AuthMiddleware.Handle(), deps.ShopHandler.Create)

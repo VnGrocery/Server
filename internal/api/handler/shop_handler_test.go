@@ -58,6 +58,75 @@ func TestCreateShop(t *testing.T) {
 	}
 }
 
+func TestCapabilitiesForUserWithShop(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewShopHandler(shopServiceAdapter{
+		list: func(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error) {
+			if input.OwnerUserID != "user-1" || input.IncludeAllStatuses {
+				t.Fatalf("unexpected list input: %+v", input)
+			}
+			return shopsvc.ListResult{
+				Items: []shopsvc.ShopView{{
+					Shop: domain.Shop{ShopID: "shop-1", OwnerUserID: "user-1", Status: shopsvc.ShopStatusActive},
+				}},
+				Total: 1,
+			}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/me/capabilities", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "user-1", Role: domain.RoleUser})
+		handler.Capabilities(c)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me/capabilities", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var response dto.CapabilitiesResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if response.Role != domain.RoleUser || !response.CanUseBuyerMode || !response.CanUseSellerMode || response.OwnedShopCount != 1 || response.OwnedShopIDs[0] != "shop-1" || response.Admin {
+		t.Fatalf("unexpected capabilities: %#v", response)
+	}
+}
+
+func TestCapabilitiesForAdminDoesNotLoadShops(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewShopHandler(shopServiceAdapter{
+		list: func(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error) {
+			t.Fatal("admin capabilities should not load owned shops")
+			return shopsvc.ListResult{}, nil
+		},
+	})
+
+	router := gin.New()
+	router.GET("/v1/me/capabilities", func(c *gin.Context) {
+		c.Set("auth.principal", authservice.Principal{UserID: "admin-1", Role: domain.RoleAdmin})
+		handler.Capabilities(c)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/me/capabilities", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	var response dto.CapabilitiesResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+	if response.Role != domain.RoleAdmin || response.CanUseBuyerMode || response.CanUseSellerMode || response.OwnedShopCount != 0 || !response.Admin {
+		t.Fatalf("unexpected capabilities: %#v", response)
+	}
+}
+
 func TestListShopsWithPagination(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := NewShopHandler(shopServiceAdapter{

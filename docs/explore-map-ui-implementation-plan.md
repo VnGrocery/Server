@@ -521,6 +521,52 @@ Nguoi dung co the dua map ve vi tri hien tai ro rang, khong phai dua vao gesture
 
 - `./gradlew assembleDevDebug`
 
+## 10.2 Luong 8: Hoi quyen vi tri mot lan khi vao app
+
+Trang thai: `done`
+
+### Muc tieu
+
+App chu dong xin quyen location mot lan khi user vao man hinh chinh lan dau, de tab Kham pha co the mac dinh theo vi tri user ma khong doi den khi user bam nut map.
+
+### Tasks
+
+- Them runtime permission request o `MainScreen`.
+- Luu co da hoi permission vao `SharedPreferences`.
+- Chi launch permission dialog neu:
+  - chua tung hoi trong install hien tai.
+  - app chua co quyen location.
+- Khong hoi lai neu user da tu choi.
+- Giu nut vi tri hien tai tren map de user co the bat/refresh thu cong sau nay.
+
+### Acceptance criteria
+
+- User vao app chinh lan dau thi thay dialog xin location neu chua cap quyen.
+- Dialog khong bi lap lai moi lan compose/reopen app.
+- Neu da co quyen location thi khong hien dialog thua.
+- Build pass.
+
+### Tests
+
+- `./gradlew assembleDevDebug`
+- Manual:
+  - install moi/clear app data.
+  - login vao app chinh.
+  - accept permission.
+  - clear app data va deny permission.
+  - reopen app, khong thay prompt lap lien tuc.
+
+### Ket qua da lam
+
+- Them `rememberLauncherForActivityResult` xin `ACCESS_FINE_LOCATION` va `ACCESS_COARSE_LOCATION` trong `MainScreen`.
+- Them `SharedPreferences` flag `initial_location_permission_requested`.
+- Mark da hoi truoc khi launch dialog de tranh launch lap neu recomposition.
+- Giu flow thu cong trong tab Kham pha qua nut vi tri hien tai.
+
+### Test da chay
+
+- `./gradlew assembleDevDebug`
+
 ## 11. Commit plan
 
 - Commit 1: `Audit explore shop location data`
@@ -532,6 +578,7 @@ Nguoi dung co the dua map ve vi tri hien tai ro rang, khong phai dua vao gesture
 - Commit 5c: `Harden explore OSM fallback`
 - Commit 6: `Polish explore map interactions`
 - Commit 7: `Add explore current location control`
+- Commit 8: `Request location permission on first main entry`
 
 Moi commit phai cap nhat `Trang thai` va `Ket qua da lam` cua luong tuong ung trong file nay truoc khi commit.
 

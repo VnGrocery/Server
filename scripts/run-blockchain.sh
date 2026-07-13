@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SERVER_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.besu-qbft.yml}"
+COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.besu-dev.yml}"
 COMPOSE_PATH="$SERVER_DIR/$COMPOSE_FILE"
 
 usage() {
@@ -17,11 +17,11 @@ Usage:
   ./scripts/run-blockchain.sh reset
 
 Environment:
-  COMPOSE_FILE   Compose file name relative to server/ (default: docker-compose.besu-qbft.yml)
+  COMPOSE_FILE   Compose file name relative to server/ (default: docker-compose.besu-dev.yml)
 
 Examples:
   ./scripts/run-blockchain.sh up -d
-  ./scripts/run-blockchain.sh logs besu-validator1
+  ./scripts/run-blockchain.sh logs besu-dev
   ./scripts/run-blockchain.sh reset
 EOF
 }

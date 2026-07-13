@@ -14,7 +14,9 @@ services:
       IPFS_API_URL: http://ipfs:5001
       IPFS_GATEWAY_URL: http://ipfs:8080
       BESU_ENABLED: "true"
-      BESU_RPC_URL: http://besu-validator1:8545
+      BESU_WORKER_ENABLED: ${BESU_WORKER_ENABLED:-true}
+      BESU_RPC_URL: http://besu-rpc-proxy:8545
+      BESU_RPC_URLS: http://besu-rpc-proxy:8545,http://besu-rpc1:8545,http://besu-rpc2:8545
       BESU_CHAIN_ID: ${BESU_CHAIN_ID:-1337}
       BESU_CONTRACT_ADDRESS: ${BESU_CONTRACT_ADDRESS}
       BESU_FROM_ADDRESS: ${BESU_FROM_ADDRESS}
@@ -38,7 +40,7 @@ services:
         condition: service_started
       redis:
         condition: service_healthy
-      besu-validator1:
+      besu-rpc-proxy:
         condition: service_started
     restart: always
     logging:
@@ -100,6 +102,11 @@ services:
       file: docker-compose.besu-qbft.yml
       service: besu-validator1
 
+  besu-rpc-init:
+    extends:
+      file: docker-compose.besu-qbft.yml
+      service: besu-rpc-init
+
   besu-validator2:
     extends:
       file: docker-compose.besu-qbft.yml
@@ -115,11 +122,28 @@ services:
       file: docker-compose.besu-qbft.yml
       service: besu-validator4
 
+  besu-rpc1:
+    extends:
+      file: docker-compose.besu-qbft.yml
+      service: besu-rpc1
+
+  besu-rpc2:
+    extends:
+      file: docker-compose.besu-qbft.yml
+      service: besu-rpc2
+
+  besu-rpc-proxy:
+    extends:
+      file: docker-compose.besu-qbft.yml
+      service: besu-rpc-proxy
+
 volumes:
   vault-data:
   ipfs-staging:
   ipfs-data:
   redis-data:
+  besu-rpc1-data:
+  besu-rpc2-data:
 
 networks:
   vngrocery_app:

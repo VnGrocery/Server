@@ -15,8 +15,10 @@ import (
 )
 
 const (
-	ChainAnchorStatusPending  = "pending_anchor"
-	ChainAnchorStatusAnchored = "anchored"
+	ChainAnchorStatusPending   = "pending_anchor"
+	ChainAnchorStatusAnchored  = "anchored"
+	ChainAnchorOperationCommit = "commit"
+	ChainAnchorOperationRevoke = "revoke"
 
 	IntegrityStatusPendingAnchor    = "pending_anchor"
 	IntegrityStatusAnchored         = "anchored"
@@ -173,12 +175,22 @@ func (s *Service) PreparePledge(pledge domain.Pledge) (domain.Pledge, error) {
 	pledge.ChainTxHash = ""
 	pledge.ChainBlockNumber = 0
 	pledge.ChainAnchorTime = nil
+	pledge.ChainAnchorOperation = ChainAnchorOperationCommit
+	pledge.ChainAnchorAttempts = 0
+	pledge.ChainAnchorNextAttemptAt = nil
+	pledge.ChainAnchorLastError = ""
 	return pledge, nil
 }
 
 func (s *Service) SyncPledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error) {
 	if s.chain == nil {
 		return pledge, nil
+	}
+	if pledge.ChainAnchorNextAttemptAt != nil && s.now().UTC().Before(*pledge.ChainAnchorNextAttemptAt) {
+		return pledge, nil
+	}
+	if pledge.ChainAnchorOperation == ChainAnchorOperationRevoke {
+		return s.syncPledgeRevoke(ctx, pledge)
 	}
 	if strings.TrimSpace(pledge.DataHash) == "" {
 		var err error
@@ -191,7 +203,6 @@ func (s *Service) SyncPledge(ctx context.Context, pledge domain.Pledge) (domain.
 	if pledge.ChainAnchorStatus == ChainAnchorStatusAnchored {
 		return pledge, nil
 	}
-
 	if strings.TrimSpace(pledge.ChainTxHash) != "" {
 		receipt, err := s.chain.Receipt(ctx, pledge.ChainTxHash)
 		if err == nil && receipt.Mined {
@@ -200,6 +211,10 @@ func (s *Service) SyncPledge(ctx context.Context, pledge domain.Pledge) (domain.
 		if err == nil {
 			return pledge, nil
 		}
+		return s.markPledgeRetry(pledge, err), err
+	}
+	if reconciled, ok := s.reconcileCommittedPledge(ctx, pledge); ok {
+		return reconciled, nil
 	}
 
 	if s.observer != nil {
@@ -207,10 +222,13 @@ func (s *Service) SyncPledge(ctx context.Context, pledge domain.Pledge) (domain.
 	}
 	commit, err := s.chain.CommitHash(ctx, pledge.PledgeID, pledge.DataHash, pledge.CreatedAt, pledge.Version)
 	if err != nil {
+		if commit.TxHash != "" {
+			pledge.ChainTxHash = commit.TxHash
+		}
 		if s.observer != nil {
 			s.observer.IncIntegrityAnchorFailure()
 		}
-		return pledge, err
+		return s.markPledgeRetry(pledge, err), err
 	}
 
 	pledge.ChainTxHash = commit.TxHash
@@ -236,6 +254,10 @@ func (s *Service) PrepareShop(shop domain.Shop) (domain.Shop, error) {
 	shop.ChainTxHash = ""
 	shop.ChainBlockNumber = 0
 	shop.ChainAnchorTime = nil
+	shop.ChainAnchorOperation = ChainAnchorOperationCommit
+	shop.ChainAnchorAttempts = 0
+	shop.ChainAnchorNextAttemptAt = nil
+	shop.ChainAnchorLastError = ""
 	return shop, nil
 }
 
@@ -253,6 +275,9 @@ func (s *Service) SyncShop(ctx context.Context, shop domain.Shop) (domain.Shop, 
 	if shop.ChainAnchorStatus == ChainAnchorStatusAnchored {
 		return shop, nil
 	}
+	if shop.ChainAnchorNextAttemptAt != nil && s.now().UTC().Before(*shop.ChainAnchorNextAttemptAt) {
+		return shop, nil
+	}
 	if strings.TrimSpace(shop.ChainTxHash) != "" {
 		receipt, err := s.chain.Receipt(ctx, shop.ChainTxHash)
 		if err == nil && receipt.Mined {
@@ -261,11 +286,18 @@ func (s *Service) SyncShop(ctx context.Context, shop domain.Shop) (domain.Shop, 
 		if err == nil {
 			return shop, nil
 		}
+		return s.markShopRetry(shop, err), err
+	}
+	if reconciled, ok := s.reconcileCommittedShop(ctx, shop); ok {
+		return reconciled, nil
 	}
 
 	commit, err := s.chain.CommitHash(ctx, shopRecordID(shop.ShopID), shop.DataHash, shop.CreatedAt, shop.Version)
 	if err != nil {
-		return shop, err
+		if commit.TxHash != "" {
+			shop.ChainTxHash = commit.TxHash
+		}
+		return s.markShopRetry(shop, err), err
 	}
 	shop.ChainTxHash = commit.TxHash
 	if commit.Mined {
@@ -287,6 +319,9 @@ func (s *Service) ProcessPendingPledges(ctx context.Context, limit int) error {
 	for _, pledge := range pledges {
 		updated, err := s.SyncPledge(ctx, pledge)
 		if err != nil {
+			if saveErr := s.pledges.Save(ctx, updated); saveErr != nil {
+				return saveErr
+			}
 			continue
 		}
 		if err := s.pledges.Save(ctx, updated); err != nil {
@@ -318,6 +353,9 @@ func (s *Service) ProcessPendingShops(ctx context.Context, limit int) error {
 		}
 		updated, err := s.SyncShop(ctx, shop)
 		if err != nil {
+			if saveErr := s.shops.Save(ctx, updated); saveErr != nil {
+				return saveErr
+			}
 			continue
 		}
 		if err := s.shops.Save(ctx, updated); err != nil {
@@ -513,19 +551,17 @@ func (s *Service) RevokePledge(ctx context.Context, pledge domain.Pledge) (domai
 	if s.observer != nil {
 		s.observer.IncIntegrityRevoke()
 	}
-	commit, err := s.chain.RevokeHash(ctx, pledge.PledgeID, nextVersion)
-	if err != nil {
-		return domain.Pledge{}, err
-	}
 	pledge.Version = nextVersion
-	pledge.IntegrityStatus = IntegrityStatusRevoked
-	pledge.ChainTxHash = commit.TxHash
+	pledge.IntegrityStatus = IntegrityStatusPendingAnchor
+	pledge.ChainAnchorStatus = ChainAnchorStatusPending
+	pledge.ChainAnchorOperation = ChainAnchorOperationRevoke
+	pledge.ChainTxHash = ""
+	pledge.ChainBlockNumber = 0
+	pledge.ChainAnchorTime = nil
+	pledge.ChainAnchorAttempts = 0
+	pledge.ChainAnchorNextAttemptAt = nil
+	pledge.ChainAnchorLastError = ""
 	pledge.UpdatedAt = s.now().UTC()
-	if commit.Mined {
-		pledge.ChainAnchorStatus = ChainAnchorStatusAnchored
-		pledge.ChainBlockNumber = commit.BlockNumber
-		pledge.ChainAnchorTime = commit.BlockTime
-	}
 	return pledge, nil
 }
 
@@ -536,25 +572,149 @@ func (s *Service) ReanchorPledge(ctx context.Context, pledge domain.Pledge) (dom
 	if s.observer != nil {
 		s.observer.IncIntegrityReanchor()
 	}
+	pledge.Version++
+	pledge.UpdatedAt = s.now().UTC()
 	rehashed, err := HashPledge(pledge)
 	if err != nil {
 		return domain.Pledge{}, err
 	}
 	pledge.DataHash = rehashed
-	pledge.Version++
 	pledge.ChainAnchorStatus = ChainAnchorStatusPending
 	pledge.IntegrityStatus = IntegrityStatusReanchored
 	pledge.ChainTxHash = ""
 	pledge.ChainBlockNumber = 0
 	pledge.ChainAnchorTime = nil
-	pledge.UpdatedAt = s.now().UTC()
-	return s.SyncPledge(ctx, pledge)
+	pledge.ChainAnchorOperation = ChainAnchorOperationCommit
+	pledge.ChainAnchorAttempts = 0
+	pledge.ChainAnchorNextAttemptAt = nil
+	pledge.ChainAnchorLastError = ""
+	return pledge, nil
+}
+
+func (s *Service) syncPledgeRevoke(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error) {
+	if strings.TrimSpace(pledge.ChainTxHash) != "" {
+		receipt, err := s.chain.Receipt(ctx, pledge.ChainTxHash)
+		if err == nil && receipt.Mined {
+			pledge = s.applyAnchored(pledge, receipt)
+			pledge.IntegrityStatus = IntegrityStatusRevoked
+			return pledge, nil
+		}
+		if err == nil {
+			return pledge, nil
+		}
+		return s.markPledgeRetry(pledge, err), err
+	}
+	if latest, err := s.chain.GetLatest(ctx, pledge.PledgeID); err == nil && latest.IsPresent && latest.IsRevoked && latest.Version == pledge.Version {
+		pledge.ChainAnchorStatus = ChainAnchorStatusAnchored
+		pledge.IntegrityStatus = IntegrityStatusRevoked
+		pledge.ChainAnchorTime = latest.Timestamp
+		pledge.ChainAnchorOperation = ""
+		pledge.ChainAnchorAttempts = 0
+		pledge.ChainAnchorNextAttemptAt = nil
+		pledge.ChainAnchorLastError = ""
+		return pledge, nil
+	}
+	commit, err := s.chain.RevokeHash(ctx, pledge.PledgeID, pledge.Version)
+	if err != nil {
+		if commit.TxHash != "" {
+			pledge.ChainTxHash = commit.TxHash
+		}
+		return s.markPledgeRetry(pledge, err), err
+	}
+	pledge.ChainTxHash = commit.TxHash
+	if commit.Mined {
+		pledge = s.applyAnchored(pledge, commit)
+		pledge.IntegrityStatus = IntegrityStatusRevoked
+	}
+	return pledge, nil
+}
+
+func (s *Service) reconcileCommittedPledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, bool) {
+	latest, err := s.chain.GetLatest(ctx, pledge.PledgeID)
+	if err != nil || !latest.IsPresent || latest.IsRevoked || latest.Version != pledge.Version || !sameHash(latest.DataHash, pledge.DataHash) {
+		return pledge, false
+	}
+	pledge.ChainAnchorStatus = ChainAnchorStatusAnchored
+	if pledge.IntegrityStatus != IntegrityStatusReanchored {
+		pledge.IntegrityStatus = IntegrityStatusAnchored
+	}
+	pledge.ChainAnchorTime = latest.Timestamp
+	pledge.ChainAnchorOperation = ""
+	pledge.ChainAnchorAttempts = 0
+	pledge.ChainAnchorNextAttemptAt = nil
+	pledge.ChainAnchorLastError = ""
+	return pledge, true
+}
+
+func (s *Service) reconcileCommittedShop(ctx context.Context, shop domain.Shop) (domain.Shop, bool) {
+	latest, err := s.chain.GetLatest(ctx, shopRecordID(shop.ShopID))
+	if err != nil || !latest.IsPresent || latest.IsRevoked || latest.Version != shop.Version || !sameHash(latest.DataHash, shop.DataHash) {
+		return shop, false
+	}
+	shop.ChainAnchorStatus = ChainAnchorStatusAnchored
+	shop.IntegrityStatus = IntegrityStatusAnchored
+	shop.ChainAnchorTime = latest.Timestamp
+	shop.ChainAnchorOperation = ""
+	shop.ChainAnchorAttempts = 0
+	shop.ChainAnchorNextAttemptAt = nil
+	shop.ChainAnchorLastError = ""
+	return shop, true
+}
+
+func (s *Service) markPledgeRetry(pledge domain.Pledge, cause error) domain.Pledge {
+	pledge.ChainAnchorAttempts++
+	next := s.now().UTC().Add(anchorRetryDelay(pledge.ChainAnchorAttempts))
+	pledge.ChainAnchorNextAttemptAt = &next
+	pledge.ChainAnchorLastError = compactError(cause)
+	return pledge
+}
+
+func (s *Service) markShopRetry(shop domain.Shop, cause error) domain.Shop {
+	shop.ChainAnchorAttempts++
+	next := s.now().UTC().Add(anchorRetryDelay(shop.ChainAnchorAttempts))
+	shop.ChainAnchorNextAttemptAt = &next
+	shop.ChainAnchorLastError = compactError(cause)
+	return shop
+}
+
+func anchorRetryDelay(attempt int) time.Duration {
+	if attempt < 1 {
+		attempt = 1
+	}
+	shift := attempt - 1
+	if shift > 6 {
+		shift = 6
+	}
+	delay := 5 * time.Second * time.Duration(1<<shift)
+	if delay > 5*time.Minute {
+		return 5 * time.Minute
+	}
+	return delay
+}
+
+func compactError(err error) string {
+	if err == nil {
+		return ""
+	}
+	value := strings.TrimSpace(err.Error())
+	if len(value) > 512 {
+		return value[:512]
+	}
+	return value
+}
+
+func sameHash(left, right string) bool {
+	return strings.EqualFold(strings.TrimPrefix(strings.TrimSpace(left), "0x"), strings.TrimPrefix(strings.TrimSpace(right), "0x"))
 }
 
 func (s *Service) applyAnchored(pledge domain.Pledge, commit CommitResult) domain.Pledge {
 	pledge.ChainTxHash = commit.TxHash
 	pledge.ChainBlockNumber = commit.BlockNumber
 	pledge.ChainAnchorStatus = ChainAnchorStatusAnchored
+	pledge.ChainAnchorOperation = ""
+	pledge.ChainAnchorAttempts = 0
+	pledge.ChainAnchorNextAttemptAt = nil
+	pledge.ChainAnchorLastError = ""
 	if pledge.IntegrityStatus != IntegrityStatusReanchored {
 		pledge.IntegrityStatus = IntegrityStatusAnchored
 	}
@@ -571,6 +731,10 @@ func (s *Service) applyAnchoredShop(shop domain.Shop, commit CommitResult) domai
 	shop.ChainTxHash = commit.TxHash
 	shop.ChainBlockNumber = commit.BlockNumber
 	shop.ChainAnchorStatus = ChainAnchorStatusAnchored
+	shop.ChainAnchorOperation = ""
+	shop.ChainAnchorAttempts = 0
+	shop.ChainAnchorNextAttemptAt = nil
+	shop.ChainAnchorLastError = ""
 	shop.IntegrityStatus = IntegrityStatusAnchored
 	if commit.BlockTime != nil {
 		shop.ChainAnchorTime = commit.BlockTime

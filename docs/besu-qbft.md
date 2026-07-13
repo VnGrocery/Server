@@ -1,121 +1,110 @@
-# Besu QBFT Local Network
+# Besu development and hardened QBFT profiles
 
-This repo includes a 4-validator Besu QBFT network for local development.
+## Local development
 
-## Start
-
-Run Besu together with the existing API and Vault stack:
+Local development uses one QBFT validator and a separate disposable chain:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.besu-qbft.yml up --build
+make besu-up
 ```
 
-The default compose stack now also includes Kubo IPFS:
+RPC is available at `http://127.0.0.1:8545`. This profile has no Byzantine
+fault tolerance and must never be used outside a developer machine.
 
-- API: `5000`
-- Vault: `8200`
-- IPFS API: `5001`
-- IPFS gateway: `8080`
+Reset it with:
 
-Validator RPC ports on the host:
+```bash
+docker compose -f docker-compose.besu-dev.yml down -v
+```
 
-- `8545` -> `besu-validator1`
-- `8546` -> `besu-validator2`
-- `8547` -> `besu-validator3`
-- `8548` -> `besu-validator4`
+## Hardened cluster profile
 
-P2P ports:
+The cluster profile contains four validators, two non-validator RPC nodes and
+an HAProxy endpoint:
 
-- `30303` to `30306`
+```bash
+make besu-cluster-up
+make besu-health
+```
 
-## Backend config
+Only HAProxy publishes RPC on host port `8545`. Validator RPC is disabled.
+Validators use a static peer mesh plus two bootnode references; API traffic is
+served by `besu-rpc1` and `besu-rpc2`.
 
-For the Go API, point the backend at validator 1:
+`BESU_IMAGE` is pinned by default. Upgrade it first in staging, run the cluster
+health/failover checks, then perform a one-validator-at-a-time rolling upgrade.
+
+Backend configuration inside Compose:
 
 ```dotenv
 BESU_ENABLED=true
-BESU_RPC_URL=http://besu-validator1:8545
+BESU_RPC_URL=http://besu-rpc-proxy:8545
+BESU_RPC_URLS=http://besu-rpc-proxy:8545,http://besu-rpc1:8545,http://besu-rpc2:8545
 BESU_CHAIN_ID=1337
 ```
 
-If the API runs on the host instead of Docker, use:
+The Go client rotates across the list and retries the same signed raw
+transaction against another endpoint when an RPC endpoint fails.
 
-```dotenv
-BESU_RPC_URL=http://127.0.0.1:8545
-```
+Run `BESU_WORKER_ENABLED=true` on exactly one API/worker replica. Set it to
+`false` on other API replicas so multiple signers do not compete for the same
+account nonce.
 
-`BESU_CONTRACT_ADDRESS` must be set after deploying `contracts/IntegrityRegistry.sol`.
+## Asynchronous anchoring
+
+Creating a shop or pledge stores `pending_anchor` in the application database
+and returns without waiting for Besu. The integrity worker performs the chain
+write and persists:
+
+- `chainAnchorOperation`
+- `chainAnchorAttempts`
+- `chainAnchorNextAttemptAt`
+- `chainAnchorLastError`
+
+Retries use exponential backoff capped at five minutes. Before resubmitting,
+the worker queries the contract and reconciles an already committed matching
+record, making recovery idempotent after an ambiguous RPC failure.
 
 ## Deploy IntegrityRegistry
 
-Use the helper script:
+Start the desired profile, then run:
 
 ```bash
-chmod +x scripts/deploy-integrity.sh
 ./scripts/deploy-integrity.sh
 ```
 
-Defaults:
+Copy the printed `BESU_CONTRACT_ADDRESS` into `.env`. The repository's funded
+accounts and validator keys are disposable development credentials. Generate
+new keys outside Git and load the signer from a secret manager for every real
+environment.
 
-- RPC: `http://127.0.0.1:8545`
-- chain id: `1337`
-- owner/deployer address: `0xfe3b557e8fb62b89f4916b721be55ceb828dbd73`
+## Consensus and existing data
 
-The script uses a Dockerized Foundry image to:
+The hardened genesis uses a 5-second block period and 10-second request timeout.
+Changing genesis is not compatible with an existing chain database. Back up
+required data, stop the old network, reset all validator/RPC data, redeploy the
+contract and run the integrity backfill before starting this profile.
 
-- compile `contracts/IntegrityRegistry.sol`
-- sign a raw transaction with the prefunded dev private key from genesis
-- deploy the contract
-- print the `BESU_CONTRACT_ADDRESS` you should copy into `.env`
+## Safe recovery
 
-For production-like backend setup on the private chain, also set:
-
-```dotenv
-BESU_PRIVATE_KEY=8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63
-```
-
-This lets the backend sign raw transactions locally instead of depending on unlocked RPC accounts.
-
-For production-like API limits across multiple replicas, prefer:
-
-```dotenv
-RATE_LIMIT_BACKEND=firestore
-RATE_LIMIT_COLLECTION=rate_limits
-```
-
-For staging-style integration with proxy and persistent Vault:
+Health checks validate chain ID, peer count, block progression and RPC drift:
 
 ```bash
-docker compose \
-  -f docker-compose.yml \
-  -f docker-compose.vault-persistent.yml \
-  -f docker-compose.besu-qbft.yml \
-  -f docker-compose.staging.yml \
-  up --build
+BESU_RPC_URLS=http://127.0.0.1:8545 ./scripts/check-besu-cluster.sh
 ```
 
-Override values if needed:
+Recovery may restart exactly one validator:
 
 ```bash
-BESU_RPC_URL=http://127.0.0.1:8545 \
-BESU_CHAIN_ID=1337 \
-BESU_OWNER_ADDRESS=0xfe3b557e8fb62b89f4916b721be55ceb828dbd73 \
-BESU_PRIVATE_KEY=8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63 \
-./scripts/deploy-integrity.sh
+make besu-recover service=besu-validator2
 ```
 
-## Reset chain data
+Never restart two validators at once. A four-validator QBFT cluster loses
+quorum when two validators are unavailable.
 
-To restart from genesis:
+## Real production topology
 
-```bash
-rm -rf besu/qbft/data/validator{1,2,3,4}/*
-touch besu/qbft/data/validator{1,2,3,4}/.gitkeep
-```
-
-## Notes
-
-- The network is private and intended for local/dev use only.
-- Validator 1 is the bootnode.
-- Genesis prefunds sample dev accounts from the upstream Besu example network.
-- After changing `IntegrityRegistry.sol` to add revoke support, redeploy the contract and update `BESU_CONTRACT_ADDRESS`.
+The Compose cluster proves the topology but all containers still share one
+host. For real fault tolerance, place each validator on an independent host or
+failure zone, replace Docker IPs in `static-nodes.json` with private routable
+addresses, use persistent SSD storage, and keep RPC/metrics on private networks.

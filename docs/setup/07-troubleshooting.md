@@ -33,7 +33,7 @@ thì thường sẽ lỗi, vì `127.0.0.1` lúc đó trỏ vào chính container
 Khi backend chạy trong Docker Compose, hãy dùng:
 
 ```dotenv
-BESU_RPC_URL=http://besu-validator1:8545
+BESU_RPC_URL=http://besu-rpc-proxy:8545
 ```
 
 Khi backend chạy trên host, hãy dùng:

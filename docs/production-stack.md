@@ -4,7 +4,7 @@
 - `api`: Go backend behind TLS proxy
 - `vault`: HA or managed Vault for account keys
 - `ipfs`: Kubo node with persistent volume and gateway policy
-- `besu`: private QBFT validators plus one internal RPC endpoint
+- `besu`: private QBFT validators plus at least two non-validator RPC endpoints
 - `firestore`: source of truth for app data
 
 ## Network patterns
@@ -25,13 +25,12 @@
 - validator2: server B2
 - validator3: server B3
 - validator4: server B4
-- backend chỉ gọi 1 RPC endpoint:
-  - validator1
-  - hoặc RPC gateway riêng
+- backend gọi RPC gateway và có danh sách RPC fallback; không gọi validator trực tiếp
 
 Ví dụ:
 ```dotenv
 BESU_RPC_URL=http://10.0.0.11:8545
+BESU_RPC_URLS=http://10.0.0.11:8545,http://10.0.0.12:8545
 ```
 
 ### Pattern D: services all on separate servers
@@ -46,6 +45,7 @@ BESU_RPC_URL=http://10.0.0.11:8545
 ## Required env
 - `BESU_ENABLED=true`
 - `BESU_RPC_URL=https://besu-rpc.internal`
+- `BESU_RPC_URLS=https://besu-rpc.internal,http://besu-rpc1:8545,http://besu-rpc2:8545`
 - `BESU_PRIVATE_KEY` from secret manager
 - `BESU_CONTRACT_ADDRESS` deployed `IntegrityRegistry`
 - `IPFS_ENABLED=true`

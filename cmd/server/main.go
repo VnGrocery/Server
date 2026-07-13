@@ -2,9 +2,14 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"vngrocery/internal/api/handler"
@@ -59,6 +64,9 @@ func (s vaultAccountKeyStore) DeleteAccountKey(ctx context.Context, vaultPath st
 }
 
 func main() {
+	appCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
@@ -198,6 +206,7 @@ func main() {
 	if cfg.BesuEnabled {
 		besuClient := besupkg.NewClient(besupkg.Config{
 			RPCURL:          cfg.BesuRPCURL,
+			RPCURLs:         splitCommaSeparated(cfg.BesuRPCURLs),
 			ContractAddress: cfg.BesuContractAddress,
 			FromAddress:     cfg.BesuFromAddress,
 			PrivateKey:      cfg.BesuPrivateKey,
@@ -207,12 +216,14 @@ func main() {
 		})
 		integrityManager = integrityservice.NewService(pledgeRepository, besuClientAdapter{client: besuClient}, auditLogger)
 		integrityManager.SetShopRepository(shopRepository)
-		integrityManager.StartBackground(context.Background(), integrityservice.WorkerConfig{
-			PendingInterval: time.Duration(mustParseInt(cfg.BesuPendingIntervalSec, 3)) * time.Second,
-			VerifyInterval:  time.Duration(mustParseInt(cfg.BesuVerifyIntervalSec, 8)) * time.Second,
-			PendingBatch:    mustParseInt(cfg.BesuPendingBatchSize, 25),
-			VerifyBatch:     mustParseInt(cfg.BesuVerifyBatchSize, 50),
-		})
+		if cfg.BesuWorkerEnabled {
+			integrityManager.StartBackground(appCtx, integrityservice.WorkerConfig{
+				PendingInterval: time.Duration(mustParseInt(cfg.BesuPendingIntervalSec, 3)) * time.Second,
+				VerifyInterval:  time.Duration(mustParseInt(cfg.BesuVerifyIntervalSec, 8)) * time.Second,
+				PendingBatch:    mustParseInt(cfg.BesuPendingBatchSize, 25),
+				VerifyBatch:     mustParseInt(cfg.BesuVerifyBatchSize, 50),
+			})
+		}
 	}
 	alertNotifier := alertpkg.NewMultiNotifier(
 		alertpkg.NewWebhookClient(cfg.AlertWebhookURL, time.Duration(mustParseInt(cfg.AlertTimeoutSec, 5))*time.Second),
@@ -246,7 +257,7 @@ func main() {
 	buyerCheckService := buyerservice.NewService(pledgeRepository, buyerCheckRepository, userRepository, visionScorer, auditLogger)
 	bundleTokenService := bundletokenservice.NewService(cfg.JWTSecret, "vngrocery", 30*time.Minute, bundleTokenUseRepository)
 	bundleTokenService.SetObserver(metrics)
-	bundleTokenService.StartCleanup(context.Background(), 10*time.Minute, 500)
+	bundleTokenService.StartCleanup(appCtx, 10*time.Minute, 500)
 	buyerCheckService.SetBundleTokenVerifier(bundleTokenService)
 	buyerCheckService.SetObserver(metrics)
 	authMiddleware := middleware.NewAuthRequired(jwtService)
@@ -295,8 +306,29 @@ func main() {
 		AdminRateLimitWindow:      time.Duration(mustParseInt(cfg.AdminRateLimitWindowSec, 60)) * time.Second,
 	})
 
-	if err := engine.Run(":" + cfg.Port); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+	server := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           engine,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+	}
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- server.ListenAndServe()
+	}()
+	select {
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("server stopped unexpectedly: %v", err)
+		}
+	case <-appCtx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("graceful shutdown failed: %v", err)
+		}
 	}
 }
 

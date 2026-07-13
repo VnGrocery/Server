@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -23,6 +24,7 @@ import (
 
 type Config struct {
 	RPCURL          string
+	RPCURLs         []string
 	ContractAddress string
 	FromAddress     string
 	PrivateKey      string
@@ -32,7 +34,7 @@ type Config struct {
 }
 
 type Client struct {
-	rpcURL          string
+	rpcURLs         []string
 	contractAddress string
 	fromAddress     string
 	privateKey      *ecdsa.PrivateKey
@@ -41,6 +43,7 @@ type Client struct {
 	receiptTimeout  time.Duration
 	httpClient      *http.Client
 	now             func() time.Time
+	nextEndpoint    atomic.Uint64
 }
 
 type CommitResult struct {
@@ -99,8 +102,10 @@ func NewClient(cfg Config) *Client {
 		fromAddress = crypto.PubkeyToAddress(privateKey.PublicKey).Hex()
 	}
 
+	rpcURLs := normalizeRPCURLs(append([]string{cfg.RPCURL}, cfg.RPCURLs...))
+
 	return &Client{
-		rpcURL:          strings.TrimSpace(cfg.RPCURL),
+		rpcURLs:         rpcURLs,
 		contractAddress: strings.TrimSpace(cfg.ContractAddress),
 		fromAddress:     fromAddress,
 		privateKey:      privateKey,
@@ -292,8 +297,8 @@ func (c *Client) getBlockTime(ctx context.Context, blockNumber int64) (*time.Tim
 }
 
 func (c *Client) rpc(ctx context.Context, method string, params any, out any) error {
-	if c.rpcURL == "" {
-		return fmt.Errorf("BESU_RPC_URL is required")
+	if len(c.rpcURLs) == 0 {
+		return fmt.Errorf("BESU_RPC_URL or BESU_RPC_URLS is required")
 	}
 	if c.contractAddress == "" && method != "eth_getTransactionReceipt" && method != "eth_getBlockByNumber" {
 		return fmt.Errorf("BESU_CONTRACT_ADDRESS is required")
@@ -312,29 +317,42 @@ func (c *Client) rpc(ctx context.Context, method string, params any, out any) er
 		return fmt.Errorf("failed to marshal rpc request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.rpcURL, bytes.NewReader(body))
+	start := int(c.nextEndpoint.Add(1)-1) % len(c.rpcURLs)
+	errorsByEndpoint := make([]string, 0, len(c.rpcURLs))
+	for i := 0; i < len(c.rpcURLs); i++ {
+		index := (start + i) % len(c.rpcURLs)
+		url := c.rpcURLs[index]
+		if err := c.callRPC(ctx, url, body, out); err != nil {
+			errorsByEndpoint = append(errorsByEndpoint, fmt.Sprintf("%s: %v", url, err))
+			continue
+		}
+		c.nextEndpoint.Store(uint64(index + 1))
+		return nil
+	}
+	return fmt.Errorf("all Besu RPC endpoints failed: %s", strings.Join(errorsByEndpoint, "; "))
+}
+
+func (c *Client) callRPC(ctx context.Context, rpcURL string, body []byte, out any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, rpcURL, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("failed to build rpc request: %w", err)
+		return fmt.Errorf("build request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("rpc request failed: %w", err)
+		return fmt.Errorf("request: %w", err)
 	}
 	defer resp.Body.Close()
-
 	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("failed to read rpc response: %w", err)
+		return fmt.Errorf("read response: %w", err)
 	}
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("rpc status %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+		return fmt.Errorf("status %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
 	}
-
 	var decoded rpcResponse
 	if err := json.Unmarshal(raw, &decoded); err != nil {
-		return fmt.Errorf("failed to decode rpc response: %w", err)
+		return fmt.Errorf("decode response: %w", err)
 	}
 	if decoded.Error != nil {
 		return fmt.Errorf("rpc error %d: %s", decoded.Error.Code, decoded.Error.Message)
@@ -343,10 +361,28 @@ func (c *Client) rpc(ctx context.Context, method string, params any, out any) er
 		return nil
 	}
 	if err := json.Unmarshal(decoded.Result, out); err != nil {
-		return fmt.Errorf("failed to decode rpc result: %w", err)
+		return fmt.Errorf("decode result: %w", err)
 	}
-
 	return nil
+}
+
+func normalizeRPCURLs(values []string) []string {
+	seen := make(map[string]struct{})
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		for _, part := range strings.Split(value, ",") {
+			trimmed := strings.TrimSpace(part)
+			if trimmed == "" {
+				continue
+			}
+			if _, exists := seen[trimmed]; exists {
+				continue
+			}
+			seen[trimmed] = struct{}{}
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }
 
 func (c *Client) sendRawTransaction(ctx context.Context, input string) (string, error) {

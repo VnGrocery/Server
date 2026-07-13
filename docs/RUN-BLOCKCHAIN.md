@@ -61,24 +61,18 @@ make run-all
 ## 4) Chỉ bật blockchain (không bật toàn bộ stack)
 
 ```bash
-docker compose -f docker-compose.deploy.yml up -d besu-validator1 besu-validator2 besu-validator3 besu-validator4
+docker compose -f docker-compose.deploy.yml up -d besu-validator1 besu-validator2 besu-validator3 besu-validator4 besu-rpc1 besu-rpc2 besu-rpc-proxy
 ```
 
 ## 5) Kiểm tra RPC blockchain
 
 ```bash
-for p in 8545 8546 8547 8548; do
-  printf ":%s " "$p"
-  curl -s -H 'Content-Type: application/json' \
-    --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
-    http://127.0.0.1:$p
-  echo
-done
+BESU_RPC_URLS=http://127.0.0.1:8545 ./scripts/check-besu-cluster.sh
 ```
 
 Nếu trả về `result` dạng hex (`0x...`) là RPC đang hoạt động.
 
-## 6) Sửa tình trạng node chưa bắt peer
+## 6) Kiểm tra hoặc phục hồi một validator
 
 ```bash
 COMPOSE_FILE=docker-compose.deploy.yml ./scripts/ensure-besu-peers.sh
@@ -87,13 +81,7 @@ COMPOSE_FILE=docker-compose.deploy.yml ./scripts/ensure-besu-peers.sh
 Kiểm tra peer count:
 
 ```bash
-for p in 8545 8546 8547 8548; do
-  printf ":%s " "$p"
-  curl -s -H 'Content-Type: application/json' \
-    --data '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}' \
-    http://127.0.0.1:$p
-  echo
-done
+RECOVER_SERVICE=besu-validator2 COMPOSE_FILE=docker-compose.deploy.yml ./scripts/ensure-besu-peers.sh
 ```
 
 ## 7) Lệnh kiểm tra nhanh
@@ -129,7 +117,7 @@ Cách xử lý:
 ### Lỗi: RPC không phản hồi
 - kiểm tra container `besu-validator*` đã Up chưa
 - xem logs validator
-- chạy `ensure-besu-peers.sh`
+- chạy `check-besu-cluster.sh`; nếu cần chỉ phục hồi một validator mỗi lần
 
 ---
 

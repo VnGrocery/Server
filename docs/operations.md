@@ -153,12 +153,13 @@ For frontend and QA handoff, use:
 
 ## Besu QBFT integrity anchoring
 
-When `BESU_ENABLED=true`, the backend computes a canonical `dataHash` for each new pledge, submits `commitHash(...)` to the configured `IntegrityRegistry`, and stores chain metadata back into Firestore.
+When `BESU_ENABLED=true`, the backend computes a canonical `dataHash`, saves the record as `pending_anchor`, and returns without waiting for Besu. A background worker submits `commitHash(...)`, reconciles ambiguous submissions and stores chain metadata back into the configured database.
 
 Required env vars:
 
 ```bash
 BESU_RPC_URL=http://127.0.0.1:8545
+BESU_RPC_URLS=http://127.0.0.1:8545,http://secondary-rpc:8545
 BESU_CONTRACT_ADDRESS=0x...
 BESU_FROM_ADDRESS=0x...
 ```
@@ -186,7 +187,7 @@ ALERT_SMTP_FROM=alerts@example.com
 ALERT_SMTP_TO=ops@example.com,security@example.com
 ```
 
-The background worker retries `pending_anchor` pledges, periodically verifies `anchored` pledges against on-chain state, and emits webhook alerts on `mismatch_detected`.
+The background worker retries `pending_anchor` pledges and shops with exponential backoff, periodically verifies `anchored` pledges against on-chain state, and emits webhook alerts on `mismatch_detected`. See `docs/besu-qbft.md` for cluster health and single-validator rolling recovery.
 
 ## Kubo IPFS
 

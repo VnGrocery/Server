@@ -3,6 +3,7 @@ SHELL := /bin/bash
 COMPOSE ?= docker compose
 BASE_COMPOSE := -f docker-compose.yml
 VAULT_PERSISTENT_COMPOSE := -f docker-compose.vault-persistent.yml
+BESU_DEV_COMPOSE := -f docker-compose.besu-dev.yml
 BESU_COMPOSE := -f docker-compose.besu-qbft.yml
 STAGING_COMPOSE := -f docker-compose.staging.yml
 PROD_COMPOSE := -f docker-compose.prod.yml
@@ -17,7 +18,8 @@ help:
 	@echo "  make vault-up            # start persistent vault only"
 	@echo "  make ipfs-up             # start ipfs only"
 	@echo "  make redis-up            # start redis only"
-	@echo "  make besu-up             # start 4-node Besu QBFT only"
+	@echo "  make besu-up             # start single-node Besu for local development"
+	@echo "  make besu-cluster-up     # start hardened 4-validator + 2-RPC cluster"
 	@echo "  make stack-up            # start base + persistent vault + besu + staging proxy"
 	@echo "  make deploy-up           # start single-file deploy baseline"
 	@echo "  make build-api           # build api image in deploy compose"
@@ -25,9 +27,8 @@ help:
 	@echo "  make vault-init          # print/init persistent vault manually"
 	@echo "  make vault-status        # show persistent vault status"
 	@echo "  make deploy-config       # validate deploy compose"
-	@echo "  make besu-peers          # bootstrap/check Besu peers in deploy compose"
-	@echo "  make besu-heal           # bootstrap peers + auto-heal node drift (restart lagging validators)"
-	@echo "  make besu-heal-strict    # auto-heal with stricter drift threshold"
+	@echo "  make besu-health         # check peer count, block progress and RPC drift"
+	@echo "  make besu-recover service=besu-validator2 # restart exactly one validator, then verify"
 	@echo "  make logs service=api    # tail logs for a service in deploy compose"
 	@echo "  make ps                  # show deploy stack containers"
 	@echo "  make down                # stop deploy stack"
@@ -53,6 +54,10 @@ redis-up:
 
 .PHONY: besu-up
 besu-up:
+	$(COMPOSE) $(BESU_DEV_COMPOSE) up -d
+
+.PHONY: besu-cluster-up
+besu-cluster-up:
 	$(COMPOSE) $(BESU_COMPOSE) up -d
 
 .PHONY: stack-up
@@ -83,33 +88,13 @@ vault-status:
 deploy-config:
 	$(COMPOSE) $(DEPLOY_COMPOSE) config
 
-.PHONY: besu-peers
-besu-peers:
-	COMPOSE_FILE=docker-compose.deploy.yml ./scripts/ensure-besu-peers.sh
+.PHONY: besu-health
+besu-health:
+	BESU_RPC_URLS=http://127.0.0.1:8545 ./scripts/check-besu-cluster.sh
 
-.PHONY: besu-heal
-besu-heal:
-	COMPOSE_FILE=docker-compose.deploy.yml \
-	MAX_ATTEMPTS=10 \
-	SLEEP_SEC=2 \
-	MAX_BLOCK_DRIFT=24 \
-	HEAL_ON_DRIFT=1 \
-	HEAL_ON_ZERO_PEER=1 \
-	HEAL_WAIT_SEC=5 \
-	HEAL_MAX_RESTARTS=3 \
-	./scripts/ensure-besu-peers.sh
-
-.PHONY: besu-heal-strict
-besu-heal-strict:
-	COMPOSE_FILE=docker-compose.deploy.yml \
-	MAX_ATTEMPTS=12 \
-	SLEEP_SEC=2 \
-	MAX_BLOCK_DRIFT=8 \
-	HEAL_ON_DRIFT=1 \
-	HEAL_ON_ZERO_PEER=1 \
-	HEAL_WAIT_SEC=6 \
-	HEAL_MAX_RESTARTS=4 \
-	./scripts/ensure-besu-peers.sh
+.PHONY: besu-recover
+besu-recover:
+	COMPOSE_FILE=docker-compose.deploy.yml RECOVER_SERVICE=$(service) ./scripts/ensure-besu-peers.sh
 
 .PHONY: logs
 logs:

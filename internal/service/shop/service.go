@@ -188,7 +188,6 @@ type PledgeIntegrityReader interface {
 
 type ShopIntegrityManager interface {
 	PrepareShop(shop domain.Shop) (domain.Shop, error)
-	SyncShop(ctx context.Context, shop domain.Shop) (domain.Shop, error)
 }
 
 type PledgeIntegrityView struct {
@@ -346,15 +345,6 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Shop, e
 
 	if err := s.shops.Save(ctx, shop); err != nil {
 		return domain.Shop{}, err
-	}
-	if s.shopIntegrity != nil {
-		anchored, err := s.shopIntegrity.SyncShop(ctx, shop)
-		if err == nil {
-			shop = anchored
-			if saveErr := s.shops.Save(ctx, shop); saveErr != nil {
-				return domain.Shop{}, saveErr
-			}
-		}
 	}
 	if err := s.logMutation(ctx, input.OwnerUserID, "shop", shop.ShopID, shop.Version, "shop.created", audit.MutationPayload{
 		After: shop,

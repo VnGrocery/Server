@@ -28,6 +28,7 @@ Hệ thống lưu audit trail, proof, image CID, và integrity anchor để tăn
 - signed event log + verify API
 - trust score cho shop/seller
 - Besu integrity anchoring
+- asynchronous Besu anchoring with RPC failover and retry backoff
 - IPFS image CID flow
 
 ## Quick Start

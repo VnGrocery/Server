@@ -1,19 +1,29 @@
 services:
+  besu-rpc-init:
+    image: alpine:3.20
+    command: ["sh", "-c", "chown -R 1000:1000 /rpc1 /rpc2"]
+    volumes:
+      - besu-rpc1-data:/rpc1
+      - besu-rpc2-data:/rpc2
+    restart: "no"
+
   besu-validator1:
-    image: hyperledger/besu:24.3.3
+    image: ${BESU_IMAGE:-hyperledger/besu:24.3.3}
     container_name: vngrocery-besu-validator1
     command:
       - --config-file=/opt/besu/common-config.toml
       - --identity=validator1
+      - --static-nodes-file=/opt/besu/static-nodes.json
+      - --bootnodes=enode://bf036b0c7f975b56a68e8b9f98afce6bcc3f70b58210b37b4c20dfa8bc1417e95c7e03b7fb1c45575168372cd559592edfde7f16579ab6652f08fe6ad877bda7@10.42.0.3:30304
       - --p2p-host=10.42.0.2
       - --p2p-port=30303
     volumes:
       - ./besu/qbft/common-config.toml:/opt/besu/common-config.toml:ro
       - ./besu/qbft/genesis.json:/opt/besu/genesis.json:ro
       - ./besu/qbft/keys/validator1/key:/opt/besu/key:ro
+      - ./besu/qbft/static-nodes.json:/opt/besu/static-nodes.json:ro
       - ./besu/qbft/data/validator1:/opt/besu/data
     ports:
-      - "8545:8545"
       - "30303:30303/tcp"
       - "30303:30303/udp"
     networks:
@@ -22,11 +32,12 @@ services:
     restart: unless-stopped
 
   besu-validator2:
-    image: hyperledger/besu:24.3.3
+    image: ${BESU_IMAGE:-hyperledger/besu:24.3.3}
     container_name: vngrocery-besu-validator2
     command:
       - --config-file=/opt/besu/common-config.toml
       - --identity=validator2
+      - --static-nodes-file=/opt/besu/static-nodes.json
       - --bootnodes=enode://ad83ac93fcc30a30f3e1bb6467623e45719167be50d13dccd8361cbca478cb540069869d1bae16de0f8b17a28f26f1c6c4dc12e71f240b366c6ff6f02f3fb93e@10.42.0.2:30303
       - --p2p-host=10.42.0.3
       - --p2p-port=30304
@@ -34,9 +45,9 @@ services:
       - ./besu/qbft/common-config.toml:/opt/besu/common-config.toml:ro
       - ./besu/qbft/genesis.json:/opt/besu/genesis.json:ro
       - ./besu/qbft/keys/validator2/key:/opt/besu/key:ro
+      - ./besu/qbft/static-nodes.json:/opt/besu/static-nodes.json:ro
       - ./besu/qbft/data/validator2:/opt/besu/data
     ports:
-      - "8546:8545"
       - "30304:30304/tcp"
       - "30304:30304/udp"
     networks:
@@ -45,21 +56,22 @@ services:
     restart: unless-stopped
 
   besu-validator3:
-    image: hyperledger/besu:24.3.3
+    image: ${BESU_IMAGE:-hyperledger/besu:24.3.3}
     container_name: vngrocery-besu-validator3
     command:
       - --config-file=/opt/besu/common-config.toml
       - --identity=validator3
-      - --bootnodes=enode://ad83ac93fcc30a30f3e1bb6467623e45719167be50d13dccd8361cbca478cb540069869d1bae16de0f8b17a28f26f1c6c4dc12e71f240b366c6ff6f02f3fb93e@10.42.0.2:30303
+      - --static-nodes-file=/opt/besu/static-nodes.json
+      - --bootnodes=enode://ad83ac93fcc30a30f3e1bb6467623e45719167be50d13dccd8361cbca478cb540069869d1bae16de0f8b17a28f26f1c6c4dc12e71f240b366c6ff6f02f3fb93e@10.42.0.2:30303,enode://bf036b0c7f975b56a68e8b9f98afce6bcc3f70b58210b37b4c20dfa8bc1417e95c7e03b7fb1c45575168372cd559592edfde7f16579ab6652f08fe6ad877bda7@10.42.0.3:30304
       - --p2p-host=10.42.0.4
       - --p2p-port=30305
     volumes:
       - ./besu/qbft/common-config.toml:/opt/besu/common-config.toml:ro
       - ./besu/qbft/genesis.json:/opt/besu/genesis.json:ro
       - ./besu/qbft/keys/validator3/key:/opt/besu/key:ro
+      - ./besu/qbft/static-nodes.json:/opt/besu/static-nodes.json:ro
       - ./besu/qbft/data/validator3:/opt/besu/data
     ports:
-      - "8547:8545"
       - "30305:30305/tcp"
       - "30305:30305/udp"
     networks:
@@ -68,26 +80,87 @@ services:
     restart: unless-stopped
 
   besu-validator4:
-    image: hyperledger/besu:24.3.3
+    image: ${BESU_IMAGE:-hyperledger/besu:24.3.3}
     container_name: vngrocery-besu-validator4
     command:
       - --config-file=/opt/besu/common-config.toml
       - --identity=validator4
-      - --bootnodes=enode://ad83ac93fcc30a30f3e1bb6467623e45719167be50d13dccd8361cbca478cb540069869d1bae16de0f8b17a28f26f1c6c4dc12e71f240b366c6ff6f02f3fb93e@10.42.0.2:30303
+      - --static-nodes-file=/opt/besu/static-nodes.json
+      - --bootnodes=enode://ad83ac93fcc30a30f3e1bb6467623e45719167be50d13dccd8361cbca478cb540069869d1bae16de0f8b17a28f26f1c6c4dc12e71f240b366c6ff6f02f3fb93e@10.42.0.2:30303,enode://bf036b0c7f975b56a68e8b9f98afce6bcc3f70b58210b37b4c20dfa8bc1417e95c7e03b7fb1c45575168372cd559592edfde7f16579ab6652f08fe6ad877bda7@10.42.0.3:30304
       - --p2p-host=10.42.0.5
       - --p2p-port=30306
     volumes:
       - ./besu/qbft/common-config.toml:/opt/besu/common-config.toml:ro
       - ./besu/qbft/genesis.json:/opt/besu/genesis.json:ro
       - ./besu/qbft/keys/validator4/key:/opt/besu/key:ro
+      - ./besu/qbft/static-nodes.json:/opt/besu/static-nodes.json:ro
       - ./besu/qbft/data/validator4:/opt/besu/data
     ports:
-      - "8548:8545"
       - "30306:30306/tcp"
       - "30306:30306/udp"
     networks:
       besu_qbft:
         ipv4_address: 10.42.0.5
+    restart: unless-stopped
+
+  besu-rpc1:
+    image: ${BESU_IMAGE:-hyperledger/besu:24.3.3}
+    container_name: vngrocery-besu-rpc1
+    depends_on:
+      besu-rpc-init:
+        condition: service_completed_successfully
+    command:
+      - --config-file=/opt/besu/rpc-config.toml
+      - --identity=rpc1
+      - --static-nodes-file=/opt/besu/static-nodes.json
+      - --bootnodes=enode://ad83ac93fcc30a30f3e1bb6467623e45719167be50d13dccd8361cbca478cb540069869d1bae16de0f8b17a28f26f1c6c4dc12e71f240b366c6ff6f02f3fb93e@10.42.0.2:30303,enode://bf036b0c7f975b56a68e8b9f98afce6bcc3f70b58210b37b4c20dfa8bc1417e95c7e03b7fb1c45575168372cd559592edfde7f16579ab6652f08fe6ad877bda7@10.42.0.3:30304
+      - --p2p-host=10.42.0.10
+      - --p2p-port=30310
+    volumes:
+      - ./besu/qbft/rpc-config.toml:/opt/besu/rpc-config.toml:ro
+      - ./besu/qbft/genesis.json:/opt/besu/genesis.json:ro
+      - ./besu/qbft/static-nodes.json:/opt/besu/static-nodes.json:ro
+      - besu-rpc1-data:/opt/besu/data
+    networks:
+      besu_qbft:
+        ipv4_address: 10.42.0.10
+    restart: unless-stopped
+
+  besu-rpc2:
+    image: ${BESU_IMAGE:-hyperledger/besu:24.3.3}
+    container_name: vngrocery-besu-rpc2
+    depends_on:
+      besu-rpc-init:
+        condition: service_completed_successfully
+    command:
+      - --config-file=/opt/besu/rpc-config.toml
+      - --identity=rpc2
+      - --static-nodes-file=/opt/besu/static-nodes.json
+      - --bootnodes=enode://ad83ac93fcc30a30f3e1bb6467623e45719167be50d13dccd8361cbca478cb540069869d1bae16de0f8b17a28f26f1c6c4dc12e71f240b366c6ff6f02f3fb93e@10.42.0.2:30303,enode://bf036b0c7f975b56a68e8b9f98afce6bcc3f70b58210b37b4c20dfa8bc1417e95c7e03b7fb1c45575168372cd559592edfde7f16579ab6652f08fe6ad877bda7@10.42.0.3:30304
+      - --p2p-host=10.42.0.11
+      - --p2p-port=30311
+    volumes:
+      - ./besu/qbft/rpc-config.toml:/opt/besu/rpc-config.toml:ro
+      - ./besu/qbft/genesis.json:/opt/besu/genesis.json:ro
+      - ./besu/qbft/static-nodes.json:/opt/besu/static-nodes.json:ro
+      - besu-rpc2-data:/opt/besu/data
+    networks:
+      besu_qbft:
+        ipv4_address: 10.42.0.11
+    restart: unless-stopped
+
+  besu-rpc-proxy:
+    image: haproxy:3.0-alpine
+    container_name: vngrocery-besu-rpc-proxy
+    depends_on:
+      - besu-rpc1
+      - besu-rpc2
+    volumes:
+      - ./deploy/haproxy/besu.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      - "8545:8545"
+    networks:
+      - besu_qbft
     restart: unless-stopped
 
 networks:
@@ -100,3 +173,7 @@ networks:
       config:
         - subnet: 10.42.0.0/16
           gateway: 10.42.0.1
+
+volumes:
+  besu-rpc1-data:
+  besu-rpc2-data:

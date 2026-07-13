@@ -69,7 +69,8 @@ VAULT_ADDR=http://127.0.0.1:8200
 Nếu dùng local signing:
 ```dotenv
 BESU_ENABLED=true
-BESU_RPC_URL=http://besu-validator1:8545
+BESU_RPC_URL=http://besu-rpc-proxy:8545
+BESU_RPC_URLS=http://besu-rpc-proxy:8545,http://besu-rpc1:8545,http://besu-rpc2:8545
 BESU_CHAIN_ID=1337
 BESU_PRIVATE_KEY=<your-besu-private-key>
 ```

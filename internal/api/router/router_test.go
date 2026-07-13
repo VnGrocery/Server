@@ -469,7 +469,7 @@ func (authAccountsStub) Delete(ctx context.Context, userID string, expectedVersi
 }
 
 func (authAccountsStub) Me(ctx context.Context, userID string) (domain.User, error) {
-	return domain.User{}, errors.New("not implemented")
+	return domain.User{UserID: userID, Status: authservice.AccountStatusActive, Version: 1}, nil
 }
 
 func (authAccountsStub) UpdateMe(ctx context.Context, input authservice.UpdateProfileInput) (domain.User, error) {

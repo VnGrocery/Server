@@ -54,7 +54,8 @@ IPFS_ENABLED=true
 IPFS_API_URL=http://ipfs:5001
 IPFS_GATEWAY_URL=http://ipfs:8080
 BESU_ENABLED=true
-BESU_RPC_URL=http://besu-validator1:8545
+BESU_RPC_URL=http://besu-rpc-proxy:8545
+BESU_RPC_URLS=http://besu-rpc-proxy:8545,http://besu-rpc1:8545,http://besu-rpc2:8545
 BESU_CHAIN_ID=1337
 ```
 
@@ -89,7 +90,8 @@ Dùng:
 VAULT_ADDR=http://vault:8200
 IPFS_API_URL=http://ipfs:5001
 IPFS_GATEWAY_URL=http://ipfs:8080
-BESU_RPC_URL=http://besu-validator1:8545
+BESU_RPC_URL=http://besu-rpc-proxy:8545
+BESU_RPC_URLS=http://besu-rpc-proxy:8545,http://besu-rpc1:8545,http://besu-rpc2:8545
 ```
 
 Lý do:

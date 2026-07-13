@@ -56,7 +56,6 @@ type AuditLogger interface {
 
 type IntegrityManager interface {
 	PreparePledge(pledge domain.Pledge) (domain.Pledge, error)
-	SyncPledge(ctx context.Context, pledge domain.Pledge) (domain.Pledge, error)
 }
 
 func NewService(pledges repository.PledgeRepository, shops repository.ShopRepository, products repository.ProductRepository, auditLogger AuditLogger) *Service {
@@ -132,15 +131,6 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 
 	if err := s.pledges.Save(ctx, pledge); err != nil {
 		return domain.Pledge{}, err
-	}
-	if s.integrity != nil {
-		anchored, err := s.integrity.SyncPledge(ctx, pledge)
-		if err == nil {
-			pledge = anchored
-			if saveErr := s.pledges.Save(ctx, pledge); saveErr != nil {
-				return domain.Pledge{}, saveErr
-			}
-		}
 	}
 	if s.audit != nil {
 		if err := s.audit.Log(ctx, audit.Input{

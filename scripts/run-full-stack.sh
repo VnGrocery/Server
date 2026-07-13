@@ -67,10 +67,7 @@ print_stack_summary() {
   echo "  Vault:              http://localhost:8200"
   echo "  IPFS API:           http://localhost:5001"
   echo "  IPFS gateway:       http://localhost:8080"
-  echo "  Besu validator 1:   http://localhost:8545"
-  echo "  Besu validator 2:   http://localhost:8546"
-  echo "  Besu validator 3:   http://localhost:8547"
-  echo "  Besu validator 4:   http://localhost:8548"
+  echo "  Besu RPC proxy:     http://localhost:8545"
   echo
   echo "Useful commands:"
   echo "  ./scripts/run-full-stack.sh status"

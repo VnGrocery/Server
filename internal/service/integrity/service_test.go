@@ -2,6 +2,7 @@ package integrity
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -64,6 +65,9 @@ func (s chainStub) Verify(ctx context.Context, recordID, dataHash string) (bool,
 }
 
 func (s chainStub) GetLatest(ctx context.Context, recordID string) (LatestRecord, error) {
+	if s.latest == nil {
+		return LatestRecord{}, nil
+	}
 	return s.latest(ctx, recordID)
 }
 
@@ -160,6 +164,75 @@ func TestSyncPledgeAnchorsMinedCommit(t *testing.T) {
 	}
 }
 
+func TestProcessPendingPledgePersistsRetryBackoff(t *testing.T) {
+	now := time.Date(2026, 4, 9, 10, 0, 0, 0, time.UTC)
+	saved := domain.Pledge{}
+	service := NewService(pledgeRepositoryStub{
+		listByChainAnchorStatus: func(ctx context.Context, status string, limit int) ([]domain.Pledge, error) {
+			return []domain.Pledge{{
+				PledgeID: "pledge-1", DataHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				Version: 1, ChainAnchorStatus: ChainAnchorStatusPending, ChainAnchorOperation: ChainAnchorOperationCommit,
+				CreatedAt: now,
+			}}, nil
+		},
+		save: func(ctx context.Context, pledge domain.Pledge) error { saved = pledge; return nil },
+	}, chainStub{
+		commit: func(ctx context.Context, recordID, dataHash string, timestamp time.Time, version int) (CommitResult, error) {
+			return CommitResult{}, errors.New("quorum unavailable")
+		},
+	}, nil)
+	service.now = func() time.Time { return now }
+
+	if err := service.ProcessPendingPledges(context.Background(), 10); err != nil {
+		t.Fatalf("expected worker to retain retryable error, got %v", err)
+	}
+	if saved.ChainAnchorAttempts != 1 || saved.ChainAnchorNextAttemptAt == nil || saved.ChainAnchorLastError != "quorum unavailable" {
+		t.Fatalf("expected persisted retry metadata, got %#v", saved)
+	}
+}
+
+func TestSyncPledgeReconcilesAlreadyCommittedRecord(t *testing.T) {
+	commitCalls := 0
+	service := NewService(nil, chainStub{
+		latest: func(ctx context.Context, recordID string) (LatestRecord, error) {
+			return LatestRecord{DataHash: "aaaa", Version: 2, IsPresent: true}, nil
+		},
+		commit: func(ctx context.Context, recordID, dataHash string, timestamp time.Time, version int) (CommitResult, error) {
+			commitCalls++
+			return CommitResult{}, nil
+		},
+	}, nil)
+
+	pledge, err := service.SyncPledge(context.Background(), domain.Pledge{
+		PledgeID: "pledge-1", DataHash: "aaaa", Version: 2, ChainAnchorStatus: ChainAnchorStatusPending,
+	})
+	if err != nil {
+		t.Fatalf("expected reconciliation to succeed, got %v", err)
+	}
+	if commitCalls != 0 || pledge.ChainAnchorStatus != ChainAnchorStatusAnchored {
+		t.Fatalf("expected existing chain state to be reused, got calls=%d pledge=%#v", commitCalls, pledge)
+	}
+}
+
+func TestReanchorHashesFinalVersionAndTimestamp(t *testing.T) {
+	now := time.Date(2026, 4, 9, 11, 0, 0, 0, time.UTC)
+	service := NewService(nil, chainStub{}, nil)
+	service.now = func() time.Time { return now }
+	updated, err := service.ReanchorPledge(context.Background(), domain.Pledge{
+		PledgeID: "pledge-1", Version: 1, CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour),
+	})
+	if err != nil {
+		t.Fatalf("expected reanchor preparation to succeed, got %v", err)
+	}
+	expected, err := HashPledge(updated)
+	if err != nil {
+		t.Fatalf("expected final pledge to hash, got %v", err)
+	}
+	if updated.Version != 2 || updated.DataHash != expected {
+		t.Fatalf("expected hash of final version, got %#v", updated)
+	}
+}
+
 func TestVerifyAnchoredPledgesMarksMismatch(t *testing.T) {
 	now := time.Date(2026, 4, 9, 10, 0, 0, 0, time.UTC)
 	saved := domain.Pledge{}
@@ -235,8 +308,15 @@ func TestRevokePledgeUpdatesIntegrityStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-	if pledge.Version != 2 || pledge.IntegrityStatus != IntegrityStatusRevoked || pledge.ChainTxHash != "0xrevoke" {
-		t.Fatalf("unexpected revoked pledge: %#v", pledge)
+	if pledge.Version != 2 || pledge.IntegrityStatus != IntegrityStatusPendingAnchor || pledge.ChainAnchorOperation != ChainAnchorOperationRevoke {
+		t.Fatalf("expected queued revoke, got %#v", pledge)
+	}
+	pledge, err = service.SyncPledge(context.Background(), pledge)
+	if err != nil {
+		t.Fatalf("expected queued revoke to sync, got %v", err)
+	}
+	if pledge.IntegrityStatus != IntegrityStatusRevoked || pledge.ChainTxHash != "0xrevoke" || pledge.ChainAnchorStatus != ChainAnchorStatusAnchored {
+		t.Fatalf("unexpected synced revoke: %#v", pledge)
 	}
 }
 

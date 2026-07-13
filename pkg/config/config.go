@@ -27,7 +27,9 @@ type Config struct {
 	VaultKVMount              string
 	VaultKeysPathPrefix       string
 	BesuEnabled               bool
+	BesuWorkerEnabled         bool
 	BesuRPCURL                string
+	BesuRPCURLs               string
 	BesuChainID               string
 	BesuContractAddress       string
 	BesuFromAddress           string
@@ -93,7 +95,9 @@ func Load() (Config, error) {
 		VaultKVMount:              getEnvOrDefault("VAULT_KV_MOUNT", "secret"),
 		VaultKeysPathPrefix:       getEnvOrDefault("VAULT_KEYS_PATH_PREFIX", "account-keys"),
 		BesuEnabled:               os.Getenv("BESU_ENABLED") == "true",
+		BesuWorkerEnabled:         getEnvOrDefault("BESU_WORKER_ENABLED", "true") == "true",
 		BesuRPCURL:                os.Getenv("BESU_RPC_URL"),
+		BesuRPCURLs:               os.Getenv("BESU_RPC_URLS"),
 		BesuChainID:               os.Getenv("BESU_CHAIN_ID"),
 		BesuContractAddress:       os.Getenv("BESU_CONTRACT_ADDRESS"),
 		BesuFromAddress:           os.Getenv("BESU_FROM_ADDRESS"),
@@ -190,8 +194,8 @@ func (c Config) Validate() error {
 		}
 	}
 	if c.BesuEnabled {
-		if c.BesuRPCURL == "" {
-			return errors.New("BESU_RPC_URL is required when BESU_ENABLED=true")
+		if c.BesuRPCURL == "" && c.BesuRPCURLs == "" {
+			return errors.New("BESU_RPC_URL or BESU_RPC_URLS is required when BESU_ENABLED=true")
 		}
 		if c.BesuContractAddress == "" {
 			return errors.New("BESU_CONTRACT_ADDRESS is required when BESU_ENABLED=true")

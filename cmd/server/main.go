@@ -30,6 +30,7 @@ import (
 	shopservice "vngrocery/internal/service/shop"
 	useradminservice "vngrocery/internal/service/useradmin"
 	visionservice "vngrocery/internal/service/vision"
+	voucherservice "vngrocery/internal/service/voucher"
 	alertpkg "vngrocery/pkg/alert"
 	besupkg "vngrocery/pkg/besu"
 	cachepkg "vngrocery/pkg/cache"
@@ -88,6 +89,8 @@ func main() {
 	var productFreshnessReportRepository repository.ProductFreshnessReportRepository
 	var shopRepository repository.ShopRepository
 	var shopReviewRepository repository.ShopReviewRepository
+	var voucherRepository repository.VoucherRepository
+	var userVoucherRepository repository.UserVoucherRepository
 	var userRepository repository.UserRepository
 	var authUserRepository repository.AuthUserRepository
 	var refreshTokenRepository repository.RefreshTokenRepository
@@ -133,6 +136,8 @@ func main() {
 		productFreshnessReportRepository = mongorepo.NewProductFreshnessReportRepository(mongoApp.Database)
 		shopRepository = mongorepo.NewShopRepository(mongoApp.Database)
 		shopReviewRepository = mongorepo.NewShopReviewRepository(mongoApp.Database)
+		voucherRepository = mongorepo.NewVoucherRepository(mongoApp.Database)
+		userVoucherRepository = mongorepo.NewUserVoucherRepository(mongoApp.Database)
 		userRepository = mongorepo.NewUserRepository(mongoApp.Database)
 		authUserRepository = mongorepo.NewAuthUserRepository(mongoApp.Database)
 		refreshTokenRepository = mongorepo.NewRefreshTokenRepository(mongoApp.Database)
@@ -160,6 +165,8 @@ func main() {
 		productFreshnessReportRepository = firestorerepo.NewProductFreshnessReportRepository(firebaseApp.Firestore)
 		shopRepository = firestorerepo.NewShopRepository(firebaseApp.Firestore)
 		shopReviewRepository = firestorerepo.NewShopReviewRepository(firebaseApp.Firestore)
+		voucherRepository = firestorerepo.NewVoucherRepository(firebaseApp.Firestore)
+		userVoucherRepository = firestorerepo.NewUserVoucherRepository(firebaseApp.Firestore)
 		userRepository = firestorerepo.NewUserRepository(firebaseApp.Firestore)
 		authUserRepository = firestorerepo.NewAuthUserRepository(firebaseApp.Firestore)
 		refreshTokenRepository = firestorerepo.NewRefreshTokenRepository(firebaseApp.Firestore)
@@ -250,6 +257,7 @@ func main() {
 	productManager := productservice.NewService(productRepository, productFreshnessReportRepository, shopRepository, userRepository, auditLogger)
 	userAdminService := useradminservice.NewService(userRepository, authUserRepository, accountKeys, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, buyerCheckRepository, shopReviewRepository, userRepository, auditLogger)
+	voucherManager := voucherservice.NewService(voucherRepository, userVoucherRepository, shopRepository)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, productRepository, auditLogger)
 	shopManager.SetPledgeIntegrityReader(integrityAdapter{service: integrityManager})
 	shopManager.SetShopIntegrityManager(integrityManager)
@@ -284,6 +292,7 @@ func main() {
 	}
 	mediaHandler := handler.NewMediaHandler(ipfsUploadAdapterOrNil(ipfsClient), uploadCfg)
 	shopHandler := handler.NewShopHandler(shopManager)
+	voucherHandler := handler.NewVoucherHandler(voucherManager)
 
 	engine := router.New(router.Dependencies{
 		HealthHandler:             healthHandler,
@@ -296,6 +305,7 @@ func main() {
 		SellerHandler:             sellerHandler,
 		BuyerHandler:              buyerHandler,
 		ShopHandler:               shopHandler,
+		VoucherHandler:            voucherHandler,
 		AuthMiddleware:            authMiddleware,
 		AdminMiddleware:           adminMiddleware,
 		Metrics:                   metrics,

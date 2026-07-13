@@ -751,6 +751,10 @@ func buildSchemas() gin.H {
 			},
 		},
 	}
+	schemas["VoucherResponse"] = gin.H{"type": "object", "properties": gin.H{"voucherId": gin.H{"type": "string"}, "shopId": gin.H{"type": "string"}, "code": gin.H{"type": "string"}, "title": gin.H{"type": "string"}, "discountValue": gin.H{"type": "integer"}, "isPercent": gin.H{"type": "boolean"}, "minSpend": gin.H{"type": "integer"}, "expiresAt": gin.H{"type": "string", "format": "date-time"}, "active": gin.H{"type": "boolean"}, "manual": gin.H{"type": "boolean"}}}
+	schemas["VoucherCheckRequest"] = gin.H{"type": "object", "required": []string{"code", "shopId", "orderValue"}, "properties": gin.H{"code": gin.H{"type": "string"}, "shopId": gin.H{"type": "string"}, "orderValue": gin.H{"type": "integer"}}}
+	schemas["VoucherCheckResponse"] = gin.H{"type": "object", "properties": gin.H{"voucher": gin.H{"$ref": "#/components/schemas/VoucherResponse"}, "valid": gin.H{"type": "boolean"}, "message": gin.H{"type": "string"}, "discountAmount": gin.H{"type": "integer"}, "finalPrice": gin.H{"type": "integer"}}}
+	schemas["UserVoucherResponse"] = gin.H{"type": "object", "properties": gin.H{"userVoucherId": gin.H{"type": "string"}, "voucherId": gin.H{"type": "string"}, "used": gin.H{"type": "boolean"}, "usedAt": gin.H{"type": "string", "format": "date-time"}, "voucher": gin.H{"$ref": "#/components/schemas/VoucherResponse"}}}
 
 	return schemas
 }
@@ -1357,6 +1361,11 @@ func buildPaths() gin.H {
 			},
 		},
 	}
+	paths["/v1/me/shop"] = gin.H{"get": gin.H{"summary": "Get the authenticated seller shop", "security": []gin.H{{"bearerAuth": []string{}}}, "responses": mergeResponses(success(http.StatusOK, "ShopResponse"), errorResponse)}}
+	paths["/v1/seller/shops/{shopId}/products"] = gin.H{"get": gin.H{"summary": "List all products owned by the authenticated seller", "security": []gin.H{{"bearerAuth": []string{}}}, "parameters": []gin.H{pathParam("shopId")}, "responses": mergeResponses(success(http.StatusOK, "ProductListResponse"), errorResponse)}}
+	paths["/v1/vouchers/check"] = gin.H{"post": gin.H{"summary": "Validate a voucher and calculate its discount", "requestBody": jsonBody("VoucherCheckRequest"), "responses": mergeResponses(success(http.StatusOK, "VoucherCheckResponse"), errorResponse)}}
+	paths["/v1/me/vouchers"] = gin.H{"get": gin.H{"summary": "List the authenticated user's voucher wallet", "security": []gin.H{{"bearerAuth": []string{}}}, "responses": errorResponse}, "post": gin.H{"summary": "Save a voucher to the authenticated user's wallet", "security": []gin.H{{"bearerAuth": []string{}}}, "responses": mergeResponses(success(http.StatusCreated, "UserVoucherResponse"), errorResponse)}}
+	paths["/v1/me/vouchers/{userVoucherId}/use"] = gin.H{"post": gin.H{"summary": "Mark a wallet voucher as used", "security": []gin.H{{"bearerAuth": []string{}}}, "parameters": []gin.H{pathParam("userVoucherId")}, "responses": mergeResponses(success(http.StatusOK, "UserVoucherResponse"), errorResponse)}}
 
 	annotatePathDocs(paths)
 	return paths

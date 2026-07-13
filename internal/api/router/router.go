@@ -22,6 +22,7 @@ type Dependencies struct {
 	SellerHandler             *handler.SellerHandler
 	BuyerHandler              *handler.BuyerHandler
 	ShopHandler               *handler.ShopHandler
+	VoucherHandler            *handler.VoucherHandler
 	AuthMiddleware            *middleware.AuthRequired
 	AdminMiddleware           *middleware.AdminRequired
 	Metrics                   *middleware.Metrics
@@ -98,11 +99,18 @@ func New(deps Dependencies) *gin.Engine {
 		v1.GET("/shops/:shopId/products/:productId", deps.ProductHandler.GetByID)
 		v1.GET("/shops/:shopId/products/:productId/freshness-reports", deps.ProductHandler.ListFreshnessReports)
 		v1.GET("/shops/:shopId/reviews", deps.ShopHandler.ListReviews)
+		if deps.VoucherHandler != nil {
+			v1.GET("/vouchers/:voucherId", deps.VoucherHandler.Get)
+			v1.POST("/vouchers/check", deps.VoucherHandler.Check)
+			v1.GET("/shops/:shopId/vouchers", deps.VoucherHandler.ListShop)
+		}
 		v1.GET("/me", deps.AuthMiddleware.Handle(), deps.AuthHandler.Me)
+		v1.GET("/me/shop", deps.AuthMiddleware.Handle(), deps.ShopHandler.GetMine)
 		v1.PATCH("/me", deps.AuthMiddleware.Handle(), deps.AuthHandler.UpdateMe)
 		v1.POST("/me/password", deps.AuthMiddleware.Handle(), deps.AuthHandler.ChangePassword)
 		v1.POST("/shops", deps.AuthMiddleware.Handle(), deps.ShopHandler.Create)
 		v1.POST("/shops/:shopId/products", deps.AuthMiddleware.Handle(), deps.ProductHandler.Create)
+		v1.GET("/seller/shops/:shopId/products", deps.AuthMiddleware.Handle(), deps.ProductHandler.ListSeller)
 		v1.POST("/shops/:shopId/products/bulk", deps.AuthMiddleware.Handle(), deps.ProductHandler.BulkUpsert)
 		v1.POST("/shops/:shopId/products/:productId/freshness-reports", deps.AuthMiddleware.Handle(), deps.ProductHandler.CreateFreshnessReport)
 		v1.PUT("/shops/:shopId", deps.AuthMiddleware.Handle(), deps.ShopHandler.Update)
@@ -111,6 +119,13 @@ func New(deps Dependencies) *gin.Engine {
 		v1.DELETE("/shops/:shopId/products/:productId", deps.AuthMiddleware.Handle(), deps.ProductHandler.Delete)
 		v1.POST("/shops/:shopId/reviews", deps.AuthMiddleware.Handle(), deps.ShopHandler.CreateReview)
 		v1.DELETE("/shops/:shopId/reviews/me", deps.AuthMiddleware.Handle(), deps.ShopHandler.DeleteReview)
+		if deps.VoucherHandler != nil {
+			v1.POST("/shops/:shopId/vouchers", deps.AuthMiddleware.Handle(), deps.VoucherHandler.Create)
+			v1.GET("/me/vouchers", deps.AuthMiddleware.Handle(), deps.VoucherHandler.Wallet)
+			v1.POST("/me/vouchers", deps.AuthMiddleware.Handle(), deps.VoucherHandler.Save)
+			v1.POST("/me/vouchers/manual", deps.AuthMiddleware.Handle(), deps.VoucherHandler.AddManual)
+			v1.POST("/me/vouchers/:userVoucherId/use", deps.AuthMiddleware.Handle(), deps.VoucherHandler.Use)
+		}
 		v1.GET("/admin/shops", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.ShopHandler.AdminList)
 		v1.PATCH("/admin/shops/:shopId/moderation", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.ShopHandler.Moderate)
 		v1.POST("/admin/shops/:shopId/pledges/:pledgeId/reanchor", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.ShopHandler.ReanchorPledgeIntegrity)

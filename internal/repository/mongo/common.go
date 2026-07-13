@@ -23,6 +23,8 @@ const (
 	pledgesCollection                 = firestorecollections.PledgesCollection
 	buyerChecksCollection             = firestorecollections.BuyerChecksCollection
 	shopReviewsCollection             = firestorecollections.ShopReviewsCollection
+	vouchersCollection                = firestorecollections.VouchersCollection
+	userVouchersCollection            = firestorecollections.UserVouchersCollection
 	eventLogsCollection               = firestorecollections.EventLogsCollection
 )
 

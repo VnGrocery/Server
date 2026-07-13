@@ -109,6 +109,20 @@ type ShopReviewRepository interface {
 	ListByShopID(ctx context.Context, shopID string) ([]domain.ShopReview, error)
 }
 
+type VoucherRepository interface {
+	Save(ctx context.Context, voucher domain.Voucher) error
+	GetByID(ctx context.Context, voucherID string) (domain.Voucher, error)
+	GetByCode(ctx context.Context, code string) (domain.Voucher, error)
+	ListByShopID(ctx context.Context, shopID string) ([]domain.Voucher, error)
+}
+
+type UserVoucherRepository interface {
+	Save(ctx context.Context, voucher domain.UserVoucher) error
+	GetByID(ctx context.Context, userVoucherID string) (domain.UserVoucher, error)
+	GetByUserAndVoucher(ctx context.Context, userID, voucherID string) (domain.UserVoucher, error)
+	ListByUserID(ctx context.Context, userID string) ([]domain.UserVoucher, error)
+}
+
 type AuthUserRepository interface {
 	NewUserID() string
 	Save(ctx context.Context, user domain.AuthUser) error

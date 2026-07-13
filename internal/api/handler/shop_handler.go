@@ -68,6 +68,27 @@ func (h *ShopHandler) Create(c *gin.Context) {
 	c.JSON(http.StatusCreated, toShopResponse(shopsvc.ShopView{Shop: shop}))
 }
 
+func (h *ShopHandler) GetMine(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+	reader, ok := h.shops.(interface {
+		GetMine(context.Context, string) (shopsvc.ShopView, error)
+	})
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "owned shop reader is not configured"})
+		return
+	}
+	shop, err := reader.GetMine(c.Request.Context(), principal.UserID)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, toShopResponse(shop))
+}
+
 func (h *ShopHandler) Update(c *gin.Context) {
 	principal, ok := middleware.GetPrincipal(c)
 	if !ok {
@@ -406,6 +427,7 @@ func (h *ShopHandler) CreateReview(c *gin.Context) {
 		ExpectedVersion: request.ExpectedVersion,
 		Rating:          request.Rating,
 		Comment:         request.Comment,
+		ImageURLs:       request.ImageURLs,
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -418,6 +440,7 @@ func (h *ShopHandler) CreateReview(c *gin.Context) {
 		ReviewerUserID: review.ReviewerUserID,
 		Rating:         review.Rating,
 		Comment:        review.Comment,
+		ImageURLs:      review.ImageURLs,
 		Status:         review.Status,
 		Version:        review.Version,
 		CreatedAt:      review.CreatedAt,
@@ -451,6 +474,7 @@ func (h *ShopHandler) DeleteReview(c *gin.Context) {
 		ReviewerUserID: review.ReviewerUserID,
 		Rating:         review.Rating,
 		Comment:        review.Comment,
+		ImageURLs:      review.ImageURLs,
 		Status:         review.Status,
 		Version:        review.Version,
 		CreatedAt:      review.CreatedAt,
@@ -473,6 +497,7 @@ func (h *ShopHandler) ListReviews(c *gin.Context) {
 			ReviewerUserID: review.ReviewerUserID,
 			Rating:         review.Rating,
 			Comment:        review.Comment,
+			ImageURLs:      review.ImageURLs,
 			Status:         review.Status,
 			Version:        review.Version,
 			CreatedAt:      review.CreatedAt,

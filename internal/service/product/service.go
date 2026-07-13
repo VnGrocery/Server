@@ -452,17 +452,22 @@ func (s *Service) List(ctx context.Context, input ListInput) ([]domain.Product, 
 	if err != nil || shop.ShopID == "" || (!input.IncludeAllStatuses && shop.Status == shopsvc.ShopStatusDeleted) {
 		return nil, ErrNotFound
 	}
-	status := ""
-	if !input.IncludeAllStatuses {
-		status = ProductStatusActive
-	}
 	products, err := s.products.List(ctx, repository.ProductListFilter{
 		ShopID:      strings.TrimSpace(input.ShopID),
-		Status:      status,
+		Status:      "",
 		OwnerUserID: strings.TrimSpace(input.OwnerUserID),
 	})
 	if err != nil {
 		return nil, err
+	}
+	if !input.IncludeAllStatuses {
+		public := products[:0]
+		for _, product := range products {
+			if isPublicProductStatus(product.Status) {
+				public = append(public, product)
+			}
+		}
+		products = public
 	}
 	products = filterProducts(products, input)
 	sortProducts(products, input.Sort)

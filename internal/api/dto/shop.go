@@ -47,9 +47,10 @@ type ShopRatingSummaryResponse struct {
 }
 
 type CreateShopReviewRequest struct {
-	ExpectedVersion int    `json:"expectedVersion"`
-	Rating          int    `json:"rating"`
-	Comment         string `json:"comment"`
+	ExpectedVersion int      `json:"expectedVersion"`
+	Rating          int      `json:"rating"`
+	Comment         string   `json:"comment"`
+	ImageURLs       []string `json:"imageUrls"`
 }
 
 type ShopReviewResponse struct {
@@ -58,6 +59,7 @@ type ShopReviewResponse struct {
 	ReviewerUserID string    `json:"reviewerUserId"`
 	Rating         int       `json:"rating"`
 	Comment        string    `json:"comment"`
+	ImageURLs      []string  `json:"imageUrls"`
 	Status         string    `json:"status"`
 	Version        int       `json:"version"`
 	CreatedAt      time.Time `json:"createdAt"`

@@ -12,5 +12,7 @@ const (
 	PledgesCollection                 = "pledges"
 	BuyerChecksCollection             = "buyer_checks"
 	ShopReviewsCollection             = "shop_reviews"
+	VouchersCollection                = "vouchers"
+	UserVouchersCollection            = "user_vouchers"
 	EventLogsCollection               = "event_logs"
 )

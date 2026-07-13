@@ -79,6 +79,8 @@ IMAGE_PATH=/abs/path/to/image.jpg ./scripts/e2e-mobile-flow.sh
 ```
 
 ## Important Docs
+
+Mobile cấu hình Server bằng `--dart-define=API_BASE_URL=<server-url>`. Các route tích hợp bổ sung gồm `GET /v1/me/shop`, `GET /v1/seller/shops/:shopId/products`, `/v1/vouchers/check` và `/v1/me/vouchers`. Contract đầy đủ có tại `/docs` và `/openapi.json` khi Server đang chạy.
 - setup từ đầu: [docs/setup/00-start-here.md](/home/dora/VNGrocery/server/docs/setup/00-start-here.md)
 - setup MongoDB: [docs/setup/02a-mongodb-or-firestore.md](/home/dora/VNGrocery/server/docs/setup/02a-mongodb-or-firestore.md)
 - vận hành: [docs/operations.md](/home/dora/VNGrocery/server/docs/operations.md)

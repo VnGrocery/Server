@@ -296,6 +296,7 @@ type ReviewInput struct {
 	ExpectedVersion int
 	Rating          int
 	Comment         string
+	ImageURLs       []string
 }
 
 type DeleteReviewInput struct {
@@ -512,6 +513,23 @@ func (s *Service) GetByID(ctx context.Context, shopID string) (ShopView, error) 
 	return s.buildShopView(ctx, shop)
 }
 
+func (s *Service) GetMine(ctx context.Context, ownerUserID string) (ShopView, error) {
+	ownerUserID = strings.TrimSpace(ownerUserID)
+	if ownerUserID == "" {
+		return ShopView{}, ErrInvalidShop
+	}
+	items, err := s.shops.List(ctx, repository.ShopListFilter{OwnerUserID: ownerUserID})
+	if err != nil {
+		return ShopView{}, err
+	}
+	for _, shop := range items {
+		if shop.Status != ShopStatusDeleted {
+			return s.buildShopView(ctx, shop)
+		}
+	}
+	return ShopView{}, ErrNotFound
+}
+
 func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopReview, error) {
 	if strings.TrimSpace(input.ShopID) == "" {
 		return domain.ShopReview{}, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
@@ -546,6 +564,7 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 		before := existing
 		existing.Rating = input.Rating
 		existing.Comment = strings.TrimSpace(input.Comment)
+		existing.ImageURLs = append([]string(nil), input.ImageURLs...)
 		existing.Status = ReviewStatusActive
 		existing.Version++
 		existing.UpdatedAt = now
@@ -567,6 +586,7 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 		ReviewerUserID: strings.TrimSpace(input.ReviewerUserID),
 		Rating:         input.Rating,
 		Comment:        strings.TrimSpace(input.Comment),
+		ImageURLs:      append([]string(nil), input.ImageURLs...),
 		Status:         ReviewStatusActive,
 		Version:        1,
 		CreatedAt:      now,

@@ -233,6 +233,24 @@ func (h *ProductHandler) List(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.ProductListResponse{Items: items})
 }
 
+func (h *ProductHandler) ListSeller(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+	products, err := h.products.List(c.Request.Context(), productsvc.ListInput{ShopID: c.Param("shopId"), Query: c.Query("q"), Category: c.Query("category"), Tag: c.Query("tag"), Sort: c.Query("sort"), OwnerUserID: principal.UserID, IncludeAllStatuses: true})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	items := make([]dto.ProductResponse, 0, len(products))
+	for _, product := range products {
+		items = append(items, toProductResponse(product))
+	}
+	c.JSON(http.StatusOK, dto.ProductListResponse{Items: items})
+}
+
 func (h *ProductHandler) CreateFreshnessReport(c *gin.Context) {
 	principal, ok := middleware.GetPrincipal(c)
 	if !ok {

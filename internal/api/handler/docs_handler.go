@@ -341,6 +341,7 @@ func buildSchemas() gin.H {
 				"reviewId":       gin.H{"type": "string"},
 				"shopId":         gin.H{"type": "string"},
 				"reviewerUserId": gin.H{"type": "string"},
+				"reviewerName":   gin.H{"type": "string", "description": "Display name of the reviewer; empty when the account has none."},
 				"rating":         gin.H{"type": "integer"},
 				"comment":        gin.H{"type": "string"},
 				"status":         gin.H{"type": "string"},

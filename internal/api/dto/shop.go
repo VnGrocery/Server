@@ -54,16 +54,19 @@ type CreateShopReviewRequest struct {
 }
 
 type ShopReviewResponse struct {
-	ReviewID       string    `json:"reviewId"`
-	ShopID         string    `json:"shopId"`
-	ReviewerUserID string    `json:"reviewerUserId"`
-	Rating         int       `json:"rating"`
-	Comment        string    `json:"comment"`
-	ImageURLs      []string  `json:"imageUrls"`
-	Status         string    `json:"status"`
-	Version        int       `json:"version"`
-	CreatedAt      time.Time `json:"createdAt"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	ReviewID       string `json:"reviewId"`
+	ShopID         string `json:"shopId"`
+	ReviewerUserID string `json:"reviewerUserId"`
+	// Empty when the account has no display name; the client shows a generic
+	// label rather than printing the raw user id.
+	ReviewerName string    `json:"reviewerName"`
+	Rating       int       `json:"rating"`
+	Comment      string    `json:"comment"`
+	ImageURLs    []string  `json:"imageUrls"`
+	Status       string    `json:"status"`
+	Version      int       `json:"version"`
+	CreatedAt    time.Time `json:"createdAt"`
+	UpdatedAt    time.Time `json:"updatedAt"`
 }
 
 type ShopResponse struct {

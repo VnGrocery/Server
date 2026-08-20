@@ -674,14 +674,17 @@ func (shopHandlerStub) DeleteReview(ctx context.Context, input shopservice.Delet
 	}, nil
 }
 
-func (shopHandlerStub) ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
-	return []domain.ShopReview{
+func (shopHandlerStub) ListReviews(ctx context.Context, shopID string) ([]shopservice.ReviewView, error) {
+	return []shopservice.ReviewView{
 		{
-			ReviewID:       "review-1",
-			ShopID:         shopID,
-			ReviewerUserID: "user-1",
-			Rating:         4,
-			Comment:        "Good",
+			Review: domain.ShopReview{
+				ReviewID:       "review-1",
+				ShopID:         shopID,
+				ReviewerUserID: "user-1",
+				Rating:         4,
+				Comment:        "Good",
+			},
+			ReviewerName: "Trần Minh Anh",
 		},
 	}, nil
 }

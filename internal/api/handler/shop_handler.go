@@ -28,7 +28,7 @@ type ShopService interface {
 	RevokePledgeIntegrity(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error)
 	Review(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
 	DeleteReview(ctx context.Context, input shopsvc.DeleteReviewInput) (domain.ShopReview, error)
-	ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error)
+	ListReviews(ctx context.Context, shopID string) ([]shopsvc.ReviewView, error)
 }
 
 type ShopHandler struct {
@@ -434,18 +434,9 @@ func (h *ShopHandler) CreateReview(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, dto.ShopReviewResponse{
-		ReviewID:       review.ReviewID,
-		ShopID:         review.ShopID,
-		ReviewerUserID: review.ReviewerUserID,
-		Rating:         review.Rating,
-		Comment:        review.Comment,
-		ImageURLs:      review.ImageURLs,
-		Status:         review.Status,
-		Version:        review.Version,
-		CreatedAt:      review.CreatedAt,
-		UpdatedAt:      review.UpdatedAt,
-	})
+	// The caller is the reviewer and already knows their own name, so this
+	// response leaves it empty; the list endpoint fills it in for everyone else.
+	c.JSON(http.StatusCreated, toShopReviewResponse(review, ""))
 }
 
 func (h *ShopHandler) DeleteReview(c *gin.Context) {
@@ -468,18 +459,7 @@ func (h *ShopHandler) DeleteReview(c *gin.Context) {
 		h.writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, dto.ShopReviewResponse{
-		ReviewID:       review.ReviewID,
-		ShopID:         review.ShopID,
-		ReviewerUserID: review.ReviewerUserID,
-		Rating:         review.Rating,
-		Comment:        review.Comment,
-		ImageURLs:      review.ImageURLs,
-		Status:         review.Status,
-		Version:        review.Version,
-		CreatedAt:      review.CreatedAt,
-		UpdatedAt:      review.UpdatedAt,
-	})
+	c.JSON(http.StatusOK, toShopReviewResponse(review, ""))
 }
 
 func (h *ShopHandler) ListReviews(c *gin.Context) {
@@ -490,22 +470,29 @@ func (h *ShopHandler) ListReviews(c *gin.Context) {
 	}
 
 	response := make([]dto.ShopReviewResponse, 0, len(reviews))
-	for _, review := range reviews {
-		response = append(response, dto.ShopReviewResponse{
-			ReviewID:       review.ReviewID,
-			ShopID:         review.ShopID,
-			ReviewerUserID: review.ReviewerUserID,
-			Rating:         review.Rating,
-			Comment:        review.Comment,
-			ImageURLs:      review.ImageURLs,
-			Status:         review.Status,
-			Version:        review.Version,
-			CreatedAt:      review.CreatedAt,
-			UpdatedAt:      review.UpdatedAt,
-		})
+	for _, view := range reviews {
+		response = append(response, toShopReviewResponse(view.Review, view.ReviewerName))
 	}
 
 	c.JSON(http.StatusOK, response)
+}
+
+// One place that shapes a review response; the three endpoints used to repeat
+// the same ten-field literal.
+func toShopReviewResponse(review domain.ShopReview, reviewerName string) dto.ShopReviewResponse {
+	return dto.ShopReviewResponse{
+		ReviewID:       review.ReviewID,
+		ShopID:         review.ShopID,
+		ReviewerUserID: review.ReviewerUserID,
+		ReviewerName:   reviewerName,
+		Rating:         review.Rating,
+		Comment:        review.Comment,
+		ImageURLs:      review.ImageURLs,
+		Status:         review.Status,
+		Version:        review.Version,
+		CreatedAt:      review.CreatedAt,
+		UpdatedAt:      review.UpdatedAt,
+	}
 }
 
 func (h *ShopHandler) writeError(c *gin.Context, err error) {

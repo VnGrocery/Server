@@ -220,8 +220,11 @@ func TestCreateReview(t *testing.T) {
 func TestListReviews(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler := NewShopHandler(shopServiceAdapter{
-		listReviews: func(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
-			return []domain.ShopReview{{ReviewID: "review-1", ShopID: shopID, ReviewerUserID: "user-1", Rating: 4, Comment: "Good"}}, nil
+		listReviews: func(ctx context.Context, shopID string) ([]shopsvc.ReviewView, error) {
+			return []shopsvc.ReviewView{{
+				Review:       domain.ShopReview{ReviewID: "review-1", ShopID: shopID, ReviewerUserID: "user-1", Rating: 4, Comment: "Good"},
+				ReviewerName: "Trần Minh Anh",
+			}}, nil
 		},
 	})
 
@@ -234,6 +237,18 @@ func TestListReviews(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	// Without a name the app can only label every review "a shopper".
+	var body []dto.ShopReviewResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body) != 1 {
+		t.Fatalf("expected 1 review, got %d", len(body))
+	}
+	if body[0].ReviewerName != "Trần Minh Anh" {
+		t.Fatalf("expected reviewer name in the response, got %q", body[0].ReviewerName)
 	}
 }
 
@@ -320,7 +335,7 @@ type shopServiceAdapter struct {
 	moderate                func(ctx context.Context, input shopsvc.ModerateInput) (domain.Shop, error)
 	review                  func(ctx context.Context, input shopsvc.ReviewInput) (domain.ShopReview, error)
 	deleteReview            func(ctx context.Context, input shopsvc.DeleteReviewInput) (domain.ShopReview, error)
-	listReviews             func(ctx context.Context, shopID string) ([]domain.ShopReview, error)
+	listReviews             func(ctx context.Context, shopID string) ([]shopsvc.ReviewView, error)
 }
 
 func (s shopServiceAdapter) Create(ctx context.Context, input shopsvc.CreateInput) (domain.Shop, error) {
@@ -389,6 +404,6 @@ func (s shopServiceAdapter) DeleteReview(ctx context.Context, input shopsvc.Dele
 	}
 	return s.deleteReview(ctx, input)
 }
-func (s shopServiceAdapter) ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
+func (s shopServiceAdapter) ListReviews(ctx context.Context, shopID string) ([]shopsvc.ReviewView, error) {
 	return s.listReviews(ctx, shopID)
 }

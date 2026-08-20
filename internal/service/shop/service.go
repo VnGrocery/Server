@@ -655,7 +655,16 @@ func (s *Service) logMutation(ctx context.Context, actorUserID, resourceType, re
 	})
 }
 
-func (s *Service) ListReviews(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
+// ReviewView is a review plus the reviewer's display name.
+//
+// The API used to return reviewerUserId and nothing else, so the app had no
+// name to print and labelled every single review with a generic "a shopper".
+type ReviewView struct {
+	Review       domain.ShopReview
+	ReviewerName string
+}
+
+func (s *Service) ListReviews(ctx context.Context, shopID string) ([]ReviewView, error) {
 	if strings.TrimSpace(shopID) == "" {
 		return nil, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
 	}
@@ -666,13 +675,40 @@ func (s *Service) ListReviews(ctx context.Context, shopID string) ([]domain.Shop
 	if err != nil {
 		return nil, err
 	}
-	active := make([]domain.ShopReview, 0, len(reviews))
+
+	// One lookup per reviewer, cached: a shop accepts one review per account,
+	// but the same person shows up across pages of a long list.
+	names := make(map[string]string)
+	active := make([]ReviewView, 0, len(reviews))
 	for _, review := range reviews {
-		if review.Status == ReviewStatusActive {
-			active = append(active, review)
+		if review.Status != ReviewStatusActive {
+			continue
 		}
+		active = append(active, ReviewView{
+			Review:       review,
+			ReviewerName: s.reviewerName(ctx, names, review.ReviewerUserID),
+		})
 	}
 	return active, nil
+}
+
+// reviewerName resolves a display name, or "" when it cannot. A missing name is
+// not an error worth failing the whole list over — the app falls back to a
+// generic label for exactly this case.
+func (s *Service) reviewerName(ctx context.Context, cache map[string]string, userID string) string {
+	userID = strings.TrimSpace(userID)
+	if userID == "" || s.users == nil {
+		return ""
+	}
+	if name, ok := cache[userID]; ok {
+		return name
+	}
+	name := ""
+	if user, err := s.users.GetByID(ctx, userID); err == nil {
+		name = strings.TrimSpace(user.DisplayName)
+	}
+	cache[userID] = name
+	return name
 }
 
 func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error) {

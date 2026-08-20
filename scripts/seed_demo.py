@@ -70,6 +70,7 @@ SHOPS = [
         "latitude": 10.7721,
         "longitude": 106.6980,
         "category": "vegetables",
+        "tags": ["Đà Lạt", "giao trong ngày"],
         "products": [
             ("Cải ngọt Đà Lạt", 18000, 9.1, "Thu hoạch sáng nay, lá còn phấn."),
             ("Xà lách Romaine", 32000, 8.7, "Bảo quản lạnh 4°C từ vườn."),
@@ -89,6 +90,7 @@ SHOPS = [
         "latitude": 10.7546,
         "longitude": 106.6634,
         "category": "meat",
+        "tags": ["VietGAP", "mổ trong ngày"],
         "products": [
             ("Ba rọi heo rút sườn", 165000, 8.8, "Heo mổ trong ngày, cấp đông nhanh."),
             ("Thăn bò Úc nhập khẩu", 420000, 9.0, "Nhập nguyên khối, cắt theo yêu cầu."),
@@ -106,6 +108,7 @@ SHOPS = [
         "latitude": 10.4114,
         "longitude": 106.9548,
         "category": "seafood",
+        "tags": ["Cần Giờ", "đánh bắt tự nhiên"],
         "products": [
             ("Tôm sú tươi size 20", 380000, 8.6, "Tôm còn nhảy, bảo quản đá vảy."),
             ("Mực lá Cần Giờ", 295000, 8.2, "Mực dày mình, đánh bắt đêm qua."),
@@ -123,6 +126,7 @@ SHOPS = [
         "latitude": 10.8462,
         "longitude": 106.7803,
         "category": "fruit",
+        "tags": ["miền Tây", "chín cây"],
         "products": [
             ("Sầu riêng Ri6", 145000, 9.2, "Cơm vàng hạt lép, chín cây."),
             ("Xoài cát Hòa Lộc", 89000, 8.8, "Trái 400-500g, ngọt đậm."),
@@ -139,6 +143,7 @@ SHOPS = [
         "latitude": 10.7995,
         "longitude": 106.6822,
         "category": "fresh_produce",
+        "tags": ["hữu cơ"],
         "products": [
             ("Gạo ST25 túi 5kg", 185000, 8.0, "Gạo vụ mới, đóng túi hút chân không."),
             ("Trứng gà thả vườn", 42000, 8.1, "Hộp 10 quả, gà nuôi thả."),
@@ -186,7 +191,7 @@ def seed(api, suffix):
                     "name": name,
                     "description": note,
                     "category": shop["category"],
-                    "tags": ["trusted"],
+                    "tags": shop["tags"],
                     "freshnessNote": note,
                     "freshnessScore": score,
                     "price": price,

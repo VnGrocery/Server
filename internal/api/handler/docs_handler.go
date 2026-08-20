@@ -295,6 +295,7 @@ func buildSchemas() gin.H {
 		"ShopResponse": gin.H{
 			"type": "object",
 			"properties": gin.H{
+				"distanceKm":        gin.H{"type": "number", "description": "Kilometres from the lat/lng in the query; absent when not a location search."},
 				"shopId":            gin.H{"type": "string"},
 				"ownerUserId":       gin.H{"type": "string"},
 				"name":              gin.H{"type": "string"},
@@ -941,9 +942,13 @@ func buildPaths() gin.H {
 					queryParam("q", "string"),
 					queryParam("ownerUserId", "string"),
 					queryParam("status", "string"),
+					queryParam("lat", "number"),
+					queryParam("lng", "number"),
+					queryParam("radiusKm", "number"),
 					realtimeQueryParam(),
 				},
-				"responses": mergeResponses(success(http.StatusOK, "ShopListResponse"), errorResponse),
+				"description": "lat, lng and radiusKm narrow the list to shops around a point, nearest first, and add distanceKm to each item. All three go together or none.",
+				"responses":   mergeResponses(success(http.StatusOK, "ShopListResponse"), errorResponse),
 			},
 			"post": gin.H{
 				"summary":     "Create shop",

@@ -118,6 +118,10 @@ type ListInput struct {
 	OwnerUserID        string
 	ActorUserID        string
 	IncludeAllStatuses bool
+
+	// Near narrows the result to shops around a point and orders them nearest
+	// first. Ignored unless it describes a usable circle.
+	Near NearFilter
 }
 
 type TrustSummary struct {
@@ -153,6 +157,10 @@ type ShopView struct {
 	Shop          domain.Shop
 	TrustSummary  TrustSummary
 	RatingSummary RatingSummary
+
+	// DistanceKm from the point in ListInput.Near. Nil when the listing was not
+	// filtered by location, so a client can tell "0.0 km away" from "unknown".
+	DistanceKm *float64
 }
 
 type ListResult struct {
@@ -749,16 +757,41 @@ func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error)
 	}
 
 	query := strings.ToLower(strings.TrimSpace(input.Query))
+	near := input.Near
+	byDistance := near.Valid()
+
 	filtered := make([]domain.Shop, 0, len(shops))
+	distances := make(map[string]float64, len(shops))
 	for _, shop := range shops {
-		if query == "" || matchesQuery(shop, query) {
-			filtered = append(filtered, shop)
+		if query != "" && !matchesQuery(shop, query) {
+			continue
 		}
+		if byDistance {
+			// A shop saved without coordinates sits at (0, 0) in the Atlantic;
+			// measuring to it would place it thousands of kilometres away and
+			// silently drop it, so it is excluded from a location search
+			// rather than answered wrongly.
+			if shop.Latitude == 0 && shop.Longitude == 0 {
+				continue
+			}
+			km := DistanceKm(near.Latitude, near.Longitude, shop.Latitude, shop.Longitude)
+			if km > near.RadiusKm {
+				continue
+			}
+			distances[shop.ShopID] = km
+		}
+		filtered = append(filtered, shop)
 	}
 
-	sort.Slice(filtered, func(i, j int) bool {
-		return filtered[i].UpdatedAt.After(filtered[j].UpdatedAt)
-	})
+	if byDistance {
+		sort.Slice(filtered, func(i, j int) bool {
+			return distances[filtered[i].ShopID] < distances[filtered[j].ShopID]
+		})
+	} else {
+		sort.Slice(filtered, func(i, j int) bool {
+			return filtered[i].UpdatedAt.After(filtered[j].UpdatedAt)
+		})
+	}
 
 	total := len(filtered)
 	start := (page - 1) * pageSize
@@ -783,6 +816,10 @@ func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error)
 		view, err := s.buildShopView(ctx, shop)
 		if err != nil {
 			return ListResult{}, err
+		}
+		if byDistance {
+			km := distances[shop.ShopID]
+			view.DistanceKm = &km
 		}
 		items = append(items, view)
 	}

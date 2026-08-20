@@ -3,8 +3,10 @@ package handler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -181,6 +183,12 @@ func (h *ShopHandler) List(c *gin.Context) {
 		return
 	}
 
+	near, err := parseNearQuery(c.Query("lat"), c.Query("lng"), c.Query("radiusKm"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
 	result, err := h.shops.List(c.Request.Context(), shopsvc.ListInput{
 		Page:               page,
 		PageSize:           pageSize,
@@ -188,6 +196,7 @@ func (h *ShopHandler) List(c *gin.Context) {
 		Status:             c.Query("status"),
 		OwnerUserID:        c.Query("ownerUserId"),
 		IncludeAllStatuses: false,
+		Near:               near,
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -516,6 +525,7 @@ func (h *ShopHandler) writeError(c *gin.Context, err error) {
 func toShopResponse(view shopsvc.ShopView) dto.ShopResponse {
 	shop := view.Shop
 	return dto.ShopResponse{
+		DistanceKm:        view.DistanceKm,
 		ShopID:            shop.ShopID,
 		OwnerUserID:       shop.OwnerUserID,
 		Version:           shop.Version,
@@ -594,6 +604,43 @@ func toPledgeResponse(pledge domain.Pledge) dto.PledgeResponse {
 		CreatedAt:         pledge.CreatedAt,
 		UpdatedAt:         pledge.UpdatedAt,
 	}
+}
+
+// parseNearQuery reads the optional lat/lng/radiusKm trio.
+//
+// All three are omitted by a client with no location, which is not an error —
+// the listing simply is not narrowed. Supplying some but not all is an error:
+// silently ignoring half a request would look like the filter had run.
+func parseNearQuery(latValue, lngValue, radiusValue string) (shopsvc.NearFilter, error) {
+	lat := strings.TrimSpace(latValue)
+	lng := strings.TrimSpace(lngValue)
+	radius := strings.TrimSpace(radiusValue)
+
+	if lat == "" && lng == "" && radius == "" {
+		return shopsvc.NearFilter{}, nil
+	}
+	if lat == "" || lng == "" || radius == "" {
+		return shopsvc.NearFilter{}, errors.New("lat, lng and radiusKm must be supplied together")
+	}
+
+	near := shopsvc.NearFilter{}
+	var err error
+	if near.Latitude, err = strconv.ParseFloat(lat, 64); err != nil {
+		return shopsvc.NearFilter{}, errors.New("lat must be a number")
+	}
+	if near.Longitude, err = strconv.ParseFloat(lng, 64); err != nil {
+		return shopsvc.NearFilter{}, errors.New("lng must be a number")
+	}
+	if near.RadiusKm, err = strconv.ParseFloat(radius, 64); err != nil {
+		return shopsvc.NearFilter{}, errors.New("radiusKm must be a number")
+	}
+	if !near.Valid() {
+		return shopsvc.NearFilter{}, fmt.Errorf(
+			"lat must be -90..90, lng -180..180 and radiusKm 0..%g",
+			shopsvc.MaxNearRadiusKm,
+		)
+	}
+	return near, nil
 }
 
 func parsePagination(pageValue, pageSizeValue string) (int, int, error) {

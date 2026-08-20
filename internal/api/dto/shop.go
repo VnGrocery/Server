@@ -70,6 +70,10 @@ type ShopReviewResponse struct {
 }
 
 type ShopResponse struct {
+	// DistanceKm from the point in a lat/lng/radiusKm query. Omitted when the
+	// listing was not narrowed by location, so a client can tell "right here"
+	// from "not measured".
+	DistanceKm        *float64                  `json:"distanceKm,omitempty"`
 	ShopID            string                    `json:"shopId"`
 	OwnerUserID       string                    `json:"ownerUserId"`
 	Version           int                       `json:"version"`

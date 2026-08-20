@@ -154,6 +154,139 @@ SHOPS = [
         "reviews": [],
         "voucher": None,
     },
+    # The set below spreads across the city so that anywhere in central Ho Chi
+    # Minh City has something inside the 5 km ring. A demo run from one office
+    # should not depend on standing next to one particular market.
+    {
+        "name": "Rau Củ Sạch Bình Thạnh",
+        "description": "Rau củ theo mùa, nhập từ hợp tác xã Củ Chi mỗi sáng.",
+        "address": "215 Điện Biên Phủ, Quận Bình Thạnh, TP.HCM",
+        "latitude": 10.8010,
+        "longitude": 106.7110,
+        "category": "vegetables",
+        "tags": ["Củ Chi", "theo mùa"],
+        "products": [
+            ("Rau muống nước", 12000, 8.6, "Cọng nhỏ, hái sáng cùng ngày."),
+            ("Bí đao xanh", 21000, 8.4, "Trái non, vỏ còn phấn."),
+            ("Mồng tơi", 11000, 8.5, "Lá dày, không dập."),
+            ("Khổ qua rừng", 38000, 8.2, "Trái nhỏ, vị đắng thanh."),
+        ],
+        "pledges": 3,
+        "reviews": [(5, "Rau tươi, giá mềm hơn siêu thị."),
+                    (4, "Giao đúng giờ, đóng gói gọn.")],
+        "voucher": ("RAUBT12", "Giảm 12% đơn rau củ", 12, True, 80000),
+    },
+    {
+        "name": "Thủy Hải Sản Tân Bình",
+        "description": "Hải sản đông lạnh và tươi sống, có tem truy xuất từng lô.",
+        "address": "42 Cộng Hòa, Quận Tân Bình, TP.HCM",
+        "latitude": 10.8015,
+        "longitude": 106.6520,
+        "category": "seafood",
+        "tags": ["cấp đông nhanh", "có tem lô"],
+        "products": [
+            ("Cá hồi Na Uy phi lê", 520000, 8.9, "Nhập nguyên con, cắt theo yêu cầu."),
+            ("Bạch tuộc baby", 245000, 8.3, "Làm sạch, cấp đông -40°C."),
+            ("Nghêu Bến Tre", 48000, 8.1, "Ngâm nhả cát 6 tiếng."),
+        ],
+        "pledges": 2,
+        "reviews": [(5, "Cá hồi tươi, quét mã ra đúng ngày nhập."),
+                    (4, "Nghêu sạch cát, nấu ngọt nước.")],
+        "voucher": None,
+    },
+    {
+        "name": "Trái Cây Nhập Khẩu Quận 7",
+        "description": "Trái cây nhập khẩu, bảo quản lạnh từ kho tới quầy.",
+        "address": "1058 Nguyễn Văn Linh, Quận 7, TP.HCM",
+        "latitude": 10.7290,
+        "longitude": 106.7180,
+        "category": "fruit",
+        "tags": ["nhập khẩu", "bảo quản lạnh"],
+        "products": [
+            ("Táo Envy New Zealand", 165000, 9.0, "Size 70-80, giòn ngọt."),
+            ("Nho mẫu đơn Hàn Quốc", 480000, 8.8, "Hộp 1kg, còn nguyên phấn."),
+            ("Kiwi vàng Zespri", 128000, 8.5, "Chín tới, ăn được ngay."),
+            ("Cam vàng Úc", 89000, 8.4, "Nhiều nước, ít hạt."),
+        ],
+        "pledges": 3,
+        "reviews": [(5, "Nho ngon, đóng hộp cẩn thận."),
+                    (5, "Táo giòn đúng như mô tả."),
+                    (4, "Giá cao nhưng chất lượng ổn định.")],
+        "voucher": ("NHAPKHAU20", "Giảm 20.000đ đơn từ 200k", 20000, False, 200000),
+    },
+    {
+        "name": "Thịt Tươi Gò Vấp",
+        "description": "Thịt heo và gà ta, giết mổ tập trung có kiểm dịch.",
+        "address": "88 Quang Trung, Quận Gò Vấp, TP.HCM",
+        "latitude": 10.8380,
+        "longitude": 106.6650,
+        "category": "meat",
+        "tags": ["có kiểm dịch", "mổ trong ngày"],
+        "products": [
+            ("Gà ta nguyên con", 145000, 8.7, "Gà thả vườn, 1.5-1.8kg."),
+            ("Nạc dăm heo", 138000, 8.5, "Thớ mềm, ít mỡ."),
+            ("Xương ống heo", 62000, 8.0, "Ninh nước dùng ngọt."),
+        ],
+        "pledges": 2,
+        "reviews": [(4, "Gà chắc thịt, luộc lên thơm.")],
+        "voucher": None,
+    },
+    {
+        "name": "Nông Sản Thủ Đức",
+        "description": "Nông sản Lâm Đồng về thẳng kho Thủ Đức mỗi đêm.",
+        "address": "12 Võ Văn Ngân, TP. Thủ Đức, TP.HCM",
+        "latitude": 10.8500,
+        "longitude": 106.7570,
+        "category": "fresh_produce",
+        "tags": ["Lâm Đồng", "về đêm"],
+        "products": [
+            ("Khoai tây Đà Lạt", 32000, 8.6, "Củ đều, vỏ mỏng."),
+            ("Cà rốt Đà Lạt", 28000, 8.5, "Ngọt, không xơ."),
+            ("Hành tây tím", 35000, 8.3, "Vỏ khô, không mọc mầm."),
+            ("Súp lơ xanh", 45000, 8.7, "Bông chặt, cuống non."),
+        ],
+        "pledges": 4,
+        "reviews": [(5, "Khoai tây bở, nấu canh ngon."),
+                    (4, "Rau về đêm nên sáng mua rất tươi.")],
+        "voucher": ("THUDUC10", "Giảm 10% nông sản Đà Lạt", 10, True, 100000),
+    },
+    {
+        "name": "Chợ Quê Quận 10",
+        "description": "Đặc sản vùng miền: gạo, trứng, đồ khô có nguồn gốc rõ.",
+        "address": "301 Sư Vạn Hạnh, Quận 10, TP.HCM",
+        "latitude": 10.7720,
+        "longitude": 106.6680,
+        "category": "fresh_produce",
+        "tags": ["đặc sản vùng miền"],
+        "products": [
+            ("Gạo tám Điện Biên", 210000, 8.4, "Túi 5kg, vụ mới."),
+            ("Trứng vịt Đồng Tháp", 48000, 8.2, "Hộp 10 quả, vịt chạy đồng."),
+            ("Nấm hương khô Sa Pa", 155000, 8.6, "Cánh dày, thơm đậm."),
+        ],
+        "pledges": 2,
+        "reviews": [(4, "Gạo dẻo, nấu lên thơm."),
+                    (5, "Nấm hương thơm, không bị mốc.")],
+        "voucher": None,
+    },
+    {
+        "name": "Rau Hữu Cơ Quận 3",
+        "description": "Rau hữu cơ trồng nhà kính, có chứng nhận từng luống.",
+        "address": "175 Võ Văn Tần, Quận 3, TP.HCM",
+        "latitude": 10.7780,
+        "longitude": 106.6870,
+        "category": "vegetables",
+        "tags": ["hữu cơ", "nhà kính"],
+        "products": [
+            ("Cải kale xoăn", 68000, 9.0, "Lá non, trồng nhà kính."),
+            ("Rau chân vịt", 55000, 8.8, "Cắt gốc, rửa sẵn."),
+            ("Cà chua beef", 72000, 8.7, "Trái to, thịt dày."),
+        ],
+        "pledges": 3,
+        "reviews": [(5, "Rau sạch thật, ăn sống được."),
+                    (5, "Có chứng nhận rõ ràng, yên tâm."),
+                    (4, "Giá cao nhưng xứng đáng.")],
+        "voucher": ("HUUCO15", "Giảm 15% rau hữu cơ", 15, True, 120000),
+    },
 ]
 
 
@@ -161,13 +294,14 @@ def log(message):
     print(message, flush=True)
 
 
-def seed(api, suffix):
+def seed(api, suffix, only=None):
     created_shops = []
+    wanted = [shop for shop in SHOPS if only is None or shop["name"] in only]
 
-    for index, shop in enumerate(SHOPS, start=1):
+    for index, shop in enumerate(wanted, start=1):
         email = f"seller{index}.{suffix}@vngrocery.demo"
         token = api.register(email, shop["name"])
-        log(f"\n[{index}/{len(SHOPS)}] {shop['name']}")
+        log(f"\n[{index}/{len(wanted)}] {shop['name']}")
 
         created = api.post(
             "/v1/shops",
@@ -288,7 +422,33 @@ def report(api, shops):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://localhost:5050")
+    parser.add_argument(
+        "--only",
+        help=(
+            "Comma-separated shop names to seed. Without it every shop is "
+            "seeded, which duplicates any already on the server -- use this to "
+            "top up an existing demo database instead of doubling it."
+        ),
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="Print the shop names this script can seed, then exit.",
+    )
     args = parser.parse_args()
+
+    if args.list:
+        for shop in SHOPS:
+            log(shop["name"])
+        return 0
+
+    only = None
+    if args.only:
+        only = {name.strip() for name in args.only.split(",") if name.strip()}
+        unknown = only - {shop["name"] for shop in SHOPS}
+        if unknown:
+            print(f"Không có cửa hàng: {', '.join(sorted(unknown))}", file=sys.stderr)
+            return 1
 
     api = Api(args.base_url)
     try:
@@ -301,7 +461,7 @@ def main():
     log(f"Seeding {args.base_url} (hậu tố tài khoản: {suffix})")
 
     try:
-        shops = seed(api, suffix)
+        shops = seed(api, suffix, only)
         report(api, shops)
     except RuntimeError as error:
         print(f"\nSeed thất bại: {error}", file=sys.stderr)

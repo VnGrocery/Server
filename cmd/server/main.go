@@ -224,7 +224,8 @@ func main() {
 		cfg.GoogleClientID,
 		splitCommaSeparated(cfg.BootstrapAdminEmails)...,
 	)
-	productManager := productservice.NewService(productRepository, productFreshnessReportRepository, shopRepository, userRepository, auditLogger)
+	productManager := productservice.NewService(productRepository, productFreshnessReportRepository, shopRepository, userRepository, auditLogger).
+		WithEventLog(eventLogRepository, auditLogger)
 	userAdminService := useradminservice.NewService(userRepository, authUserRepository, accountKeys, auditLogger)
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, buyerCheckRepository, shopReviewRepository, userRepository, auditLogger)
 	voucherManager := voucherservice.NewService(voucherRepository, userVoucherRepository, shopRepository)

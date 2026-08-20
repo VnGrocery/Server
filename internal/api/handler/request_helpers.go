@@ -18,3 +18,15 @@ func parsePositiveIntQuery(raw, field string) (int, error) {
 	}
 	return parsed, nil
 }
+
+// parseOptionalPositiveIntQuery reads a query parameter that may be absent.
+//
+// Absent means "use the default", which is not the same as a caller sending
+// nonsense: an unparseable value is still an error rather than being quietly
+// replaced by the default.
+func parseOptionalPositiveIntQuery(raw, field string) (int, error) {
+	if strings.TrimSpace(raw) == "" {
+		return 0, nil
+	}
+	return parsePositiveIntQuery(raw, field)
+}

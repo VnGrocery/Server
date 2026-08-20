@@ -691,6 +691,10 @@ func (shopHandlerStub) ListReviews(ctx context.Context, shopID string) ([]shopse
 
 type productHandlerStub struct{}
 
+func (productHandlerStub) History(ctx context.Context, input productservice.HistoryInput) (productservice.ProductHistory, error) {
+	return productservice.ProductHistory{ProductID: input.ProductID}, nil
+}
+
 func (productHandlerStub) Create(ctx context.Context, input productservice.CreateInput) (domain.Product, error) {
 	return domain.Product{
 		ProductID:   "product-1",

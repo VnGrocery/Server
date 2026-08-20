@@ -162,6 +162,8 @@ type Service struct {
 	shops    repository.ShopRepository
 	users    repository.UserRepository
 	audit    AuditLogger
+	events   repository.EventLogRepository
+	verifier ChainVerifier
 	now      func() time.Time
 }
 
@@ -174,6 +176,23 @@ func NewService(products repository.ProductRepository, reports repository.Produc
 		audit:    auditLogger,
 		now:      time.Now,
 	}
+}
+
+// ChainVerifier re-checks the hashes, signatures and links of a resource's
+// recorded history.
+type ChainVerifier interface {
+	VerifyResource(ctx context.Context, input audit.VerifyResourceInput) (audit.VerifyResourceResult, error)
+}
+
+// WithEventLog supplies the log History reads a product's change history from,
+// and the verifier that re-checks it.
+//
+// Set separately rather than through the constructor because only History needs
+// it, and it fails loudly when absent rather than quietly returning nothing.
+func (s *Service) WithEventLog(events repository.EventLogRepository, verifier ChainVerifier) *Service {
+	s.events = events
+	s.verifier = verifier
+	return s
 }
 
 func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Product, error) {

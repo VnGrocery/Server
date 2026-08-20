@@ -14,6 +14,7 @@ import (
 )
 
 type ProductService interface {
+	History(ctx context.Context, input productsvc.HistoryInput) (productsvc.ProductHistory, error)
 	Create(ctx context.Context, input productsvc.CreateInput) (domain.Product, error)
 	Update(ctx context.Context, input productsvc.UpdateInput) (domain.Product, error)
 	Delete(ctx context.Context, input productsvc.DeleteInput) (domain.Product, error)
@@ -441,4 +442,65 @@ func toProductResponse(product domain.Product) dto.ProductResponse {
 		CreatedAt:         product.CreatedAt,
 		UpdatedAt:         product.UpdatedAt,
 	}
+}
+
+// History returns a product's recorded change history and its price series.
+func (h *ProductHandler) History(c *gin.Context) {
+	windowDays, err := parseOptionalPositiveIntQuery(c.Query("windowDays"), "windowDays")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	history, err := h.products.History(c.Request.Context(), productsvc.HistoryInput{
+		ShopID:     c.Param("shopId"),
+		ProductID:  c.Param("productId"),
+		WindowDays: windowDays,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+
+	entries := make([]dto.ProductHistoryEntryResponse, 0, len(history.Entries))
+	for _, entry := range history.Entries {
+		changes := make([]dto.FieldChangeResponse, 0, len(entry.Changes))
+		for _, change := range entry.Changes {
+			changes = append(changes, dto.FieldChangeResponse{
+				Field:  change.Field,
+				Before: change.Before,
+				After:  change.After,
+			})
+		}
+		entries = append(entries, dto.ProductHistoryEntryResponse{
+			SHA:              entry.SHA,
+			ShortSHA:         entry.ShortSHA,
+			PreviousSHA:      entry.PreviousSHA,
+			Sequence:         entry.Sequence,
+			Action:           entry.Action,
+			Status:           entry.Status,
+			ActorUserID:      entry.ActorUserID,
+			ActorName:        entry.ActorName,
+			OccurredAt:       entry.OccurredAt,
+			Verified:         entry.Verified,
+			ContentHashValid: entry.ContentHashValid,
+			SignatureValid:   entry.SignatureValid,
+			ChainLinkValid:   entry.ChainLinkValid,
+			PriceAfter:       entry.PriceAfter,
+			Changes:          changes,
+		})
+	}
+
+	points := make([]dto.PricePointResponse, 0, len(history.PriceHistory))
+	for _, point := range history.PriceHistory {
+		points = append(points, dto.PricePointResponse{At: point.At, Price: point.Price})
+	}
+
+	c.JSON(http.StatusOK, dto.ProductHistoryResponse{
+		ProductID:     history.ProductID,
+		Entries:       entries,
+		ChainVerified: history.ChainVerified,
+		PriceHistory:  points,
+		WindowDays:    history.WindowDays,
+	})
 }

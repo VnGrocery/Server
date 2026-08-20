@@ -98,6 +98,7 @@ func New(deps Dependencies) *gin.Engine {
 		v1.GET("/shops/:shopId/products", deps.ProductHandler.List)
 		v1.GET("/shops/:shopId/products/:productId", deps.ProductHandler.GetByID)
 		v1.GET("/shops/:shopId/products/:productId/freshness-reports", deps.ProductHandler.ListFreshnessReports)
+		v1.GET("/shops/:shopId/products/:productId/history", deps.ProductHandler.History)
 		v1.GET("/shops/:shopId/reviews", deps.ShopHandler.ListReviews)
 		if deps.VoucherHandler != nil {
 			v1.GET("/vouchers/:voucherId", deps.VoucherHandler.Get)

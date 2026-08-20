@@ -17,6 +17,7 @@ import (
 )
 
 type productServiceAdapter struct {
+	history                   func(ctx context.Context, input productsvc.HistoryInput) (productsvc.ProductHistory, error)
 	create                    func(ctx context.Context, input productsvc.CreateInput) (domain.Product, error)
 	update                    func(ctx context.Context, input productsvc.UpdateInput) (domain.Product, error)
 	delete                    func(ctx context.Context, input productsvc.DeleteInput) (domain.Product, error)
@@ -64,6 +65,13 @@ func (s productServiceAdapter) CreateFreshnessReport(ctx context.Context, input 
 
 func (s productServiceAdapter) ModerateFreshnessReport(ctx context.Context, input productsvc.ModerateFreshnessReportInput) (domain.ProductFreshnessReport, error) {
 	return s.moderateFreshnessReport(ctx, input)
+}
+
+func (s productServiceAdapter) History(ctx context.Context, input productsvc.HistoryInput) (productsvc.ProductHistory, error) {
+	if s.history == nil {
+		return productsvc.ProductHistory{}, nil
+	}
+	return s.history(ctx, input)
 }
 
 func (s productServiceAdapter) ListFreshnessReports(ctx context.Context, shopID, productID string) ([]domain.ProductFreshnessReport, error) {

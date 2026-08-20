@@ -37,7 +37,7 @@ Không cần cài Go, MongoDB, hay Besu trên máy — tất cả chạy trong D
 ./scripts/vng health            # 4. kiểm tra
 ```
 
-Xong. Mở http://localhost:5000/health, thấy `{"status":"ok"}` là chạy được.
+Xong. Mở http://localhost:5050/health, thấy `{"status":"ok"}` là chạy được.
 
 > **Vì sao phải deploy contract trước khi `up`?**
 > Server cần địa chỉ contract để neo hash lên blockchain. Bước 2 tự động ghi
@@ -63,7 +63,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 
 | Service | Cổng | Vai trò |
 |---|---|---|
-| `api` | 5000 | Backend Go |
+| `api` | 5050 | Backend Go (trong container vẫn là 5000) |
 | `mongo` | 27017 | Cơ sở dữ liệu chính |
 | `vault` | 8200 | Lưu khoá tài khoản |
 | `ipfs` | 5001 / 8080 | Lưu ảnh sản phẩm |
@@ -176,7 +176,7 @@ Muốn xác nhận blockchain neo thành công, lấy `shopId` và `pledgeId` �
 quả rồi gọi:
 
 ```bash
-curl -s http://localhost:5000/v1/shops/<shopId>/pledges/<pledgeId>/proof | jq .integrity
+curl -s http://localhost:5050/v1/shops/<shopId>/pledges/<pledgeId>/proof | jq .integrity
 ```
 
 Kết quả đúng phải có:
@@ -197,17 +197,20 @@ theo chu kỳ vài giây một lần.
 
 ## 8. Gặp lỗi thì làm gì
 
-### `bind: address already in use` ở cổng 5000
+### `bind: address already in use` ở cổng API
 
-Trên macOS, cổng 5000 bị AirPlay Receiver chiếm. Đổi cổng trong `.env`:
+API mặc định đã nằm ở cổng 5050 của máy host (cổng 5000 bị AirPlay Receiver
+của macOS chiếm sẵn). Nếu 5050 cũng bận, đổi trong `.env`:
 
 ```bash
-API_PORT=5050
+API_PORT=5060
 ```
 
-Rồi `./scripts/vng up` lại. API sẽ ở `http://localhost:5050`.
+Rồi `./scripts/vng up` lại, và chạy app với cổng tương ứng:
 
-(Cách khác: tắt AirPlay Receiver trong System Settings → General → AirDrop & Handoff.)
+```bash
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5060
+```
 
 ### API restart liên tục, log ghi `JWT_SECRET must be changed`
 

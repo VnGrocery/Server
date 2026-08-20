@@ -82,11 +82,20 @@ EOF
   fi
 }
 
+# Host port the API is published on. The container always listens on 5000; the
+# host side is 5050 by default because macOS AirPlay Receiver owns 5000.
+api_port() {
+  local port=""
+  [[ -f "$SERVER_DIR/.env" ]] &&
+    port="$(grep -E '^API_PORT=' "$SERVER_DIR/.env" | cut -d= -f2- || true)"
+  echo "${port:-5050}"
+}
+
 summary() {
   cat <<EOF
 
 Stack is up (profile=$PROFILE, chain=$CHAIN). Endpoints:
-  API            http://localhost:5000/health
+  API            http://localhost:$(api_port)/health
   MongoDB        mongodb://localhost:27017
   Vault          http://localhost:8200
   IPFS API       http://localhost:5001
@@ -140,7 +149,8 @@ case "$COMMAND" in
 
   health)
     info "API"
-    curl -fsS --max-time 5 http://localhost:5000/health && echo || warn "API not responding"
+    curl -fsS --max-time 5 "http://localhost:$(api_port)/health" && echo ||
+      warn "API not responding"
     info "Blockchain"
     "$SCRIPT_DIR/check-blockchain.sh"
     ;;
@@ -216,9 +226,8 @@ EOF
   seed)
     require_env_file
     info "Seeding demo data"
-    port="$(grep -E '^API_PORT=' "$SERVER_DIR/.env" | cut -d= -f2- || true)"
     python3 "$SCRIPT_DIR/seed_demo.py" \
-      --base-url "http://localhost:${port:-5000}" "$@"
+      --base-url "http://localhost:$(api_port)" "$@"
     ;;
 
   help|-h|--help)

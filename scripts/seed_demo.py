@@ -6,7 +6,7 @@ anchors on chain), buyer reviews and vouchers, so the app has something real to
 show instead of one product called "E2E Fresh Produce".
 
 Usage:
-    python3 scripts/seed_demo.py [--base-url http://localhost:5000]
+    python3 scripts/seed_demo.py [--base-url http://localhost:5050]
 
 Buyer checks are deliberately not seeded: they need the vision provider, and
 without OPENAI_API_KEY the endpoint returns "provider unavailable".
@@ -282,7 +282,7 @@ def report(api, shops):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-url", default="http://localhost:5000")
+    parser.add_argument("--base-url", default="http://localhost:5050")
     args = parser.parse_args()
 
     api = Api(args.base_url)

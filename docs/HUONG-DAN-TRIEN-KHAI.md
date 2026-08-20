@@ -72,6 +72,26 @@ python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 
 ---
 
+## 3b. Tạo dữ liệu demo
+
+Server mới dựng thì rỗng, app sẽ trông trống trải. Đổ dữ liệu mẫu:
+
+```bash
+./scripts/vng seed
+```
+
+Tạo 5 cửa hàng có thật ở TP.HCM (rau, thịt, hải sản, trái cây, nông sản) kèm
+sản phẩm, cam kết độ tươi (được neo lên blockchain), đánh giá và voucher. Mật
+khẩu mọi tài khoản: `Passw0rd!`
+
+Một cửa hàng cố ý **không có cam kết nào** để thấy trạng thái "chưa đủ dữ liệu"
+— khác với cửa hàng bị chấm điểm thấp.
+
+> Kiểm chứng của người mua (buyer check) **không** được seed: nó cần AI vision,
+> mà không có `OPENAI_API_KEY` thì server trả về "provider unavailable".
+
+---
+
 ## 4. Các lệnh hay dùng
 
 ```bash
@@ -82,6 +102,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 ./scripts/vng logs api          # xem log (đổi 'api' thành service khác)
 ./scripts/vng health            # kiểm tra API + blockchain
 ./scripts/vng e2e               # chạy thử toàn bộ luồng nghiệp vụ
+./scripts/vng seed              # đổ dữ liệu demo
 ./scripts/vng reset             # xoá sạch dữ liệu, làm lại từ đầu
 ./scripts/vng help              # xem tất cả lệnh
 ```

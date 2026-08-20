@@ -13,6 +13,7 @@
 #   ./scripts/vng contract-deploy    # deploy IntegrityRegistry, writes .env
 #   ./scripts/vng vault-init         # init/unseal persistent vault (prod only)
 #   ./scripts/vng e2e                # end-to-end API smoke test
+#   ./scripts/vng seed               # fill with demo shops, products, pledges
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -212,6 +213,14 @@ EOF
     "$SCRIPT_DIR/e2e-mobile-flow.sh" "$@"
     ;;
 
+  seed)
+    require_env_file
+    info "Seeding demo data"
+    port="$(grep -E '^API_PORT=' "$SERVER_DIR/.env" | cut -d= -f2- || true)"
+    python3 "$SCRIPT_DIR/seed_demo.py" \
+      --base-url "http://localhost:${port:-5000}" "$@"
+    ;;
+
   help|-h|--help)
     awk 'NR>1 && /^#/ {sub(/^# ?/,""); print; next} NR>1 {exit}' "$0"
     cat <<EOF
@@ -229,6 +238,7 @@ Commands:
   contract-deploy   deploy IntegrityRegistry and update .env
   vault-init        initialise persistent Vault (--prod only)
   e2e               end-to-end API smoke test
+  seed              fill the database with believable demo data
 EOF
     ;;
 

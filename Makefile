@@ -1,123 +1,48 @@
+# Thin wrapper over ./scripts/vng, which is the real entry point.
+# Run `./scripts/vng help` (or `make help`) for the full command list.
 SHELL := /bin/bash
-
-COMPOSE ?= docker compose
-BASE_COMPOSE := -f docker-compose.yml
-VAULT_PERSISTENT_COMPOSE := -f docker-compose.vault-persistent.yml
-BESU_DEV_COMPOSE := -f docker-compose.besu-dev.yml
-BESU_COMPOSE := -f docker-compose.besu-qbft.yml
-STAGING_COMPOSE := -f docker-compose.staging.yml
-PROD_COMPOSE := -f docker-compose.prod.yml
-DEPLOY_COMPOSE := -f docker-compose.deploy.yml
-VAULT_HTTP_ADDR ?= http://127.0.0.1:8200
+VNG := ./scripts/vng
 service ?= api
 
-.PHONY: help
+.PHONY: help up up-prod up-qbft down restart status logs health reset contract vault-init e2e test
 help:
-	@echo "Available targets:"
-	@echo "  make api-up              # start api + vault(dev) + ipfs + redis"
-	@echo "  make vault-up            # start persistent vault only"
-	@echo "  make ipfs-up             # start ipfs only"
-	@echo "  make redis-up            # start redis only"
-	@echo "  make besu-up             # start single-node Besu for local development"
-	@echo "  make besu-cluster-up     # start hardened 4-validator + 2-RPC cluster"
-	@echo "  make stack-up            # start base + persistent vault + besu + staging proxy"
-	@echo "  make deploy-up           # start single-file deploy baseline"
-	@echo "  make build-api           # build api image in deploy compose"
-	@echo "  make run-all             # build api image, then run deploy baseline with vault readiness checks"
-	@echo "  make vault-init          # print/init persistent vault manually"
-	@echo "  make vault-status        # show persistent vault status"
-	@echo "  make deploy-config       # validate deploy compose"
-	@echo "  make besu-health         # check peer count, block progress and RPC drift"
-	@echo "  make besu-recover service=besu-validator2 # restart exactly one validator, then verify"
-	@echo "  make logs service=api    # tail logs for a service in deploy compose"
-	@echo "  make ps                  # show deploy stack containers"
-	@echo "  make down                # stop deploy stack"
-	@echo "  make clean               # stop deploy stack and remove local temp artifacts"
-	@echo "  make clean-local         # stop deploy stack and remove orphan containers"
-	@echo "  make clean-all           # stop deploy stack and remove local volumes"
+	@$(VNG) help
 
-.PHONY: api-up
-api-up:
-	$(COMPOSE) $(BASE_COMPOSE) up -d --build
+up:              ## dev stack, single-node Besu
+	$(VNG) up
 
-.PHONY: vault-up
-vault-up:
-	$(COMPOSE) $(DEPLOY_COMPOSE) up -d vault
+up-prod:         ## production overlay
+	$(VNG) up --prod
 
-.PHONY: ipfs-up
-ipfs-up:
-	$(COMPOSE) $(DEPLOY_COMPOSE) up -d ipfs
+up-qbft:         ## 4-validator cluster (demo)
+	$(VNG) up --qbft
 
-.PHONY: redis-up
-redis-up:
-	$(COMPOSE) $(DEPLOY_COMPOSE) up -d redis
-
-.PHONY: besu-up
-besu-up:
-	$(COMPOSE) $(BESU_DEV_COMPOSE) up -d
-
-.PHONY: besu-cluster-up
-besu-cluster-up:
-	$(COMPOSE) $(BESU_COMPOSE) up -d
-
-.PHONY: stack-up
-stack-up:
-	$(COMPOSE) $(BASE_COMPOSE) $(VAULT_PERSISTENT_COMPOSE) $(BESU_COMPOSE) $(STAGING_COMPOSE) up -d --build
-
-.PHONY: deploy-up
-deploy-up:
-	./scripts/up-deploy.sh
-
-.PHONY: build-api
-build-api:
-	$(COMPOSE) $(DEPLOY_COMPOSE) build api
-
-.PHONY: run-all
-run-all: build-api
-	./scripts/run-all.sh
-
-.PHONY: vault-init
-vault-init:
-	./scripts/init-vault.sh
-
-.PHONY: vault-status
-vault-status:
-	$(COMPOSE) $(DEPLOY_COMPOSE) exec vault vault status -address=$(VAULT_HTTP_ADDR)
-
-.PHONY: deploy-config
-deploy-config:
-	$(COMPOSE) $(DEPLOY_COMPOSE) config
-
-.PHONY: besu-health
-besu-health:
-	BESU_RPC_URLS=http://127.0.0.1:8545 ./scripts/check-besu-cluster.sh
-
-.PHONY: besu-recover
-besu-recover:
-	COMPOSE_FILE=docker-compose.deploy.yml RECOVER_SERVICE=$(service) ./scripts/ensure-besu-peers.sh
-
-.PHONY: logs
-logs:
-	$(COMPOSE) $(DEPLOY_COMPOSE) logs -f $(service)
-
-.PHONY: ps
-ps:
-	$(COMPOSE) $(DEPLOY_COMPOSE) ps
-
-.PHONY: down
 down:
-	$(COMPOSE) $(DEPLOY_COMPOSE) down
+	$(VNG) down
 
-.PHONY: clean
-clean:
-	$(COMPOSE) $(DEPLOY_COMPOSE) down --remove-orphans
-	rm -f /tmp/vngrocery-deploy-compose*.txt /tmp/vngrocery-vault-status*.txt /tmp/vngrocery-vault-runall*.txt
+restart:
+	$(VNG) restart
 
-.PHONY: clean-local
-clean-local:
-	$(COMPOSE) $(DEPLOY_COMPOSE) down --remove-orphans
+status:
+	$(VNG) status
 
-.PHONY: clean-all
-clean-all:
-	$(COMPOSE) $(DEPLOY_COMPOSE) down --remove-orphans --volumes
-	rm -f /tmp/vngrocery-deploy-compose*.txt /tmp/vngrocery-vault-status*.txt /tmp/vngrocery-vault-runall*.txt
+logs:            ## make logs service=api
+	$(VNG) logs $(service)
+
+health:
+	$(VNG) health
+
+reset:           ## wipe containers + volumes (asks for confirmation)
+	$(VNG) reset
+
+contract:        ## deploy IntegrityRegistry and update .env
+	$(VNG) contract-deploy
+
+vault-init:
+	$(VNG) --prod vault-init
+
+e2e:
+	$(VNG) e2e
+
+test:
+	go test ./...

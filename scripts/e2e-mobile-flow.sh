@@ -11,6 +11,8 @@ SHOP_NAME="${SHOP_NAME:-E2E Trust Shop}"
 PRODUCT_NAME="${PRODUCT_NAME:-E2E Fresh Produce}"
 PRODUCT_CATEGORY="${PRODUCT_CATEGORY:-fresh_produce}"
 PRODUCT_TAG="${PRODUCT_TAG:-trusted}"
+# /v1/seller/commit rejects a pledge without a bundleId.
+BUNDLE_ID="${BUNDLE_ID:-e2e-bundle-$RANDOM$(date +%s)}"
 
 have_cmd() { command -v "$1" >/dev/null 2>&1; }
 
@@ -101,7 +103,7 @@ else
 fi
 
 step "seller commit"
-commit_payload="{\"shopId\":\"$shop_id\",\"productId\":\"$product_id\",\"score\":8.6,\"category\":\"$PRODUCT_CATEGORY\",\"confidence\":0.92,\"imageHash\":\"$image_hash\""
+commit_payload="{\"shopId\":\"$shop_id\",\"productId\":\"$product_id\",\"bundleId\":\"$BUNDLE_ID\",\"score\":8.6,\"category\":\"$PRODUCT_CATEGORY\",\"confidence\":0.92,\"imageHash\":\"$image_hash\""
 if [[ -n "$image_cid" ]]; then
   commit_payload+=",\"imageCid\":\"$image_cid\""
 fi

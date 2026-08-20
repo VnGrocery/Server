@@ -1,8 +1,11 @@
 # Operations Notes
 
+> **Hướng dẫn triển khai chính thức:** [HUONG-DAN-TRIEN-KHAI.md](HUONG-DAN-TRIEN-KHAI.md)
+> Tài liệu này chỉ bổ sung chi tiết vận hành nâng cao.
+
 Nếu bạn là người mới hoàn toàn, bắt đầu ở:
 
-- [00-start-here.md](/home/dora/VNGrocery/server/docs/setup/00-start-here.md)
+- [00-start-here.md](HUONG-DAN-TRIEN-KHAI.md)
 
 ## Vault local persistence
 
@@ -11,20 +14,20 @@ Default `docker-compose.yml` still runs Vault dev mode for fast local developmen
 For local persistent Vault, run:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.vault-persistent.yml up --build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
 ```
 
 If you want the full deploy-style stack with one compose file, use:
 
 ```bash
-./scripts/init-vault.sh
-./scripts/up-deploy.sh
+./scripts/vng --prod vault-init
+./scripts/vng up --prod
 ```
 
 Or use the single entrypoint script:
 
 ```bash
-./scripts/run-all.sh
+./scripts/vng up
 ```
 
 It starts Vault first, checks whether Vault is initialized and unsealed, and only starts the full stack when Vault is ready.
@@ -33,10 +36,10 @@ If you prefer shorter commands, use the `Makefile`:
 
 ```bash
 make help
-make vault-up
-make besu-up
+./scripts/vng --prod vault-init
+./scripts/vng chain-up
 make ipfs-up
-make run-all
+./scripts/vng up
 ```
 
 The persistent Vault uses file storage at the named Docker volume `vault-data`. It must be initialized and unsealed with standard Vault commands before the API can sign events:
@@ -121,9 +124,8 @@ For staging-style local validation with persistent Vault and reverse proxy:
 ```bash
 docker compose \
   -f docker-compose.yml \
-  -f docker-compose.vault-persistent.yml \
   -f docker-compose.besu-qbft.yml \
-  -f docker-compose.staging.yml \
+  -f docker-compose.prod.yml \
   up --build
 ```
 
@@ -132,7 +134,6 @@ For production-oriented compose layering in this repo:
 ```bash
 docker compose \
   -f docker-compose.yml \
-  -f docker-compose.vault-persistent.yml \
   -f docker-compose.prod.yml \
   up -d
 ```
@@ -142,7 +143,7 @@ The production file is only a repo baseline. Replace local mounts, secrets, and 
 For a single-file deploy baseline in this repo, use:
 
 ```bash
-docker compose -f docker-compose.deploy.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.besu.yml -f docker-compose.prod.yml up -d --build
 ```
 
 For frontend and QA handoff, use:

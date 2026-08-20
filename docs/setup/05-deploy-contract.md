@@ -52,7 +52,7 @@ Nhưng cho môi trường nghiêm túc, nên dùng `BESU_PRIVATE_KEY`.
 Khởi động lại stack:
 
 ```bash
-make run-all
+./scripts/vng up
 ```
 
 ## Nếu mỗi validator chạy ở một server riêng

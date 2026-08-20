@@ -1,0 +1,70 @@
+# Single-node Besu (QBFT, 1 validator) for local development and demo.
+#
+# Why single node: QBFT needs n >= 3f+1 nodes to tolerate f failures, so the
+# 4-validator cluster stops producing blocks as soon as 2 nodes desync. With one
+# node there is nothing to stay in sync with, which removes the whole class of
+# problems for dev and demo use.
+#
+# Use docker-compose.besu-qbft.yml instead when a multi-validator demo is needed.
+services:
+  besu-init:
+    image: alpine:3.20
+    command: ["sh", "-c", "chown -R 1000:1000 /data"]
+    volumes:
+      - besu-data:/data
+    restart: "no"
+    networks:
+      - vngrocery_app
+
+  besu:
+    image: ${BESU_IMAGE:-hyperledger/besu:24.3.3}
+    container_name: vngrocery-besu
+    depends_on:
+      besu-init:
+        condition: service_completed_successfully
+    command:
+      - --config-file=/opt/besu/config.toml
+      - --identity=vngrocery-dev
+      - --p2p-host=0.0.0.0
+      - --p2p-port=30303
+    volumes:
+      - ./besu/dev/config.toml:/opt/besu/config.toml:ro
+      - ./besu/dev/genesis.json:/opt/besu/genesis.json:ro
+      - ./besu/qbft/keys/validator1/key:/opt/besu/key:ro
+      - besu-data:/opt/besu/data
+    ports:
+      - "8545:8545"
+    # The Besu image ships neither curl nor wget, but it does have bash, so the
+    # RPC port is probed through bash's /dev/tcp instead.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8545"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    networks:
+      - vngrocery_app
+    restart: unless-stopped
+
+  api:
+    environment:
+      BESU_ENABLED: "true"
+      BESU_WORKER_ENABLED: ${BESU_WORKER_ENABLED:-true}
+      BESU_RPC_URL: http://besu:8545
+      BESU_RPC_URLS: http://besu:8545
+      BESU_CHAIN_ID: ${BESU_CHAIN_ID:-1337}
+      BESU_CONTRACT_ADDRESS: ${BESU_CONTRACT_ADDRESS:-0x0000000000000000000000000000000000000000}
+      BESU_FROM_ADDRESS: ${BESU_FROM_ADDRESS:-0xfe3b557e8fb62b89f4916b721be55ceb828dbd73}
+      BESU_PRIVATE_KEY: ${BESU_PRIVATE_KEY:-8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63}
+      BESU_GAS_LIMIT: ${BESU_GAS_LIMIT:-250000}
+      BESU_RECEIPT_TIMEOUT_SEC: ${BESU_RECEIPT_TIMEOUT_SEC:-30}
+      BESU_PENDING_INTERVAL_SEC: ${BESU_PENDING_INTERVAL_SEC:-3}
+      BESU_VERIFY_INTERVAL_SEC: ${BESU_VERIFY_INTERVAL_SEC:-8}
+      BESU_PENDING_BATCH_SIZE: ${BESU_PENDING_BATCH_SIZE:-25}
+      BESU_VERIFY_BATCH_SIZE: ${BESU_VERIFY_BATCH_SIZE:-50}
+    depends_on:
+      besu:
+        condition: service_healthy
+
+volumes:
+  besu-data:

@@ -8,7 +8,7 @@ Nguyên nhân thường gặp:
 
 Kiểm tra:
 ```bash
-docker compose -f docker-compose.deploy.yml exec vault vault status -address=http://127.0.0.1:8200
+docker compose -f docker-compose.yml -f docker-compose.besu.yml -f docker-compose.prod.yml exec vault vault status -address=http://127.0.0.1:8200
 ```
 
 Bạn cần thấy:
@@ -57,7 +57,7 @@ make besu-peers
 Hoặc script trực tiếp:
 
 ```bash
-COMPOSE_FILE=docker-compose.deploy.yml ./scripts/ensure-besu-peers.sh
+./scripts/ensure-besu-peers.sh
 ```
 
 ## 3. IPFS chạy nhưng không có `imageCid`
@@ -86,7 +86,7 @@ Kiểm tra:
 ## 5. Muốn xóa local stack và chạy lại
 ```bash
 make down
-docker compose -f docker-compose.deploy.yml down --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.besu.yml -f docker-compose.prod.yml down --remove-orphans
 ```
 
 Nếu cần reset Vault local:
@@ -101,7 +101,7 @@ Nếu chỉ là local dev, cách đơn giản nhất là xóa volume Vault và i
 ## 7. Docker báo lỗi network not found
 Chạy:
 ```bash
-docker compose -f docker-compose.deploy.yml down --remove-orphans
+docker compose -f docker-compose.yml -f docker-compose.besu.yml -f docker-compose.prod.yml down --remove-orphans
 docker network prune -f
-make run-all
+./scripts/vng up
 ```

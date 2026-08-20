@@ -18,7 +18,6 @@ import (
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
 	cacherepo "vngrocery/internal/repository/cache"
-	firestorerepo "vngrocery/internal/repository/firestore"
 	mongorepo "vngrocery/internal/repository/mongo"
 	auditservice "vngrocery/internal/service/audit"
 	authservice "vngrocery/internal/service/auth"
@@ -35,7 +34,6 @@ import (
 	besupkg "vngrocery/pkg/besu"
 	cachepkg "vngrocery/pkg/cache"
 	"vngrocery/pkg/config"
-	firebasepkg "vngrocery/pkg/firebase"
 	ipfspkg "vngrocery/pkg/ipfs"
 	mongopkg "vngrocery/pkg/mongodb"
 	vaultpkg "vngrocery/pkg/vault"
@@ -97,7 +95,6 @@ func main() {
 	var passwordResetTokenRepository repository.PasswordResetTokenRepository
 	var bundleTokenUseRepository repository.BundleTokenUseRepository
 	var eventLogRepository repository.EventLogRepository
-	var firebaseApp *firebasepkg.App
 	var mongoApp *mongopkg.App
 	var cacheStore *cachepkg.Store
 	if cfg.CacheBackend == "redis" {
@@ -119,65 +116,38 @@ func main() {
 		cacheStore = cachepkg.NewStore(redisKV, cfg.CachePrefix, time.Duration(mustParseInt(cfg.CacheTTLSeconds, 30))*time.Second)
 	}
 
-	if cfg.UseMongo() {
-		mongoApp, err = mongopkg.NewApp(cfg)
-		if err != nil {
-			log.Fatalf("failed to initialize MongoDB: %v", err)
+	// MongoDB is the only supported backend; the Firestore repositories were
+	// removed from this repository.
+	if !cfg.UseMongo() {
+		log.Fatalf("MONGODB_ENABLED must be true: MongoDB is the only supported storage backend")
+	}
+	mongoApp, err = mongopkg.NewApp(cfg)
+	if err != nil {
+		log.Fatalf("failed to initialize MongoDB: %v", err)
+	}
+	defer func() {
+		if closeErr := mongoApp.Close(); closeErr != nil {
+			log.Printf("failed to close MongoDB resources: %v", closeErr)
 		}
-		defer func() {
-			if closeErr := mongoApp.Close(); closeErr != nil {
-				log.Printf("failed to close MongoDB resources: %v", closeErr)
-			}
-		}()
+	}()
 
-		pledgeRepository = mongorepo.NewPledgeRepository(mongoApp.Database)
-		buyerCheckRepository = mongorepo.NewBuyerCheckRepository(mongoApp.Database)
-		productRepository = mongorepo.NewProductRepository(mongoApp.Database)
-		productFreshnessReportRepository = mongorepo.NewProductFreshnessReportRepository(mongoApp.Database)
-		shopRepository = mongorepo.NewShopRepository(mongoApp.Database)
-		shopReviewRepository = mongorepo.NewShopReviewRepository(mongoApp.Database)
-		voucherRepository = mongorepo.NewVoucherRepository(mongoApp.Database)
-		userVoucherRepository = mongorepo.NewUserVoucherRepository(mongoApp.Database)
-		userRepository = mongorepo.NewUserRepository(mongoApp.Database)
-		authUserRepository = mongorepo.NewAuthUserRepository(mongoApp.Database)
-		refreshTokenRepository = mongorepo.NewRefreshTokenRepository(mongoApp.Database)
-		passwordResetTokenRepository = mongorepo.NewPasswordResetTokenRepository(mongoApp.Database)
-		bundleTokenUseRepository = mongorepo.NewBundleTokenUseRepository(mongoApp.Database)
-		eventLogRepository = mongorepo.NewEventLogRepository(mongoApp.Database)
-		rateLimitStore = middleware.NewMemoryRateLimitStore()
-		if cfg.RateLimitBackend == "firestore" {
-			log.Printf("RATE_LIMIT_BACKEND=firestore ignored because MongoDB is active; using memory rate limit store")
-		}
-	} else {
-		firebaseApp, err = firebasepkg.NewApp(cfg)
-		if err != nil {
-			log.Fatalf("failed to initialize Firebase: %v", err)
-		}
-		defer func() {
-			if closeErr := firebaseApp.Close(); closeErr != nil {
-				log.Printf("failed to close Firebase resources: %v", closeErr)
-			}
-		}()
-
-		pledgeRepository = firestorerepo.NewPledgeRepository(firebaseApp.Firestore)
-		buyerCheckRepository = firestorerepo.NewBuyerCheckRepository(firebaseApp.Firestore)
-		productRepository = firestorerepo.NewProductRepository(firebaseApp.Firestore)
-		productFreshnessReportRepository = firestorerepo.NewProductFreshnessReportRepository(firebaseApp.Firestore)
-		shopRepository = firestorerepo.NewShopRepository(firebaseApp.Firestore)
-		shopReviewRepository = firestorerepo.NewShopReviewRepository(firebaseApp.Firestore)
-		voucherRepository = firestorerepo.NewVoucherRepository(firebaseApp.Firestore)
-		userVoucherRepository = firestorerepo.NewUserVoucherRepository(firebaseApp.Firestore)
-		userRepository = firestorerepo.NewUserRepository(firebaseApp.Firestore)
-		authUserRepository = firestorerepo.NewAuthUserRepository(firebaseApp.Firestore)
-		refreshTokenRepository = firestorerepo.NewRefreshTokenRepository(firebaseApp.Firestore)
-		passwordResetTokenRepository = firestorerepo.NewPasswordResetTokenRepository(firebaseApp.Firestore)
-		bundleTokenUseRepository = firestorerepo.NewBundleTokenUseRepository(firebaseApp.Firestore)
-		eventLogRepository = firestorerepo.NewEventLogRepository(firebaseApp.Firestore)
-		if cfg.RateLimitBackend == "firestore" {
-			rateLimitStore = middleware.NewFirestoreRateLimitStore(firebaseApp.Firestore, cfg.RateLimitCollection)
-		} else {
-			rateLimitStore = middleware.NewMemoryRateLimitStore()
-		}
+	pledgeRepository = mongorepo.NewPledgeRepository(mongoApp.Database)
+	buyerCheckRepository = mongorepo.NewBuyerCheckRepository(mongoApp.Database)
+	productRepository = mongorepo.NewProductRepository(mongoApp.Database)
+	productFreshnessReportRepository = mongorepo.NewProductFreshnessReportRepository(mongoApp.Database)
+	shopRepository = mongorepo.NewShopRepository(mongoApp.Database)
+	shopReviewRepository = mongorepo.NewShopReviewRepository(mongoApp.Database)
+	voucherRepository = mongorepo.NewVoucherRepository(mongoApp.Database)
+	userVoucherRepository = mongorepo.NewUserVoucherRepository(mongoApp.Database)
+	userRepository = mongorepo.NewUserRepository(mongoApp.Database)
+	authUserRepository = mongorepo.NewAuthUserRepository(mongoApp.Database)
+	refreshTokenRepository = mongorepo.NewRefreshTokenRepository(mongoApp.Database)
+	passwordResetTokenRepository = mongorepo.NewPasswordResetTokenRepository(mongoApp.Database)
+	bundleTokenUseRepository = mongorepo.NewBundleTokenUseRepository(mongoApp.Database)
+	eventLogRepository = mongorepo.NewEventLogRepository(mongoApp.Database)
+	rateLimitStore = middleware.NewMemoryRateLimitStore()
+	if cfg.RateLimitBackend == "firestore" {
+		log.Printf("RATE_LIMIT_BACKEND=firestore ignored because MongoDB is active; using memory rate limit store")
 	}
 	if cacheStore != nil && cacheStore.IsEnabled() {
 		shopRepository = cacherepo.NewShopRepository(shopRepository, cacheStore)

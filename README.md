@@ -57,7 +57,7 @@ FIREBASE_CREDENTIALS_FILE=./secrets/firebase-service-account.json
 
 3. Chạy stack local
 ```bash
-make run-all
+./scripts/vng up
 ```
 
 4. Nếu Vault chưa init/unseal, làm theo hướng dẫn script in ra
@@ -69,7 +69,7 @@ make run-all
 
 6. Cập nhật `.env` với `VAULT_TOKEN` và `BESU_CONTRACT_ADDRESS`, rồi chạy lại:
 ```bash
-make run-all
+./scripts/vng up
 ```
 
 7. Test flow:
@@ -90,10 +90,10 @@ Mobile cấu hình Server bằng `--dart-define=API_BASE_URL=<server-url>`. Các
 ## Useful Commands
 ```bash
 make help
-make vault-up
-make besu-up
+./scripts/vng --prod vault-init
+./scripts/vng chain-up
 make ipfs-up
-make run-all
+./scripts/vng up
 make logs service=api
 make clean
 make clean-all

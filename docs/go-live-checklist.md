@@ -7,7 +7,7 @@
 - Put reverse proxy/TLS in front of the API.
 - Restrict Besu RPC, Vault, and IPFS API to private network access only.
 - Validate persistent disk sizing for Firestore export, Vault snapshots, and IPFS pinned content.
-- Confirm `docker-compose.deploy.yml` is customized or replaced for the target environment.
+- Confirm `docker-compose.yml` + `docker-compose.besu.yml` + `docker-compose.prod.yml` is customized or replaced for the target environment.
 
 ## Secrets
 - Store `BESU_PRIVATE_KEY`, Vault token, and Firebase credentials in a secret manager.
@@ -20,7 +20,7 @@
 - Enable alert routing with at least one of Slack, Telegram, SMTP, or generic webhook.
 - Run `go run ./cmd/backfill-integrity --batch-size 200` on legacy data.
 - Verify `GET /v1/shops/:shopId/pledges/:pledgeId/proof` returns sane proof states.
-- Run [scripts/e2e-mobile-flow.sh](/home/dora/VNGrocery/server/scripts/e2e-mobile-flow.sh) against staging with a real image.
+- Run [scripts/e2e-mobile-flow.sh](../scripts/e2e-mobile-flow.sh) against staging with a real image.
 - Verify bootstrap admin policy if `BOOTSTRAP_ADMIN_EMAILS` is used.
 
 ## Data

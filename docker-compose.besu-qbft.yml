@@ -1,3 +1,10 @@
+# 4-validator QBFT cluster. Demo / multi-node showcase only.
+#
+# QBFT tolerates f failures with n >= 3f+1 nodes, so with n=4 (f=1) the chain
+# halts as soon as two validators desync. Use docker-compose.besu.yml (single
+# node) for day-to-day work and reserve this file for demonstrating consensus.
+#
+#   ./scripts/vng up --qbft
 services:
   besu-rpc-init:
     image: alpine:3.20
@@ -162,6 +169,24 @@ services:
     networks:
       - besu_qbft
     restart: unless-stopped
+
+  api:
+    environment:
+      BESU_ENABLED: "true"
+      BESU_WORKER_ENABLED: ${BESU_WORKER_ENABLED:-true}
+      BESU_RPC_URL: http://besu-rpc-proxy:8545
+      BESU_RPC_URLS: http://besu-rpc-proxy:8545,http://besu-rpc1:8545,http://besu-rpc2:8545
+      BESU_CHAIN_ID: ${BESU_CHAIN_ID:-1337}
+      BESU_CONTRACT_ADDRESS: ${BESU_CONTRACT_ADDRESS:-0x0000000000000000000000000000000000000000}
+      BESU_FROM_ADDRESS: ${BESU_FROM_ADDRESS:-0xfe3b557e8fb62b89f4916b721be55ceb828dbd73}
+      BESU_PRIVATE_KEY: ${BESU_PRIVATE_KEY:-8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63}
+      BESU_GAS_LIMIT: ${BESU_GAS_LIMIT:-250000}
+    depends_on:
+      besu-rpc-proxy:
+        condition: service_started
+    networks:
+      vngrocery_app:
+      besu_qbft:
 
 networks:
   besu_qbft:

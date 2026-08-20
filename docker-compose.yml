@@ -1,3 +1,9 @@
+# Base stack: api + mongo + vault(dev) + ipfs + redis.
+# Blockchain is a separate overlay: docker-compose.besu.yml (1 node, default)
+# or docker-compose.besu-qbft.yml (4 validators, demo only).
+# Production hardening overlay: docker-compose.prod.yml
+#
+# Prefer ./scripts/vng over calling docker compose directly.
 services:
   api:
     build:
@@ -8,6 +14,11 @@ services:
       - .env
     environment:
       PORT: 5000
+      # Overrides .env: inside the container 127.0.0.1 is the container itself,
+      # so Mongo must be reached by its compose service name.
+      MONGODB_ENABLED: "true"
+      MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-vngrocery}
       VAULT_ENABLED: "true"
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: root
@@ -22,16 +33,37 @@ services:
       REDIS_ADDR: redis:6379
       REDIS_DB: 0
     ports:
-      - "5000:5000"
+      # Host port is configurable: on macOS, ControlCenter (AirPlay Receiver)
+      # already listens on 5000. Set API_PORT in .env to move it.
+      - "${API_PORT:-5000}:5000"
     volumes:
       - ./secrets:/app/secrets:ro
     depends_on:
+      mongo:
+        condition: service_healthy
       vault:
         condition: service_healthy
       ipfs:
         condition: service_started
       redis:
         condition: service_healthy
+    networks:
+      - vngrocery_app
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:7
+    container_name: vngrocery-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
     networks:
       - vngrocery_app
     restart: unless-stopped
@@ -90,6 +122,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  mongo-data:
   ipfs-staging:
   ipfs-data:
   redis-data:

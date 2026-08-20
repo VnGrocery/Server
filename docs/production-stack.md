@@ -1,5 +1,8 @@
 # Production Stack
 
+> **Hướng dẫn triển khai chính thức:** [HUONG-DAN-TRIEN-KHAI.md](HUONG-DAN-TRIEN-KHAI.md)
+> Tài liệu này chỉ bổ sung chi tiết vận hành nâng cao.
+
 ## Target topology
 - `api`: Go backend behind TLS proxy
 - `vault`: HA or managed Vault for account keys
@@ -55,10 +58,10 @@ BESU_RPC_URL=http://10.0.0.11:8545
 - `MEDIA_ALLOWED_TYPES=image/jpeg,image/png,image/webp`
 
 ## One-command local deploy baseline
-- `./scripts/init-vault.sh`
-- `./scripts/up-deploy.sh`
-- `./scripts/run-all.sh`
-- stack entrypoint file: `docker-compose.deploy.yml`
+- `./scripts/vng --prod vault-init`
+- `./scripts/vng up --prod`
+- `./scripts/vng up`
+- stack entrypoint file: `docker-compose.yml` + `docker-compose.besu.yml` + `docker-compose.prod.yml`
 
 ## Storage rules
 - Keep raw images off-chain.

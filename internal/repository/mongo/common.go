@@ -4,28 +4,29 @@ import (
 	"context"
 	"fmt"
 
-	firestorecollections "vngrocery/internal/repository/firestore"
-
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+// Collection names. These were previously re-exported from the Firestore
+// repository package; that backend has been removed, so they live here with the
+// only backend that still uses them.
 const (
-	usersCollection                   = firestorecollections.UsersCollection
-	authUsersCollection               = firestorecollections.AuthUsersCollection
-	refreshTokensCollection           = firestorecollections.RefreshTokensCollection
-	passwordResetTokensCollection     = firestorecollections.PasswordResetTokensCollection
-	bundleTokenUsesCollection         = firestorecollections.BundleTokenUsesCollection
-	shopsCollection                   = firestorecollections.ShopsCollection
-	productsCollection                = firestorecollections.ProductsCollection
-	productFreshnessReportsCollection = firestorecollections.ProductFreshnessReportsCollection
-	pledgesCollection                 = firestorecollections.PledgesCollection
-	buyerChecksCollection             = firestorecollections.BuyerChecksCollection
-	shopReviewsCollection             = firestorecollections.ShopReviewsCollection
-	vouchersCollection                = firestorecollections.VouchersCollection
-	userVouchersCollection            = firestorecollections.UserVouchersCollection
-	eventLogsCollection               = firestorecollections.EventLogsCollection
+	usersCollection                   = "users"
+	authUsersCollection               = "auth_users"
+	refreshTokensCollection           = "refresh_tokens"
+	passwordResetTokensCollection     = "password_reset_tokens"
+	bundleTokenUsesCollection         = "bundle_token_uses"
+	shopsCollection                   = "shops"
+	productsCollection                = "products"
+	productFreshnessReportsCollection = "product_freshness_reports"
+	pledgesCollection                 = "pledges"
+	buyerChecksCollection             = "buyer_checks"
+	shopReviewsCollection             = "shop_reviews"
+	vouchersCollection                = "vouchers"
+	userVouchersCollection            = "user_vouchers"
+	eventLogsCollection               = "event_logs"
 )
 
 func saveByID(ctx context.Context, collection *mongo.Collection, id string, value any) error {

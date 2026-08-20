@@ -1,5 +1,10 @@
 # 02a. MongoDB Or Firestore
 
+> **Đã lỗi thời.** Backend Firestore đã bị gỡ khỏi dự án; MongoDB là
+> backend duy nhất và `MONGODB_ENABLED` phải để `true`. Giữ file này chỉ
+> để tham khảo lịch sử. Xem [HUONG-DAN-TRIEN-KHAI.md](../HUONG-DAN-TRIEN-KHAI.md).
+
+
 ## Quy tắc chọn backend lưu trữ
 
 Repo này hiện hỗ trợ 2 backend:

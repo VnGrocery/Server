@@ -40,6 +40,6 @@ Build the mobile app without needing blockchain-specific knowledge. The app shou
 - raw integrity mismatch diagnostics unless building admin UI
 
 ## QA handoff
-- Use [scripts/e2e-mobile-flow.sh](/home/dora/VNGrocery/server/scripts/e2e-mobile-flow.sh) for smoke tests.
-- Use [docs/mobile-api-playbook.md](/home/dora/VNGrocery/server/docs/mobile-api-playbook.md) for endpoint-by-endpoint payloads.
-- Use [docs/mobile-handoff.md](/home/dora/VNGrocery/server/docs/mobile-handoff.md) for UI mapping.
+- Use [scripts/e2e-mobile-flow.sh](../scripts/e2e-mobile-flow.sh) for smoke tests.
+- Use [docs/mobile-api-playbook.md](mobile-api-playbook.md) for endpoint-by-endpoint payloads.
+- Use [docs/mobile-handoff.md](mobile-handoff.md) for UI mapping.

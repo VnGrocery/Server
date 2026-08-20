@@ -30,6 +30,18 @@ func (r *PledgeRepository) ListByShopID(ctx context.Context, shopID string) ([]d
 	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt.After(items[j].CreatedAt) })
 	return items, nil
 }
+
+// ListAll returns every pledge ordered by ID, which is what the backfill tool
+// needs to page through the whole collection with --start-after.
+func (r *PledgeRepository) ListAll(ctx context.Context) ([]domain.Pledge, error) {
+	items, err := listDocuments[domain.Pledge](ctx, r.collection, bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].PledgeID < items[j].PledgeID })
+	return items, nil
+}
+
 func (r *PledgeRepository) ListByChainAnchorStatus(ctx context.Context, status string, limit int) ([]domain.Pledge, error) {
 	findOptions := options.Find()
 	if limit > 0 {

@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"vngrocery/internal/domain"
-	firestorerepo "vngrocery/internal/repository/firestore"
+	mongorepo "vngrocery/internal/repository/mongo"
 	integrityservice "vngrocery/internal/service/integrity"
 	besupkg "vngrocery/pkg/besu"
 	"vngrocery/pkg/config"
-	firebasepkg "vngrocery/pkg/firebase"
+	mongopkg "vngrocery/pkg/mongodb"
 )
 
 func main() {
@@ -26,21 +26,23 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to load config: %v", err)
 	}
-	if cfg.UseMongo() {
-		log.Fatalf("backfill-integrity currently supports Firestore only; set MONGODB_ENABLED=false to use this command")
+	// The Firestore backend was removed from this repository, so this tool now
+	// runs against MongoDB like the server does.
+	if !cfg.UseMongo() {
+		log.Fatalf("MONGODB_ENABLED must be true: MongoDB is the only supported storage backend")
 	}
 
-	app, err := firebasepkg.NewApp(cfg)
+	app, err := mongopkg.NewApp(cfg)
 	if err != nil {
-		log.Fatalf("failed to initialize Firebase: %v", err)
+		log.Fatalf("failed to initialize MongoDB: %v", err)
 	}
 	defer func() {
 		if closeErr := app.Close(); closeErr != nil {
-			log.Printf("failed to close Firebase resources: %v", closeErr)
+			log.Printf("failed to close MongoDB resources: %v", closeErr)
 		}
 	}()
 
-	pledgeRepository := firestorerepo.NewPledgeRepository(app.Firestore)
+	pledgeRepository := mongorepo.NewPledgeRepository(app.Database)
 	var integrityManager *integrityservice.Service
 	if cfg.BesuEnabled {
 		besuClient := besupkg.NewClient(besupkg.Config{
@@ -58,23 +60,18 @@ func main() {
 	}
 
 	ctx := context.Background()
-	docs, err := app.Firestore.Collection(firestorerepo.PledgesCollection).Documents(ctx).GetAll()
+	pledges, err := pledgeRepository.ListAll(ctx)
 	if err != nil {
 		log.Fatalf("failed to list pledges: %v", err)
 	}
 
 	var updatedCount int
-	for _, doc := range docs {
-		if strings.TrimSpace(*startAfter) != "" && doc.Ref.ID <= strings.TrimSpace(*startAfter) {
+	for _, pledge := range pledges {
+		if strings.TrimSpace(*startAfter) != "" && pledge.PledgeID <= strings.TrimSpace(*startAfter) {
 			continue
 		}
 		if *batchSize > 0 && updatedCount >= *batchSize {
 			break
-		}
-		var pledge domain.Pledge
-		if err := doc.DataTo(&pledge); err != nil {
-			log.Printf("skip invalid pledge %s: %v", doc.Ref.ID, err)
-			continue
 		}
 
 		needsPrepare := strings.TrimSpace(pledge.DataHash) == "" || strings.TrimSpace(pledge.ChainAnchorStatus) == "" || strings.TrimSpace(pledge.IntegrityStatus) == ""
@@ -102,7 +99,7 @@ func main() {
 			log.Printf("dry-run pledge %s status=%s integrity=%s tx=%s", pledge.PledgeID, pledge.ChainAnchorStatus, pledge.IntegrityStatus, pledge.ChainTxHash)
 			continue
 		}
-		if _, err := app.Firestore.Collection(firestorerepo.PledgesCollection).Doc(pledge.PledgeID).Set(ctx, pledge); err != nil {
+		if err := pledgeRepository.Save(ctx, pledge); err != nil {
 			log.Printf("save pledge %s failed: %v", pledge.PledgeID, err)
 		}
 	}

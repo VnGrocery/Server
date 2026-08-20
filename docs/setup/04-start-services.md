@@ -4,7 +4,7 @@
 Chạy:
 
 ```bash
-make run-all
+./scripts/vng up
 ```
 
 Script sẽ:
@@ -17,7 +17,7 @@ Script sẽ:
 Script sẽ in ra lệnh kiểu này:
 
 ```bash
-docker compose -f docker-compose.deploy.yml exec vault vault operator init -address=http://127.0.0.1:8200
+docker compose -f docker-compose.yml -f docker-compose.besu.yml -f docker-compose.prod.yml exec vault vault operator init -address=http://127.0.0.1:8200
 ```
 
 Sau khi chạy lệnh đó:
@@ -28,19 +28,19 @@ Sau khi chạy lệnh đó:
 Dùng bất kỳ 3 key:
 
 ```bash
-docker compose -f docker-compose.deploy.yml exec vault vault operator unseal -address=http://127.0.0.1:8200 "<UNSEAL_KEY_1>"
-docker compose -f docker-compose.deploy.yml exec vault vault operator unseal -address=http://127.0.0.1:8200 "<UNSEAL_KEY_2>"
-docker compose -f docker-compose.deploy.yml exec vault vault operator unseal -address=http://127.0.0.1:8200 "<UNSEAL_KEY_3>"
+docker compose -f docker-compose.yml -f docker-compose.besu.yml -f docker-compose.prod.yml exec vault vault operator unseal -address=http://127.0.0.1:8200 "<UNSEAL_KEY_1>"
+docker compose -f docker-compose.yml -f docker-compose.besu.yml -f docker-compose.prod.yml exec vault vault operator unseal -address=http://127.0.0.1:8200 "<UNSEAL_KEY_2>"
+docker compose -f docker-compose.yml -f docker-compose.besu.yml -f docker-compose.prod.yml exec vault vault operator unseal -address=http://127.0.0.1:8200 "<UNSEAL_KEY_3>"
 ```
 
 ## Login Vault
 ```bash
-docker compose -f docker-compose.deploy.yml exec vault vault login -address=http://127.0.0.1:8200 "<ROOT_TOKEN>"
+docker compose -f docker-compose.yml -f docker-compose.besu.yml -f docker-compose.prod.yml exec vault vault login -address=http://127.0.0.1:8200 "<ROOT_TOKEN>"
 ```
 
 ## Bật KV v2 nếu chưa có
 ```bash
-docker compose -f docker-compose.deploy.yml exec vault vault secrets enable -address=http://127.0.0.1:8200 -path=secret kv-v2
+docker compose -f docker-compose.yml -f docker-compose.besu.yml -f docker-compose.prod.yml exec vault vault secrets enable -address=http://127.0.0.1:8200 -path=secret kv-v2
 ```
 
 ## Điền lại `.env`
@@ -153,13 +153,13 @@ Backend không cần gọi cả 4 validator cùng lúc.
 
 ## Chạy lại toàn bộ stack
 ```bash
-make run-all
+./scripts/vng up
 ```
 
 ## Nếu chỉ muốn chạy riêng từng phần
 ```bash
-make vault-up
+./scripts/vng --prod vault-init
 make ipfs-up
-make besu-up
-make api-up
+./scripts/vng chain-up
+./scripts/vng up --no-chain
 ```

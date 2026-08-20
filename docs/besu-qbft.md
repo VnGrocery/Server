@@ -5,7 +5,7 @@
 Local development uses one QBFT validator and a separate disposable chain:
 
 ```bash
-make besu-up
+./scripts/vng chain-up
 ```
 
 RPC is available at `http://127.0.0.1:8545`. This profile has no Byzantine
@@ -14,7 +14,7 @@ fault tolerance and must never be used outside a developer machine.
 Reset it with:
 
 ```bash
-docker compose -f docker-compose.besu-dev.yml down -v
+docker compose -f docker-compose.besu.yml down -v
 ```
 
 ## Hardened cluster profile

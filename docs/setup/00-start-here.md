@@ -1,45 +1,32 @@
 # Start Here
 
-Đây là file chính. Nếu bạn là người mới, chỉ cần đi theo đúng thứ tự dưới đây.
+> **Dùng hướng dẫn này:** [HUONG-DAN-TRIEN-KHAI.md](../HUONG-DAN-TRIEN-KHAI.md)
+>
+> Đó là tài liệu triển khai chính thức và đã được kiểm chứng bằng cách chạy thật.
+> Các file `01-` đến `07-` trong thư mục này là bản cũ, còn sót nội dung không
+> còn đúng (ví dụ hướng dẫn chọn Firestore — backend đó đã bị gỡ khỏi dự án,
+> MongoDB hiện là backend duy nhất).
 
-## Mục tiêu
-Bạn sẽ làm được 5 việc:
+## Chạy nhanh
 
-1. Clone mã nguồn
-2. Tạo file `.env`
-3. Chuẩn bị các key và token cần thiết
-4. Chạy toàn bộ stack local: API, Vault, IPFS, Besu
-5. Gọi test flow để kiểm tra hệ thống sống
+Đứng ở thư mục `server/`:
 
-## Thứ tự đọc
-1. [01-prepare-machine.md](/home/dora/VNGrocery/server/docs/setup/01-prepare-machine.md)
-2. [02-clone-and-env.md](/home/dora/VNGrocery/server/docs/setup/02-clone-and-env.md)
-3. [02a-mongodb-or-firestore.md](/home/dora/VNGrocery/server/docs/setup/02a-mongodb-or-firestore.md)
-4. [03-secrets-and-keys.md](/home/dora/VNGrocery/server/docs/setup/03-secrets-and-keys.md)
-5. [04-start-services.md](/home/dora/VNGrocery/server/docs/setup/04-start-services.md)
-6. [05-deploy-contract.md](/home/dora/VNGrocery/server/docs/setup/05-deploy-contract.md)
-7. [06-run-and-test.md](/home/dora/VNGrocery/server/docs/setup/06-run-and-test.md)
-8. [07-troubleshooting.md](/home/dora/VNGrocery/server/docs/setup/07-troubleshooting.md)
+```bash
+./scripts/vng chain-up          # 1. bật blockchain
+./scripts/vng contract-deploy   # 2. deploy contract, tự ghi vào .env
+./scripts/vng up                # 3. bật toàn bộ hệ thống
+./scripts/vng health            # 4. kiểm tra
+```
 
-## Nếu bạn chỉ muốn chạy nhanh
-Làm lần lượt:
+Chi tiết từng bước, các chế độ chạy (`--prod`, `--qbft`), và cách xử lý lỗi
+thường gặp: xem [HUONG-DAN-TRIEN-KHAI.md](../HUONG-DAN-TRIEN-KHAI.md).
 
-1. copy `.env.example` thành `.env`
-2. chọn MongoDB hoặc Firestore
-3. điền JWT và OpenAI key
-4. chạy `make run-all`
-5. init và unseal Vault theo hướng dẫn script in ra
-6. deploy contract Besu
-7. cập nhật `BESU_CONTRACT_ADDRESS` và `VAULT_TOKEN` trong `.env`
-8. chạy lại `make run-all`
-9. test bằng `./scripts/e2e-mobile-flow.sh`
+## Những giá trị phải giữ kỹ
 
-## Bạn cần giữ lại những thứ gì
-- `Firebase service account json`
 - `JWT_SECRET`
-- `Vault unseal keys`
-- `Vault root token`
-- `BESU private key` nếu dùng signing local
-- `OpenAI API key`
+- Vault unseal keys và root token
+- `BESU_PRIVATE_KEY` (khoá owner của contract)
+- `OPENAI_API_KEY`
 
-Không được làm mất các giá trị này. Nếu mất, hệ thống có thể không login được, không ký được, hoặc không anchor blockchain được.
+Mất các giá trị này thì không đăng nhập được, không ký được, hoặc không neo
+blockchain được nữa.

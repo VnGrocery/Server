@@ -1,7 +1,13 @@
+# Production overlay. Use on top of the base stack (and a besu overlay):
+#   docker compose -f docker-compose.yml -f docker-compose.besu.yml -f docker-compose.prod.yml up -d
+# or simply: ./scripts/vng up --prod
+#
+# Adds: nginx proxy, persistent (non-dev) Vault, restart:always, log rotation.
 services:
   api:
     environment:
       VAULT_ENABLED: "true"
+      VAULT_TOKEN: ${VAULT_TOKEN:?VAULT_TOKEN is required in prod - dev root token is not used here}
       IPFS_ENABLED: "true"
       RATE_LIMIT_BACKEND: firestore
       RATE_LIMIT_COLLECTION: rate_limits
@@ -18,7 +24,7 @@ services:
 
   proxy:
     image: nginx:1.29-alpine
-    container_name: vngrocery-proxy-prod
+    container_name: vngrocery-proxy
     depends_on:
       api:
         condition: service_started
@@ -26,6 +32,31 @@ services:
       - "80:80"
     volumes:
       - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - vngrocery_app
+    restart: always
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # Dev-mode Vault keeps everything in memory and resets on restart, so prod
+  # swaps in the file-backed config. It needs manual init/unseal once:
+  #   ./scripts/vng vault-init
+  vault:
+    environment:
+      VAULT_API_ADDR: http://127.0.0.1:8200
+    command: vault server -config=/vault/config/vault.hcl
+    volumes:
+      - vault-data:/vault/file
+      - ./vault/config:/vault/config:ro
+    restart: always
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  mongo:
     restart: always
     logging:
       options:
@@ -39,16 +70,12 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  vault:
-    restart: always
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "5"
-
   redis:
     restart: always
     logging:
       options:
         max-size: "10m"
         max-file: "5"
+
+volumes:
+  vault-data:

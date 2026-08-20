@@ -34,7 +34,7 @@ BOOTSTRAP_ADMIN_EMAILS=admin@example.com
 
 Nếu bạn muốn dùng Firestore thay vì MongoDB, đọc tiếp:
 
-- [02a-mongodb-or-firestore.md](/home/dora/VNGrocery/server/docs/setup/02a-mongodb-or-firestore.md)
+- [02a-mongodb-or-firestore.md](02a-mongodb-or-firestore.md)
 
 ## Chưa cần sửa ngay lúc này
 Các biến sau sẽ được điền ở bước sau:

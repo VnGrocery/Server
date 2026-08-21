@@ -14,6 +14,7 @@ import (
 	"vngrocery/internal/domain"
 	"vngrocery/internal/repository"
 	"vngrocery/internal/service/audit"
+	"vngrocery/internal/textsearch"
 )
 
 var (
@@ -1439,11 +1440,12 @@ func normalizePagination(page, pageSize int) (int, int) {
 	return page, pageSize
 }
 
+// matchesQuery folds both sides, so a name typed without tone marks finds the
+// shop that has them -- which is how Vietnamese is typed on a phone.
 func matchesQuery(shop domain.Shop, query string) bool {
-	name := strings.ToLower(shop.Name)
-	address := strings.ToLower(shop.Address)
-	description := strings.ToLower(shop.Description)
-	return strings.Contains(name, query) || strings.Contains(address, query) || strings.Contains(description, query)
+	return textsearch.Contains(shop.Name, query) ||
+		textsearch.Contains(shop.Address, query) ||
+		textsearch.Contains(shop.Description, query)
 }
 
 func isAllowedModerationStatus(status string) bool {

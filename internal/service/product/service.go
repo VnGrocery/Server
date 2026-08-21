@@ -14,6 +14,7 @@ import (
 	"vngrocery/internal/repository"
 	"vngrocery/internal/service/audit"
 	shopsvc "vngrocery/internal/service/shop"
+	"vngrocery/internal/textsearch"
 )
 
 var (
@@ -868,12 +869,15 @@ func hasTag(tags []string, expected string) bool {
 	return false
 }
 
+// matchesProductQuery folds both sides, so "sau rieng" finds "Sầu riêng".
 func matchesProductQuery(product domain.Product, query string) bool {
-	if strings.Contains(strings.ToLower(product.Name), query) || strings.Contains(strings.ToLower(product.Description), query) || strings.Contains(strings.ToLower(product.Category), query) {
+	if textsearch.Contains(product.Name, query) ||
+		textsearch.Contains(product.Description, query) ||
+		textsearch.Contains(product.Category, query) {
 		return true
 	}
 	for _, tag := range product.Tags {
-		if strings.Contains(strings.ToLower(tag), query) {
+		if textsearch.Contains(tag, query) {
 			return true
 		}
 	}

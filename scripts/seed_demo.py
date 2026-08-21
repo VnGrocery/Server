@@ -371,6 +371,69 @@ PRICE_MOVES = [
 ]
 
 
+# Staples several shops genuinely stock. Cross-shop price comparison only means
+# anything when more than one shop sells the same thing, and every seeded
+# product until now was unique to its shop, so the comparison had nothing to
+# compare. The name is identical on purpose -- that is what makes two rows the
+# same product -- while the price differs, which is the whole point.
+SHARED_PRODUCTS = [
+    ("Cà chua bi hữu cơ", "vegetables", 45000, "Trái nhỏ, vị ngọt."),
+    ("Trứng gà thả vườn", "fresh_produce", 42000, "Hộp 10 quả."),
+    ("Rau muống nước", "vegetables", 12000, "Cọng nhỏ, hái trong ngày."),
+    ("Chuối già hương", "fruit", 28000, "Nải 1.2-1.5kg."),
+]
+
+
+def seed_shared_products(api, per_product):
+    """Put the same staples on several shops, at their own prices.
+
+    Sellers set their own prices, so the spread is what a shopper is meant to
+    see. The variation here is deliberate but small -- a market, not a lottery.
+    """
+    shops = api.get("/v1/shops?pageSize=100")["items"]
+    usable = []
+    for shop in shops:
+        token = api.seller_token(shop["ownerUserId"])
+        if token is not None:
+            usable.append((shop, token))
+
+    if len(usable) < 2:
+        log("Cần ít nhất 2 cửa hàng mở được tài khoản người bán")
+        return 0
+
+    added = 0
+    for name, category, base, note in SHARED_PRODUCTS:
+        chosen = usable[: max(2, min(per_product, len(usable)))]
+        for index, (shop, token) in enumerate(chosen):
+            existing = api.get(f"/v1/shops/{shop['shopId']}/products")
+            items = existing["items"] if isinstance(existing, dict) else existing
+            if any(p["name"] == name for p in items):
+                continue
+
+            # Spread around the base price so the comparison shows something.
+            price = round(base * (0.88 + 0.08 * index) / 1000) * 1000
+            api.post(
+                f"/v1/shops/{shop['shopId']}/products",
+                {
+                    "name": name,
+                    "description": note,
+                    "category": category,
+                    "tags": shop.get("tags", []) or ["phổ thông"],
+                    "freshnessNote": note,
+                    "freshnessScore": round(8.0 + 0.1 * index, 1),
+                    "price": price,
+                    "currency": "VND",
+                    "status": "published",
+                },
+                token=token,
+            )
+            added += 1
+        log(f"  {name}: {len(chosen)} cửa hàng")
+
+    log(f"\n{added} sản phẩm dùng chung đã thêm")
+    return added
+
+
 def seed_price_history(api, changes_per_product):
     """Give every published product a real run of price changes.
 
@@ -564,6 +627,16 @@ def main():
         help="Print the shop names this script can seed, then exit.",
     )
     parser.add_argument(
+        "--shared-products",
+        type=int,
+        metavar="N",
+        help=(
+            "Skip seeding shops; instead put a handful of common staples on N "
+            "shops each, so the cross-shop price comparison has something to "
+            "compare."
+        ),
+    )
+    parser.add_argument(
         "--price-history",
         type=int,
         metavar="N",
@@ -594,6 +667,14 @@ def main():
     except RuntimeError as error:
         print(f"Server không phản hồi: {error}", file=sys.stderr)
         return 1
+
+    if args.shared_products is not None:
+        if args.shared_products < 2:
+            print("--shared-products phải từ 2 trở lên", file=sys.stderr)
+            return 1
+        log(f"Thêm mặt hàng phổ thông cho {args.shared_products} cửa hàng mỗi loại")
+        seed_shared_products(api, args.shared_products)
+        return 0
 
     if args.price_history is not None:
         if args.price_history < 1 or args.price_history > len(PRICE_MOVES):

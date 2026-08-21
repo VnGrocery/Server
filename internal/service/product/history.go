@@ -95,6 +95,10 @@ type ProductHistory struct {
 	PriceHistory []PricePoint
 
 	WindowDays int
+
+	// Market is what every other shop charges for the same product. Zero-valued
+	// when nothing else sells it, which is most products.
+	Market MarketPrice
 }
 
 // productSnapshot is the product body as the audit log marshals it: Go field
@@ -198,12 +202,20 @@ func (s *Service) History(ctx context.Context, input HistoryInput) (ProductHisto
 		points = append(points, PricePoint{At: product.CreatedAt, Price: product.Price})
 	}
 
+	// A shop's own price means little on its own; what makes it checkable is
+	// what everyone else charges for the same thing.
+	market, err := s.Market(ctx, product, windowDays)
+	if err != nil {
+		return ProductHistory{}, err
+	}
+
 	return ProductHistory{
 		ProductID:     productID,
 		Entries:       entries,
 		ChainVerified: len(events) > 0 && chainVerified,
 		PriceHistory:  priceWindow(points, s.now(), windowDays),
 		WindowDays:    windowDays,
+		Market:        market,
 	}, nil
 }
 

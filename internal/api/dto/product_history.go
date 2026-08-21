@@ -38,6 +38,27 @@ type PricePointResponse struct {
 	Price float64   `json:"price"`
 }
 
+// MarketPriceResponse is what every shop selling the same product charges.
+//
+// Two shops are treated as selling the same product when the whole name and the
+// category match once folded, so different pack sizes are never averaged into
+// one misleading number.
+type MarketPriceResponse struct {
+	CatalogKey string `json:"catalogKey"`
+
+	// ShopCount includes this shop. One means nobody else sells it and there is
+	// nothing to compare against.
+	ShopCount int `json:"shopCount"`
+
+	CurrentAverage float64 `json:"currentAverage"`
+	CurrentLowest  float64 `json:"currentLowest"`
+	CurrentHighest float64 `json:"currentHighest"`
+
+	// History is the average price in effect across those shops over the same
+	// window as the product's own series.
+	History []PricePointResponse `json:"history"`
+}
+
 // ProductHistoryResponse is a product's change history and the price series
 // derived from it.
 type ProductHistoryResponse struct {
@@ -52,4 +73,8 @@ type ProductHistoryResponse struct {
 
 	PriceHistory []PricePointResponse `json:"priceHistory"`
 	WindowDays   int                  `json:"windowDays"`
+
+	// Market is omitted when no other shop sells the same product, so the
+	// client shows no comparison rather than one against itself.
+	Market *MarketPriceResponse `json:"market,omitempty"`
 }

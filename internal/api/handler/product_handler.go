@@ -496,11 +496,28 @@ func (h *ProductHandler) History(c *gin.Context) {
 		points = append(points, dto.PricePointResponse{At: point.At, Price: point.Price})
 	}
 
+	var market *dto.MarketPriceResponse
+	if history.Market.Comparable() {
+		marketPoints := make([]dto.PricePointResponse, 0, len(history.Market.History))
+		for _, point := range history.Market.History {
+			marketPoints = append(marketPoints, dto.PricePointResponse{At: point.At, Price: point.Price})
+		}
+		market = &dto.MarketPriceResponse{
+			CatalogKey:     history.Market.CatalogKey,
+			ShopCount:      history.Market.ShopCount,
+			CurrentAverage: history.Market.CurrentAverage,
+			CurrentLowest:  history.Market.CurrentLowest,
+			CurrentHighest: history.Market.CurrentHighest,
+			History:        marketPoints,
+		}
+	}
+
 	c.JSON(http.StatusOK, dto.ProductHistoryResponse{
 		ProductID:     history.ProductID,
 		Entries:       entries,
 		ChainVerified: history.ChainVerified,
 		PriceHistory:  points,
 		WindowDays:    history.WindowDays,
+		Market:        market,
 	})
 }

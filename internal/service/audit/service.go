@@ -48,6 +48,19 @@ func NewService(events repository.EventLogRepository, authUsers repository.AuthU
 	}
 }
 
+// WithClock replaces the clock the service stamps events with.
+//
+// Exists for the demo-data generator, which writes a product's history across
+// the past month: the events it produces are signed and chained for real, so
+// the record still verifies -- only the moment they claim to have happened is
+// chosen. Nothing on the request path calls this.
+func (s *Service) WithClock(clock func() time.Time) *Service {
+	if clock != nil {
+		s.now = clock
+	}
+	return s
+}
+
 type signedEnvelope struct {
 	Action          string          `json:"action"`
 	ActorUserID     string          `json:"actorUserId"`

@@ -22,6 +22,23 @@ func (r *EventLogRepository) Save(ctx context.Context, event domain.EventLog) er
 func (r *EventLogRepository) GetByID(ctx context.Context, eventID string) (domain.EventLog, error) {
 	return getByID[domain.EventLog](ctx, r.collection, eventID)
 }
+
+// DeleteByResource removes a resource's whole recorded history.
+//
+// Only the demo-data generator uses it: an event's hash covers the one before
+// it, so a regenerated history cannot be appended to the old one -- the old
+// chain has to go first. Nothing on the request path deletes an event.
+func (r *EventLogRepository) DeleteByResource(ctx context.Context, resourceType, resourceID string) (int64, error) {
+	result, err := r.collection.DeleteMany(
+		ctx,
+		bson.M{"resourceType": resourceType, "resourceId": resourceID},
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.DeletedCount, nil
+}
+
 func (r *EventLogRepository) GetLatestByResource(ctx context.Context, resourceType, resourceID string) (domain.EventLog, error) {
 	items, err := listDocuments[domain.EventLog](ctx, r.collection, bson.M{"resourceType": resourceType, "resourceId": resourceID})
 	if err != nil {

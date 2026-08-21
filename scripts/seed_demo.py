@@ -15,6 +15,7 @@ without OPENAI_API_KEY the endpoint returns "provider unavailable".
 import argparse
 import json
 import random
+import subprocess
 import sys
 import time
 import urllib.error
@@ -37,21 +38,63 @@ class Api:
         bearer = token if token is not None else self.token
         if bearer:
             request.add_header("Authorization", f"Bearer {bearer}")
-        try:
-            with urllib.request.urlopen(request, timeout=20) as response:
-                raw = response.read().decode()
-                return json.loads(raw) if raw else {}
-        except urllib.error.HTTPError as error:
-            detail = error.read().decode()[:200]
-            raise RuntimeError(f"{method} {path} -> {error.code}: {detail}") from None
-        except urllib.error.URLError as error:
-            raise RuntimeError(f"cannot reach {url}: {error.reason}") from None
+        # The API rate-limits writes, and seeding is a burst of them. Backing
+        # off and retrying is the difference between a full catalogue and one
+        # that stops halfway with seven shops done.
+        for attempt in range(8):
+            try:
+                with urllib.request.urlopen(request, timeout=20) as response:
+                    raw = response.read().decode()
+                    return json.loads(raw) if raw else {}
+            except urllib.error.HTTPError as error:
+                detail = error.read().decode()[:200]
+                if error.code == 429 and attempt < 7:
+                    # The server says exactly how long to wait; guessing was
+                    # not enough for a burst of 150-odd writes against a
+                    # 120-per-minute limit.
+                    wait = error.headers.get("Retry-After")
+                    time.sleep(int(wait) + 1 if wait and wait.isdigit() else 15)
+                    request = urllib.request.Request(url, data=data, method=method)
+                    request.add_header("Content-Type", "application/json")
+                    if bearer:
+                        request.add_header("Authorization", f"Bearer {bearer}")
+                    continue
+                raise RuntimeError(
+                    f"{method} {path} -> {error.code}: {detail}"
+                ) from None
+            except urllib.error.URLError as error:
+                raise RuntimeError(f"cannot reach {url}: {error.reason}") from None
+        raise RuntimeError(f"{method} {path}: rate limited after several retries")
 
     def get(self, path, token=None):
         return self._call("GET", path, token=token)
 
     def post(self, path, body, token=None):
         return self._call("POST", path, body, token=token)
+
+    def put(self, path, body, token=None):
+        return self._call("PUT", path, body, token=token)
+
+    def login(self, email):
+        return self.post("/v1/auth/login", {"email": email, "password": PASSWORD})[
+            "accessToken"
+        ]
+
+    def seller_token(self, owner_user_id):
+        """Signs in as a shop's owner so their products can be edited.
+
+        Shops carry an owner id, not an email, and the demo accounts are created
+        with a per-run suffix nobody records. The address is read back out of
+        the database the stack is already running -- this is a tool for a local
+        demo, not something that ships.
+        """
+        email = owner_email(owner_user_id)
+        if email is None:
+            return None
+        try:
+            return self.login(email)
+        except RuntimeError:
+            return None
 
     def register(self, email, display_name):
         auth = self.post(
@@ -294,6 +337,91 @@ def log(message):
     print(message, flush=True)
 
 
+def owner_email(user_id):
+    """Reads a demo account's address straight from the running MongoDB."""
+    query = (
+        'db = db.getSiblingDB("vngrocery");'
+        f'const u = db.auth_users.findOne({{userId: "{user_id}"}});'
+        "print(u ? u.emailLower : '');"
+    )
+    try:
+        found = subprocess.run(
+            ["docker", "exec", "vngrocery-mongo", "mongosh", "--quiet", "--eval", query],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    email = found.stdout.strip()
+    return email or None
+
+
+# Reasons a seller actually gives when a price moves, paired with the direction
+# the price takes. A history of bare numbers says nothing; the note is what
+# makes the change legible on the product page.
+PRICE_MOVES = [
+    (0.06, "Nguồn cung giảm do mưa kéo dài."),
+    (-0.05, "Vào vụ, hàng về nhiều nên hạ giá."),
+    (0.04, "Chi phí vận chuyển tăng."),
+    (-0.03, "Điều chỉnh theo giá chợ đầu mối."),
+    (0.05, "Hàng tuyển loại 1, giá nhập cao hơn."),
+    (-0.04, "Khuyến mãi cuối tuần."),
+]
+
+
+def seed_price_history(api, changes_per_product):
+    """Give every published product a real run of price changes.
+
+    A product page shows its change history and a price chart; both are built
+    from the audit log, so a product nobody has ever edited has one entry and a
+    flat line. This walks the catalogue and makes real edits through the API,
+    so the entries are signed and chained exactly like any other change.
+    """
+    shops = api.get("/v1/shops?pageSize=100")["items"]
+    log(f"{len(shops)} cửa hàng")
+
+    touched = 0
+    for shop in shops:
+        token = api.seller_token(shop["ownerUserId"])
+        if token is None:
+            log(f"  bỏ qua {shop['name']}: không mở được tài khoản người bán")
+            continue
+
+        listing = api.get(f"/v1/shops/{shop['shopId']}/products")
+        products = listing["items"] if isinstance(listing, dict) else listing
+
+        for product in products:
+            moves = PRICE_MOVES[:changes_per_product]
+            current = product
+            for index, (delta, note) in enumerate(moves):
+                # Rounded to the nearest 1.000d: a real price tag is not
+                # 68.317d.
+                price = max(1000, round(current["price"] * (1 + delta) / 1000) * 1000)
+                current = api.put(
+                    f"/v1/shops/{shop['shopId']}/products/{current['productId']}",
+                    {
+                        "expectedVersion": current["version"],
+                        "name": current["name"],
+                        "description": current["description"],
+                        "category": current["category"],
+                        "tags": current["tags"],
+                        "freshnessNote": note,
+                        "freshnessScore": current["freshnessScore"],
+                        "price": price,
+                        "currency": current["currency"],
+                        "status": current["status"],
+                    },
+                    token=token,
+                )
+            touched += 1
+        log(f"  {shop['name']}: {len(products)} sản phẩm")
+
+    log(f"\n{touched} sản phẩm, mỗi sản phẩm {changes_per_product} lần đổi giá")
+    return touched
+
+
 def seed(api, suffix, only=None):
     created_shops = []
     wanted = [shop for shop in SHOPS if only is None or shop["name"] in only]
@@ -435,6 +563,16 @@ def main():
         action="store_true",
         help="Print the shop names this script can seed, then exit.",
     )
+    parser.add_argument(
+        "--price-history",
+        type=int,
+        metavar="N",
+        help=(
+            "Skip seeding shops; instead apply N real price changes to every "
+            "product already on the server, so each one has a change history "
+            "and a price chart to show."
+        ),
+    )
     args = parser.parse_args()
 
     if args.list:
@@ -456,6 +594,17 @@ def main():
     except RuntimeError as error:
         print(f"Server không phản hồi: {error}", file=sys.stderr)
         return 1
+
+    if args.price_history is not None:
+        if args.price_history < 1 or args.price_history > len(PRICE_MOVES):
+            print(
+                f"--price-history phải từ 1 đến {len(PRICE_MOVES)}",
+                file=sys.stderr,
+            )
+            return 1
+        log(f"Tạo lịch sử giá ({args.price_history} lần đổi mỗi sản phẩm)")
+        seed_price_history(api, args.price_history)
+        return 0
 
     suffix = str(int(time.time()))[-6:]
     log(f"Seeding {args.base_url} (hậu tố tài khoản: {suffix})")

@@ -25,6 +25,7 @@ import (
 	buyerservice "vngrocery/internal/service/buyer"
 	integrityservice "vngrocery/internal/service/integrity"
 	productservice "vngrocery/internal/service/product"
+	recommendservice "vngrocery/internal/service/recommend"
 	sellerservice "vngrocery/internal/service/seller"
 	shopservice "vngrocery/internal/service/shop"
 	useradminservice "vngrocery/internal/service/useradmin"
@@ -264,6 +265,17 @@ func main() {
 	mediaHandler := handler.NewMediaHandler(ipfsUploadAdapterOrNil(ipfsClient), uploadCfg)
 	shopHandler := handler.NewShopHandler(shopManager)
 	voucherHandler := handler.NewVoucherHandler(voucherManager)
+	// Suggestions read the same shop listing the discovery screens use, so they
+	// can never point at a shop those screens would have hidden.
+	recommendationManager := recommendservice.NewService(
+		shopManager,
+		productRepository,
+		shopReviewRepository,
+		buyerCheckRepository,
+		userVoucherRepository,
+		voucherRepository,
+	)
+	recommendationHandler := handler.NewRecommendationHandler(recommendationManager)
 
 	engine := router.New(router.Dependencies{
 		HealthHandler:             healthHandler,
@@ -277,6 +289,7 @@ func main() {
 		BuyerHandler:              buyerHandler,
 		ShopHandler:               shopHandler,
 		VoucherHandler:            voucherHandler,
+		RecommendationHandler:     recommendationHandler,
 		AuthMiddleware:            authMiddleware,
 		AdminMiddleware:           adminMiddleware,
 		Metrics:                   metrics,

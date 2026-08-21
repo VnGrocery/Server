@@ -23,6 +23,7 @@ type Dependencies struct {
 	BuyerHandler              *handler.BuyerHandler
 	ShopHandler               *handler.ShopHandler
 	VoucherHandler            *handler.VoucherHandler
+	RecommendationHandler     *handler.RecommendationHandler
 	AuthMiddleware            *middleware.AuthRequired
 	AdminMiddleware           *middleware.AdminRequired
 	Metrics                   *middleware.Metrics
@@ -126,6 +127,7 @@ func New(deps Dependencies) *gin.Engine {
 			v1.POST("/me/vouchers", deps.AuthMiddleware.Handle(), deps.VoucherHandler.Save)
 			v1.POST("/me/vouchers/manual", deps.AuthMiddleware.Handle(), deps.VoucherHandler.AddManual)
 			v1.POST("/me/vouchers/:userVoucherId/use", deps.AuthMiddleware.Handle(), deps.VoucherHandler.Use)
+			v1.GET("/me/recommendations", deps.AuthMiddleware.Handle(), deps.RecommendationHandler.List)
 		}
 		v1.GET("/admin/shops", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.ShopHandler.AdminList)
 		v1.PATCH("/admin/shops/:shopId/moderation", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.ShopHandler.Moderate)

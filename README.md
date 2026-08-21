@@ -13,8 +13,7 @@ Hệ thống lưu audit trail, proof, image CID, và integrity anchor để tăn
 
 ## Stack
 - `Go`: API, worker, business logic
-- `MongoDB`: backend mặc định
-- `Firestore`: backend tùy chọn khi tắt MongoDB
+- `MongoDB`: backend lưu trữ duy nhất
 - `Vault`: lưu private key account
 - `Besu QBFT`: anchor integrity hash
 - `Kubo IPFS`: lưu image CID
@@ -30,6 +29,8 @@ Hệ thống lưu audit trail, proof, image CID, và integrity anchor để tăn
 - Besu integrity anchoring
 - asynchronous Besu anchoring with RPC failover and retry backoff
 - IPFS image CID flow
+- lọc cửa hàng theo bán kính (`lat`/`lng`/`radiusKm`), trả kèm `distanceKm`
+- lịch sử thay đổi sản phẩm + chuỗi giá 30 ngày, dựng từ event log đã ký
 
 ## Quick Start
 1. Tạo `.env`
@@ -37,28 +38,22 @@ Hệ thống lưu audit trail, proof, image CID, và integrity anchor để tăn
 cp .env.example .env
 ```
 
-2. Điền `JWT_SECRET`, `OPENAI_API_KEY`, và chọn storage backend
+2. Điền `JWT_SECRET` và `OPENAI_API_KEY`
 
-MongoDB là mặc định:
+MongoDB là backend duy nhất; thiếu nó Server dừng ngay lúc khởi động:
 ```dotenv
 MONGODB_ENABLED=true
 MONGODB_URI=mongodb://127.0.0.1:27017
 MONGODB_DATABASE=vngrocery
-FIREBASE_ENABLED=false
-```
-
-Chỉ dùng Firestore khi:
-```dotenv
-MONGODB_ENABLED=false
-FIREBASE_ENABLED=true
-FIREBASE_PROJECT_ID=your-project
-FIREBASE_CREDENTIALS_FILE=./secrets/firebase-service-account.json
 ```
 
 3. Chạy stack local
 ```bash
 ./scripts/vng up
 ```
+
+API nằm ở cổng `5050` của máy host (cổng 5000 bị AirPlay Receiver của macOS
+chiếm sẵn). Đổi bằng `API_PORT` trong `.env` nếu cần.
 
 4. Nếu Vault chưa init/unseal, làm theo hướng dẫn script in ra
 
@@ -80,12 +75,11 @@ IMAGE_PATH=/abs/path/to/image.jpg ./scripts/e2e-mobile-flow.sh
 
 ## Important Docs
 
-Mobile cấu hình Server bằng `--dart-define=API_BASE_URL=<server-url>`. Các route tích hợp bổ sung gồm `GET /v1/me/shop`, `GET /v1/seller/shops/:shopId/products`, `/v1/vouchers/check` và `/v1/me/vouchers`. Contract đầy đủ có tại `/docs` và `/openapi.json` khi Server đang chạy.
-- setup từ đầu: [docs/setup/00-start-here.md](/home/dora/VNGrocery/server/docs/setup/00-start-here.md)
-- setup MongoDB: [docs/setup/02a-mongodb-or-firestore.md](/home/dora/VNGrocery/server/docs/setup/02a-mongodb-or-firestore.md)
-- vận hành: [docs/operations.md](/home/dora/VNGrocery/server/docs/operations.md)
-- mobile API handoff: [docs/mobile-api-playbook.md](/home/dora/VNGrocery/server/docs/mobile-api-playbook.md)
-- mobile design handoff: [tmp/mobile-design-handoff/00-start-here.md](/home/dora/VNGrocery/server/tmp/mobile-design-handoff/00-start-here.md)
+Mobile cấu hình Server bằng `--dart-define=API_BASE_URL=<server-url>`; mặc định là `http://10.0.2.2:5050`. Các route tích hợp bổ sung gồm `GET /v1/me/shop`, `GET /v1/seller/shops/:shopId/products`, `GET /v1/shops/:shopId/products/:productId/history`, `/v1/vouchers/check` và `/v1/me/vouchers`. Contract đầy đủ có tại `/docs` và `/openapi.json` khi Server đang chạy.
+- setup từ đầu: [docs/setup/00-start-here.md](docs/setup/00-start-here.md)
+- triển khai một máy, từng bước: [docs/HUONG-DAN-TRIEN-KHAI.md](docs/HUONG-DAN-TRIEN-KHAI.md)
+- vận hành: [docs/operations.md](docs/operations.md)
+- mobile API handoff: [docs/mobile-api-playbook.md](docs/mobile-api-playbook.md)
 
 ## Useful Commands
 ```bash
@@ -94,6 +88,9 @@ make help
 ./scripts/vng chain-up
 make ipfs-up
 ./scripts/vng up
+./scripts/vng seed
+./scripts/vng seed-history
+./scripts/vng health
 make logs service=api
 make clean
 make clean-all

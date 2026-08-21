@@ -107,6 +107,7 @@ type ShopReviewRepository interface {
 	Save(ctx context.Context, review domain.ShopReview) error
 	GetByShopAndUser(ctx context.Context, shopID, reviewerUserID string) (domain.ShopReview, error)
 	ListByShopID(ctx context.Context, shopID string) ([]domain.ShopReview, error)
+	ListByReviewerUserID(ctx context.Context, reviewerUserID string) ([]domain.ShopReview, error)
 }
 
 type VoucherRepository interface {

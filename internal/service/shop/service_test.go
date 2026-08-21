@@ -152,6 +152,10 @@ func (r reviewRepositoryStub) GetByShopAndUser(ctx context.Context, shopID, revi
 	return r.getByShopAndUser(ctx, shopID, reviewerUserID)
 }
 
+func (r reviewRepositoryStub) ListByReviewerUserID(ctx context.Context, reviewerUserID string) ([]domain.ShopReview, error) {
+	return nil, nil
+}
+
 func (r reviewRepositoryStub) ListByShopID(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
 	if r.listByShopID == nil {
 		return nil, nil

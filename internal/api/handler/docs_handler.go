@@ -1370,6 +1370,18 @@ func buildPaths() gin.H {
 	paths["/v1/me/shop"] = gin.H{"get": gin.H{"summary": "Get the authenticated seller shop", "security": []gin.H{{"bearerAuth": []string{}}}, "responses": mergeResponses(success(http.StatusOK, "ShopResponse"), errorResponse)}}
 	paths["/v1/seller/shops/{shopId}/products"] = gin.H{"get": gin.H{"summary": "List all products owned by the authenticated seller", "security": []gin.H{{"bearerAuth": []string{}}}, "parameters": []gin.H{pathParam("shopId")}, "responses": mergeResponses(success(http.StatusOK, "ProductListResponse"), errorResponse)}}
 	paths["/v1/vouchers/check"] = gin.H{"post": gin.H{"summary": "Validate a voucher and calculate its discount", "requestBody": jsonBody("VoucherCheckRequest"), "responses": mergeResponses(success(http.StatusOK, "VoucherCheckResponse"), errorResponse)}}
+	paths["/v1/me/recommendations"] = gin.H{"get": gin.H{
+		"summary":     "Shops and products suggested for the authenticated user",
+		"description": "Ranked from what the reader has actually done: shops they reviewed, products they checked, vouchers they saved. Each suggestion carries the reasons behind it. personalised is false when there is no such history, in which case the list is ordered by trust and distance and must not be presented as personal. lat, lng and radiusKm are optional and go together.",
+		"security":    []gin.H{{"bearerAuth": []string{}}},
+		"parameters": []gin.H{
+			queryParam("lat", "number"),
+			queryParam("lng", "number"),
+			queryParam("radiusKm", "number"),
+			queryParam("limit", "integer"),
+		},
+		"responses": mergeResponses(success(http.StatusOK, "RecommendationsResponse"), errorResponse),
+	}}
 	paths["/v1/me/vouchers"] = gin.H{"get": gin.H{"summary": "List the authenticated user's voucher wallet", "security": []gin.H{{"bearerAuth": []string{}}}, "responses": errorResponse}, "post": gin.H{"summary": "Save a voucher to the authenticated user's wallet", "security": []gin.H{{"bearerAuth": []string{}}}, "responses": mergeResponses(success(http.StatusCreated, "UserVoucherResponse"), errorResponse)}}
 	paths["/v1/me/vouchers/{userVoucherId}/use"] = gin.H{"post": gin.H{"summary": "Mark a wallet voucher as used", "security": []gin.H{{"bearerAuth": []string{}}}, "parameters": []gin.H{pathParam("userVoucherId")}, "responses": mergeResponses(success(http.StatusOK, "UserVoucherResponse"), errorResponse)}}
 

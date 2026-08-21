@@ -28,6 +28,20 @@ func (r *ShopReviewRepository) GetByShopAndUser(ctx context.Context, shopID, rev
 	}
 	return items[0], nil
 }
+
+// ListByReviewerUserID returns what one person has reviewed, newest first.
+//
+// Reviews are the only record of what a reader has engaged with that exists for
+// most accounts, so this is what recommendations are built from.
+func (r *ShopReviewRepository) ListByReviewerUserID(ctx context.Context, reviewerUserID string) ([]domain.ShopReview, error) {
+	items, err := listDocuments[domain.ShopReview](ctx, r.collection, bson.M{"reviewerUserId": reviewerUserID})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].UpdatedAt.After(items[j].UpdatedAt) })
+	return items, nil
+}
+
 func (r *ShopReviewRepository) ListByShopID(ctx context.Context, shopID string) ([]domain.ShopReview, error) {
 	items, err := listDocuments[domain.ShopReview](ctx, r.collection, bson.M{"shopId": shopID})
 	if err != nil {

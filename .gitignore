@@ -58,3 +58,7 @@ out/
 # Vault unseal key and root token, written by `./scripts/vng up`
 secrets/*
 !secrets/.gitkeep
+
+# Photos downloaded by `./scripts/vng seed-images`. Re-fetched on demand; the
+# credits file next to them is regenerated with them.
+scripts/.image-cache/

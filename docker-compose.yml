@@ -28,7 +28,12 @@ services:
       VAULT_KEYS_PATH_PREFIX: account-keys
       IPFS_ENABLED: "true"
       IPFS_API_URL: http://ipfs:5001
-      IPFS_GATEWAY_URL: http://ipfs:8080
+      # This one is not for the API's own use: it is the prefix baked into the
+      # image URLs handed to clients, so it has to be an address the phone can
+      # reach, not a compose service name. 10.0.2.2 is the Android emulator's
+      # alias for the host, matching the API base the app ships with. Point it
+      # at your machine's LAN address to browse from a real device.
+      IPFS_GATEWAY_URL: ${IPFS_PUBLIC_GATEWAY_URL:-http://10.0.2.2:8080}
       CACHE_BACKEND: redis
       CACHE_PREFIX: "vngrocery:cache:"
       CACHE_TTL_SECONDS: 10
@@ -71,6 +76,11 @@ services:
       - vngrocery_app
     restart: unless-stopped
 
+  # File-backed rather than `-dev`. Dev mode keeps everything in memory, so
+  # every restart of the stack silently threw away every account's signing key:
+  # reads carried on working off Mongo, but no seller could record a change
+  # again, and the failure only showed up as a Vault 404 deep in a write.
+  # `./scripts/vng up` initialises and unseals this automatically.
   vault:
     image: hashicorp/vault:1.19
     container_name: vngrocery-vault
@@ -128,6 +138,7 @@ services:
     restart: unless-stopped
 
 volumes:
+  vault-data:
   mongo-data:
   ipfs-staging:
   ipfs-data:
@@ -136,4 +147,3 @@ volumes:
 networks:
   vngrocery_app:
     name: vngrocery_app
-  vault-data:

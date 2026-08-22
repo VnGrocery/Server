@@ -55,6 +55,76 @@ warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m[error]\033[0m %s\n' "$*" >&2; exit 1; }
 
 require_env_file() {
+VAULT_INIT_FILE="$SERVER_DIR/secrets/vault-init.json"
+
+# Brings Vault up, initialises it the first time, and unseals it after that.
+#
+# Vault used to run in `-dev` mode, which keeps its whole store in memory. Every
+# `vng up` therefore wiped every account's Ed25519 signing key. Nothing looked
+# broken — reads come from Mongo — but the next write failed with a Vault 404
+# from deep inside the signing path, and the demo data could no longer be
+# extended. The file backend keeps the keys across restarts; the cost is that
+# Vault now starts sealed, which is what this handles.
+#
+# One unseal key, threshold one. That is deliberately not how a production
+# Vault should be set up, and prod uses its own overlay: here the whole point is
+# that a stack anyone can start must not need a human holding key shares.
+ensure_vault() {
+  info "Starting Vault"
+  dc up -d vault >/dev/null
+
+  local ready=""
+  for _ in $(seq 1 45); do
+    # Sealed and uninitialised both answer here; only a Vault that is not
+    # listening at all does not.
+    if curl -fsS --max-time 2 \
+      "http://127.0.0.1:8200/v1/sys/health?sealedcode=200&uninitcode=200&standbycode=200" \
+      >/dev/null 2>&1; then
+      ready=yes
+      break
+    fi
+    sleep 1
+  done
+  [[ -n "$ready" ]] || die "Vault did not start. Check: ./scripts/vng logs vault"
+
+  local initialised
+  initialised="$(curl -fsS --max-time 5 \
+    "http://127.0.0.1:8200/v1/sys/health?sealedcode=200&uninitcode=200&standbycode=200" \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["initialized"])')"
+
+  if [[ "$initialised" != "True" ]]; then
+    info "Initialising Vault for the first time"
+    mkdir -p "$SERVER_DIR/secrets"
+    dc exec -T vault vault operator init -key-shares=1 -key-threshold=1 -format=json \
+      > "$VAULT_INIT_FILE" || die "Vault init failed"
+    chmod 600 "$VAULT_INIT_FILE"
+    warn "Unseal key and root token written to secrets/vault-init.json - keep it, Vault cannot be opened without it"
+  fi
+
+  [[ -f "$VAULT_INIT_FILE" ]] || die "Vault is initialised but secrets/vault-init.json is missing, so it cannot be unsealed. Restore that file, or wipe Vault with: ./scripts/vng reset"
+
+  local unseal_key root_token
+  unseal_key="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["unseal_keys_b64"][0])' "$VAULT_INIT_FILE")"
+  root_token="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["root_token"])' "$VAULT_INIT_FILE")"
+
+  if ! dc exec -T vault vault status >/dev/null 2>&1; then
+    info "Unsealing Vault"
+    dc exec -T vault vault operator unseal "$unseal_key" >/dev/null \
+      || die "Vault unseal failed. If you wiped the volume, delete secrets/vault-init.json and run up again."
+  fi
+
+  # Dev mode mounted kv-v2 at secret/ for us; the file backend does not.
+  if ! dc exec -T vault sh -lc "VAULT_TOKEN='$root_token' vault secrets list -format=json" \
+      | grep -q '"secret/"'; then
+    info "Enabling the kv-v2 store account keys live in"
+    dc exec -T vault sh -lc "VAULT_TOKEN='$root_token' vault secrets enable -path=secret kv-v2" >/dev/null \
+      || die "Could not enable the kv-v2 secrets engine"
+  fi
+
+  # The API reads this through docker-compose's ${VAULT_TOKEN} interpolation.
+  export VAULT_TOKEN="$root_token"
+}
+
   if [[ ! -f "$SERVER_DIR/.env" ]]; then
     warn ".env not found - creating it from .env.example"
     cp "$SERVER_DIR/.env.example" "$SERVER_DIR/.env"
@@ -116,6 +186,9 @@ case "$COMMAND" in
     info "Validating compose files"
     dc config >/dev/null
     info "Starting stack (profile=$PROFILE, chain=$CHAIN)"
+    # Before the rest of the stack: the API refuses to start against a sealed
+    # Vault, and it needs the root token this produces.
+    ensure_vault
     dc up -d --build "$@"
     summary
     ;;
@@ -262,7 +335,7 @@ Commands:
   health            check API + chain
   reset             wipe containers and volumes (asks for confirmation)
   contract-deploy   deploy IntegrityRegistry and update .env
-  vault-init        initialise persistent Vault (--prod only)
+  vault-init        initialise persistent Vault (--prod only; dev is automatic)
   e2e               end-to-end API smoke test
   seed              fill the database with believable demo data
   seed-history      give every product a month of signed price changes

@@ -40,8 +40,9 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # Dev-mode Vault keeps everything in memory and resets on restart, so prod
-  # swaps in the file-backed config. It needs manual init/unseal once:
+  # Both profiles are file-backed now. Prod keeps the manual init/unseal so the
+  # unseal key shares can be split between people rather than left on the disk
+  # next to the data they open:
   #   ./scripts/vng vault-init
   vault:
     environment:

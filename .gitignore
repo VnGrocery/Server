@@ -54,3 +54,7 @@ cache/
 out/
 
 .key.md
+
+# Vault unseal key and root token, written by `./scripts/vng up`
+secrets/*
+!secrets/.gitkeep

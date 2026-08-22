@@ -157,7 +157,14 @@ func averageSeries(series []marketSeries, now time.Time, windowDays int) []Price
 				counted++
 			}
 		}
-		if counted == 0 {
+		// One shop is not a market. Averaging a single listing just replays
+		// that shop's own price back at it under the heading "market
+		// average", which is the one thing this chart must not do: the reader
+		// is being shown it to judge whether the price in front of them is
+		// fair. The line therefore starts at the first moment a second shop
+		// was actually listing the item, and stops if the field thins out
+		// again, rather than pretending a comparison exists throughout.
+		if counted < 2 {
 			continue
 		}
 		averaged = append(averaged, PricePoint{At: instant, Price: total / float64(counted)})

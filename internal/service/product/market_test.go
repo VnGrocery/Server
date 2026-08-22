@@ -45,16 +45,52 @@ func TestAverageSeriesLeavesOutAShopThatDidNotSellItYet(t *testing.T) {
 
 	averaged := averageSeries(series, marketNow, 30)
 
-	if averaged[0].Price != 100 {
-		t.Fatalf("expected only the first shop to count at day 20, got %v", averaged[0].Price)
+	if len(averaged) == 0 {
+		t.Fatal("expected a line once both shops were listing")
+	}
+	for _, point := range averaged {
+		// 50 is what averaging 100 with an absent shop read as zero would give.
+		if point.Price == 50 {
+			t.Fatalf("a shop that was not listing was counted as zero: %+v", point)
+		}
 	}
 	if averaged[len(averaged)-1].Price != 150 {
 		t.Fatalf("expected both to count once listed, got %v", averaged[len(averaged)-1].Price)
 	}
 }
 
+func TestAverageSeriesStartsOnlyWhereThereIsAMarket(t *testing.T) {
+	// Until a second shop lists the item there is nothing to compare against,
+	// and averaging the one listing would hand this shop's own price back to
+	// the reader labelled as the market's.
+	series := []marketSeries{
+		{shopID: "alone", points: []PricePoint{{At: day(20), Price: 100}}},
+		{shopID: "later", points: []PricePoint{{At: day(5), Price: 200}}},
+	}
+
+	averaged := averageSeries(series, marketNow, 30)
+
+	if len(averaged) == 0 {
+		t.Fatal("expected a line once both shops were listing")
+	}
+	if averaged[0].At.Before(day(5)) {
+		t.Fatalf("line began before a second shop listed, at %v", averaged[0].At)
+	}
+}
+
+func TestAverageSeriesIsEmptyWhileOnlyOneShopSells(t *testing.T) {
+	series := []marketSeries{
+		{shopID: "alone", points: []PricePoint{{At: day(20), Price: 100}}},
+	}
+
+	if averaged := averageSeries(series, marketNow, 30); len(averaged) != 0 {
+		t.Fatalf("expected no market line for a single seller, got %+v", averaged)
+	}
+}
+
 func TestAverageSeriesCarriesAPriceSetBeforeTheWindow(t *testing.T) {
-	// A shop that has not touched its price for months still charges it.
+	// A shop that has not touched its price for months still charges it, so it
+	// counts from the moment the comparison becomes possible.
 	series := []marketSeries{
 		{shopID: "a", points: []PricePoint{{At: day(200), Price: 100}}},
 		{shopID: "b", points: []PricePoint{{At: day(5), Price: 200}}},
@@ -65,11 +101,11 @@ func TestAverageSeriesCarriesAPriceSetBeforeTheWindow(t *testing.T) {
 	if len(averaged) == 0 {
 		t.Fatal("expected a line to draw")
 	}
-	if !averaged[0].At.Equal(day(30)) {
-		t.Fatalf("expected the line to start at the window edge, got %v", averaged[0].At)
+	if !averaged[0].At.Equal(day(5)) {
+		t.Fatalf("expected the line to start when the second shop listed, got %v", averaged[0].At)
 	}
-	if averaged[0].Price != 100 {
-		t.Fatalf("expected the standing price at the window edge, got %v", averaged[0].Price)
+	if averaged[0].Price != 150 {
+		t.Fatalf("expected the long-standing price to still count, got %v", averaged[0].Price)
 	}
 }
 

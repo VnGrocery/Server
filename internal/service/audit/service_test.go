@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -315,5 +316,47 @@ func TestVerifyEventAndResourceChain(t *testing.T) {
 	}
 	if !verifiedResource.Verified || verifiedResource.EventCount != 2 || len(verifiedResource.Events) != 2 {
 		t.Fatalf("unexpected resource verification result: %+v", verifiedResource)
+	}
+}
+
+// The reason is signed with the event, and adding the field must not disturb
+// the 856 events written before it existed: their envelopes have to serialize
+// byte-for-byte as they did, or every one of them stops verifying.
+func TestSignedEnvelopeKeepsOldEventsByteIdentical(t *testing.T) {
+	withReason, err := json.Marshal(signedEnvelope{
+		Action:          "shop.updated",
+		ActorUserID:     "user-1",
+		OccurredAt:      "2026-08-24T00:00:00Z",
+		Payload:         json.RawMessage(`{"after":1}`),
+		Reason:          "Đổi địa chỉ sạp",
+		ResourceID:      "shop-1",
+		ResourceType:    "shop",
+		ResourceVersion: 2,
+		Sequence:        2,
+		PreviousEventID: "event-1",
+	})
+	if err != nil {
+		t.Fatalf("marshal with reason: %v", err)
+	}
+	if !strings.Contains(string(withReason), `"reason":"Đổi địa chỉ sạp"`) {
+		t.Fatalf("the reason has to be inside the signed bytes: %s", withReason)
+	}
+
+	withoutReason, err := json.Marshal(signedEnvelope{
+		Action:          "shop.updated",
+		ActorUserID:     "user-1",
+		OccurredAt:      "2026-08-24T00:00:00Z",
+		Payload:         json.RawMessage(`{"after":1}`),
+		ResourceID:      "shop-1",
+		ResourceType:    "shop",
+		ResourceVersion: 2,
+		Sequence:        2,
+		PreviousEventID: "event-1",
+	})
+	if err != nil {
+		t.Fatalf("marshal without reason: %v", err)
+	}
+	if strings.Contains(string(withoutReason), "reason") {
+		t.Fatalf("an event with no reason must serialize exactly as before: %s", withoutReason)
 	}
 }

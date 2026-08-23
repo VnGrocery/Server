@@ -108,6 +108,7 @@ func (h *ShopHandler) Update(c *gin.Context) {
 	shop, err := h.shops.Update(c.Request.Context(), shopsvc.UpdateInput{
 		ShopID:          c.Param("shopId"),
 		OwnerUserID:     principal.UserID,
+		ChangeReason:    request.ChangeReason,
 		ExpectedVersion: request.ExpectedVersion,
 		Name:            request.Name,
 		Description:     request.Description,
@@ -139,6 +140,7 @@ func (h *ShopHandler) Delete(c *gin.Context) {
 	shop, err := h.shops.Delete(c.Request.Context(), shopsvc.DeleteInput{
 		ShopID:          c.Param("shopId"),
 		OwnerUserID:     principal.UserID,
+		ChangeReason:    c.Query("changeReason"),
 		ExpectedVersion: expectedVersion,
 	})
 	if err != nil {

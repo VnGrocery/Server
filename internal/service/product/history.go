@@ -42,6 +42,11 @@ type HistoryEntry struct {
 	ActorName   string
 	OccurredAt  time.Time
 
+	// Why the actor made this change, in their own words. Signed with the
+	// entry, so it is as tamper-evident as the numbers beside it. Empty on
+	// entries written before the field existed.
+	Reason string
+
 	// Verified is true when the content hash, the signature and the link to the
 	// previous entry all check out.
 	Verified         bool
@@ -258,6 +263,7 @@ func (s *Service) historyEntry(
 		ActorUserID: event.ActorUserID,
 		ActorName:   s.actorName(ctx, event.ActorUserID),
 		OccurredAt:  parseOccurredAt(event),
+		Reason:      strings.TrimSpace(event.Reason),
 	}
 
 	if snapshot.After != nil {

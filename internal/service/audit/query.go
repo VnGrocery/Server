@@ -265,6 +265,7 @@ func signedEnvelopeBytes(event domain.EventLog) ([]byte, error) {
 		ActorUserID:     strings.TrimSpace(event.ActorUserID),
 		OccurredAt:      occurredAt,
 		Payload:         payload,
+		Reason:          strings.TrimSpace(event.Reason),
 		ResourceID:      strings.TrimSpace(event.ResourceID),
 		ResourceType:    strings.TrimSpace(event.ResourceType),
 		ResourceVersion: event.ResourceVersion,

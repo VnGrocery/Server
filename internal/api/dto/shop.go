@@ -3,12 +3,17 @@ package dto
 import "time"
 
 type UpsertShopRequest struct {
-	ExpectedVersion int     `json:"expectedVersion"`
-	Name            string  `json:"name"`
-	Description     string  `json:"description"`
-	Address         string  `json:"address"`
-	Latitude        float64 `json:"latitude"`
-	Longitude       float64 `json:"longitude"`
+	ExpectedVersion int `json:"expectedVersion"`
+
+	// Why this change is being made. Required on update and delete; signed
+	// into the event log with everything else.
+	ChangeReason string `json:"changeReason"`
+
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Address     string  `json:"address"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
 }
 
 type ModerateShopRequest struct {

@@ -174,6 +174,7 @@ func TestUpdateProductRejectsVersionConflict(t *testing.T) {
 	}, userRepositoryStub{}, nil)
 
 	_, err := service.Update(context.Background(), UpdateInput{
+		ChangeReason:    "Cập nhật thông tin",
 		ProductID:       "product-1",
 		ShopID:          "shop-1",
 		OwnerUserID:     "user-1",
@@ -211,6 +212,7 @@ func TestDeleteProductMarksDeleted(t *testing.T) {
 	}, userRepositoryStub{}, auditLogger)
 
 	product, err := service.Delete(context.Background(), DeleteInput{
+		ChangeReason:    "Ngừng bán mặt hàng",
 		ProductID:       "product-1",
 		ShopID:          "shop-1",
 		OwnerUserID:     "user-1",

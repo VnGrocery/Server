@@ -31,6 +31,11 @@ type CommitInput struct {
 	Confidence      float64
 	ImageHash       string
 	ImageCID        string
+
+	// Why this score. Required: it is hashed with the rest of the pledge and
+	// anchored, so a buyer reading the record sees the reasoning, not just a
+	// number somebody typed.
+	Note string
 }
 
 type CommitService interface {
@@ -117,6 +122,7 @@ func (s *Service) Commit(ctx context.Context, input CommitInput) (domain.Pledge,
 		Confidence:      input.Confidence,
 		ImageHash:       strings.TrimSpace(input.ImageHash),
 		ImageCID:        strings.TrimSpace(input.ImageCID),
+		Note:            strings.TrimSpace(input.Note),
 		CommittedAt:     now,
 		CreatedAt:       now,
 		UpdatedAt:       now,
@@ -202,6 +208,13 @@ func validateCommitInput(input CommitInput) error {
 	}
 	if input.Confidence < 0 || input.Confidence > 1 {
 		return fmt.Errorf("%w: confidence must be between 0 and 1", ErrInvalidCommit)
+	}
+	note := strings.TrimSpace(input.Note)
+	if len([]rune(note)) < 5 {
+		return fmt.Errorf("%w: note is required", ErrInvalidCommit)
+	}
+	if len([]rune(note)) > 200 {
+		return fmt.Errorf("%w: note is too long", ErrInvalidCommit)
 	}
 
 	return nil

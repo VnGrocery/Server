@@ -84,6 +84,7 @@ func (h *ProductHandler) Update(c *gin.Context) {
 	}
 
 	product, err := h.products.Update(c.Request.Context(), productsvc.UpdateInput{
+		ChangeReason:    request.ChangeReason,
 		ProductID:       c.Param("productId"),
 		ShopID:          c.Param("shopId"),
 		OwnerUserID:     principal.UserID,
@@ -120,6 +121,7 @@ func (h *ProductHandler) Delete(c *gin.Context) {
 	}
 
 	product, err := h.products.Delete(c.Request.Context(), productsvc.DeleteInput{
+		ChangeReason:    c.Query("changeReason"),
 		ProductID:       c.Param("productId"),
 		ShopID:          c.Param("shopId"),
 		OwnerUserID:     principal.UserID,
@@ -475,6 +477,7 @@ func (h *ProductHandler) History(c *gin.Context) {
 		entries = append(entries, dto.ProductHistoryEntryResponse{
 			SHA:              entry.SHA,
 			ShortSHA:         entry.ShortSHA,
+			Reason:           entry.Reason,
 			PreviousSHA:      entry.PreviousSHA,
 			Sequence:         entry.Sequence,
 			Action:           entry.Action,

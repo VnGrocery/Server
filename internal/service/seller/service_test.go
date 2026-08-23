@@ -90,6 +90,7 @@ func TestCommitCreatesPledge(t *testing.T) {
 	service.now = func() time.Time { return fixedTime }
 
 	pledge, err := service.Commit(context.Background(), CommitInput{
+		Note:            "Hàng mới nhập sáng nay",
 		ShopID:          "shop-1",
 		ProductID:       "product-1",
 		BundleID:        "bundle-1",
@@ -120,6 +121,7 @@ func TestCommitRejectsInvalidInput(t *testing.T) {
 	}, productRepositoryStub{}, nil)
 
 	_, err := service.Commit(context.Background(), CommitInput{
+		Note:            "Hàng mới nhập sáng nay",
 		ShopID:          "",
 		BundleID:        "bundle-1",
 		CreatedByUserID: "user-1",
@@ -146,6 +148,7 @@ func TestCommitRejectsMissingShop(t *testing.T) {
 	}, productRepositoryStub{}, nil)
 
 	_, err := service.Commit(context.Background(), CommitInput{
+		Note:            "Hàng mới nhập sáng nay",
 		ShopID:          "shop-1",
 		BundleID:        "bundle-1",
 		CreatedByUserID: "user-1",
@@ -172,6 +175,7 @@ func TestCommitRejectsNonOwnerShop(t *testing.T) {
 	}, productRepositoryStub{}, nil)
 
 	_, err := service.Commit(context.Background(), CommitInput{
+		Note:            "Hàng mới nhập sáng nay",
 		ShopID:          "shop-1",
 		BundleID:        "bundle-1",
 		CreatedByUserID: "user-1",
@@ -252,6 +256,7 @@ func TestCommitWritesAuditLog(t *testing.T) {
 	}, productRepositoryStub{}, auditLogger)
 
 	if _, err := service.Commit(context.Background(), CommitInput{
+		Note:            "Hàng mới nhập sáng nay",
 		ShopID:          "shop-1",
 		BundleID:        "bundle-1",
 		CreatedByUserID: "user-1",

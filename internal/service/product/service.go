@@ -51,6 +51,11 @@ type CreateInput struct {
 }
 
 type UpdateInput struct {
+	// Why the owner is making this change. Required: it is signed with the
+	// rest of the event, so the price history reads as a record of decisions
+	// rather than a list of numbers.
+	ChangeReason string
+
 	ProductID       string
 	ShopID          string
 	OwnerUserID     string
@@ -68,6 +73,8 @@ type UpdateInput struct {
 }
 
 type DeleteInput struct {
+	ChangeReason string
+
 	ProductID       string
 	ShopID          string
 	OwnerUserID     string
@@ -237,13 +244,17 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Product
 	if err := s.products.Save(ctx, product); err != nil {
 		return domain.Product{}, err
 	}
-	if err := s.logMutation(ctx, product.OwnerUserID, product.ProductID, product.Version, "product.created", audit.MutationPayload{After: product}, "created"); err != nil {
+	if err := s.logMutation(ctx, product.OwnerUserID, product.ProductID, product.Version, "product.created", audit.MutationPayload{After: product}, "created", ""); err != nil {
 		return domain.Product{}, err
 	}
 	return product, nil
 }
 
 func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Product, error) {
+	reason, err := validateChangeReason(input.ChangeReason)
+	if err != nil {
+		return domain.Product{}, err
+	}
 	if strings.TrimSpace(input.ProductID) == "" {
 		return domain.Product{}, fmt.Errorf("%w: productId is required", ErrInvalidProduct)
 	}
@@ -295,13 +306,17 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Product
 	if err := s.logMutation(ctx, existing.OwnerUserID, existing.ProductID, existing.Version, "product.updated", audit.MutationPayload{
 		Before: before,
 		After:  existing,
-	}, "updated"); err != nil {
+	}, "updated", reason); err != nil {
 		return domain.Product{}, err
 	}
 	return existing, nil
 }
 
 func (s *Service) Delete(ctx context.Context, input DeleteInput) (domain.Product, error) {
+	reason, err := validateChangeReason(input.ChangeReason)
+	if err != nil {
+		return domain.Product{}, err
+	}
 	if strings.TrimSpace(input.ProductID) == "" {
 		return domain.Product{}, fmt.Errorf("%w: productId is required", ErrInvalidProduct)
 	}
@@ -341,7 +356,7 @@ func (s *Service) Delete(ctx context.Context, input DeleteInput) (domain.Product
 	if err := s.logMutation(ctx, existing.OwnerUserID, existing.ProductID, existing.Version, "product.deleted", audit.MutationPayload{
 		Before: before,
 		After:  existing,
-	}, "deleted"); err != nil {
+	}, "deleted", reason); err != nil {
 		return domain.Product{}, err
 	}
 	return existing, nil
@@ -383,7 +398,7 @@ func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.Pro
 	if err := s.products.Save(ctx, existing); err != nil {
 		return domain.Product{}, err
 	}
-	if err := s.logMutation(ctx, existing.ModeratedByUserID, existing.ProductID, existing.Version, "product.moderated", audit.MutationPayload{Before: before, After: existing}, "moderated"); err != nil {
+	if err := s.logMutation(ctx, existing.ModeratedByUserID, existing.ProductID, existing.Version, "product.moderated", audit.MutationPayload{Before: before, After: existing}, "moderated", existing.ModerationNote); err != nil {
 		return domain.Product{}, err
 	}
 	return existing, nil
@@ -683,7 +698,7 @@ func (s *Service) requireOwnedShop(ctx context.Context, shopID, ownerUserID stri
 	return shop, nil
 }
 
-func (s *Service) logMutation(ctx context.Context, actorUserID, productID string, version int, action string, payload any, status string) error {
+func (s *Service) logMutation(ctx context.Context, actorUserID, productID string, version int, action string, payload any, status, reason string) error {
 	if s.audit == nil {
 		return nil
 	}
@@ -694,6 +709,7 @@ func (s *Service) logMutation(ctx context.Context, actorUserID, productID string
 		ResourceVersion: version,
 		Action:          action,
 		Status:          status,
+		Reason:          strings.TrimSpace(reason),
 		Payload:         payload,
 	})
 }
@@ -893,4 +909,22 @@ func sortProducts(products []domain.Product, sortBy string) {
 	default:
 		sort.Slice(products, func(i, j int) bool { return products[i].CreatedAt.Before(products[j].CreatedAt) })
 	}
+}
+
+// A change to a signed record has to say why. See the same rule in the shop
+// service: the chain proved what changed and who changed it, never why.
+const (
+	minChangeReason = 5
+	maxChangeReason = 200
+)
+
+func validateChangeReason(reason string) (string, error) {
+	trimmed := strings.TrimSpace(reason)
+	if len([]rune(trimmed)) < minChangeReason {
+		return "", fmt.Errorf("%w: changeReason is required", ErrInvalidProduct)
+	}
+	if len([]rune(trimmed)) > maxChangeReason {
+		return "", fmt.Errorf("%w: changeReason is too long", ErrInvalidProduct)
+	}
+	return trimmed, nil
 }

@@ -26,10 +26,18 @@ type Input struct {
 	ResourceVersion int
 	Action          string
 	Status          string
-	Payload         any
-	PublicKey       string
-	KeyAlgorithm    string
-	SignerVaultKey  string
+
+	// Why the actor made this change, in their own words.
+	//
+	// Inside the signed envelope, not beside it: a reason a shop could edit
+	// afterwards would be a caption, not evidence. Empty on events written
+	// before the field existed, and omitempty keeps their bytes - and so their
+	// hashes - exactly as they were.
+	Reason         string
+	Payload        any
+	PublicKey      string
+	KeyAlgorithm   string
+	SignerVaultKey string
 }
 
 type Service struct {
@@ -66,6 +74,7 @@ type signedEnvelope struct {
 	ActorUserID     string          `json:"actorUserId"`
 	OccurredAt      string          `json:"occurredAt"`
 	Payload         json.RawMessage `json:"payload"`
+	Reason          string          `json:"reason,omitempty"`
 	ResourceID      string          `json:"resourceId"`
 	ResourceType    string          `json:"resourceType"`
 	ResourceVersion int             `json:"resourceVersion"`
@@ -145,6 +154,7 @@ func (s *Service) Log(ctx context.Context, input Input) error {
 		ActorUserID:     strings.TrimSpace(input.ActorUserID),
 		OccurredAt:      occurredAt,
 		Payload:         json.RawMessage(payloadBytes),
+		Reason:          strings.TrimSpace(input.Reason),
 		ResourceID:      strings.TrimSpace(input.ResourceID),
 		ResourceType:    strings.TrimSpace(input.ResourceType),
 		ResourceVersion: input.ResourceVersion,
@@ -172,6 +182,7 @@ func (s *Service) Log(ctx context.Context, input Input) error {
 		Sequence:        sequence,
 		PreviousEventID: previousEventID,
 		OccurredAt:      occurredAt,
+		Reason:          strings.TrimSpace(input.Reason),
 		PayloadJSON:     string(payloadBytes),
 		PublicKey:       publicKey,
 		KeyAlgorithm:    keyAlgorithm,

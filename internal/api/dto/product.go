@@ -3,6 +3,9 @@ package dto
 import "time"
 
 type UpsertProductRequest struct {
+	// Why this change is being made. Required on update and delete.
+	ChangeReason string `json:"changeReason"`
+
 	ProductID       string   `json:"productId"`
 	ExpectedVersion int      `json:"expectedVersion"`
 	Name            string   `json:"name"`

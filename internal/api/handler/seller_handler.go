@@ -144,6 +144,7 @@ func (h *SellerHandler) Commit(c *gin.Context) {
 		Confidence:      request.Confidence,
 		ImageHash:       request.ImageHash,
 		ImageCID:        request.ImageCID,
+		Note:            request.Note,
 	})
 	if err != nil {
 		status := http.StatusInternalServerError

@@ -60,11 +60,16 @@ type UpdateInput struct {
 	ShopID          string
 	OwnerUserID     string
 	ExpectedVersion int
-	Name            string
-	Description     string
-	Address         string
-	Latitude        float64
-	Longitude       float64
+
+	// Why the owner is making this change. Required: it is signed with the
+	// rest of the event.
+	ChangeReason string
+
+	Name        string
+	Description string
+	Address     string
+	Latitude    float64
+	Longitude   float64
 }
 
 type ModerateInput struct {
@@ -76,6 +81,8 @@ type ModerateInput struct {
 }
 
 type DeleteInput struct {
+	ChangeReason string
+
 	ShopID          string
 	OwnerUserID     string
 	ExpectedVersion int
@@ -368,7 +375,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Shop, e
 	}
 	if err := s.logMutation(ctx, input.OwnerUserID, "shop", shop.ShopID, shop.Version, "shop.created", audit.MutationPayload{
 		After: shop,
-	}, "created"); err != nil {
+	}, "created", ""); err != nil {
 		return domain.Shop{}, err
 	}
 
@@ -380,6 +387,10 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Shop, e
 		return domain.Shop{}, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
 	}
 	if err := validate(input.OwnerUserID, input.Name, input.Address, input.Latitude, input.Longitude); err != nil {
+		return domain.Shop{}, err
+	}
+	reason, err := validateChangeReason(input.ChangeReason)
+	if err != nil {
 		return domain.Shop{}, err
 	}
 	if s.shops == nil {
@@ -418,7 +429,7 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Shop, e
 	if err := s.logMutation(ctx, input.OwnerUserID, "shop", existing.ShopID, existing.Version, "shop.updated", audit.MutationPayload{
 		Before: before,
 		After:  existing,
-	}, "updated"); err != nil {
+	}, "updated", reason); err != nil {
 		return domain.Shop{}, err
 	}
 
@@ -426,6 +437,10 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Shop, e
 }
 
 func (s *Service) Delete(ctx context.Context, input DeleteInput) (domain.Shop, error) {
+	reason, err := validateChangeReason(input.ChangeReason)
+	if err != nil {
+		return domain.Shop{}, err
+	}
 	if strings.TrimSpace(input.ShopID) == "" {
 		return domain.Shop{}, fmt.Errorf("%w: shopId is required", ErrInvalidShop)
 	}
@@ -460,7 +475,7 @@ func (s *Service) Delete(ctx context.Context, input DeleteInput) (domain.Shop, e
 	if err := s.logMutation(ctx, input.OwnerUserID, "shop", existing.ShopID, existing.Version, "shop.deleted", audit.MutationPayload{
 		Before: before,
 		After:  existing,
-	}, "deleted"); err != nil {
+	}, "deleted", reason); err != nil {
 		return domain.Shop{}, err
 	}
 	return existing, nil
@@ -507,7 +522,7 @@ func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.Sho
 	if err := s.logMutation(ctx, input.ModeratorUserID, "shop", existing.ShopID, existing.Version, "shop.moderated", audit.MutationPayload{
 		Before: before,
 		After:  existing,
-	}, "moderated"); err != nil {
+	}, "moderated", existing.ModerationNote); err != nil {
 		return domain.Shop{}, err
 	}
 
@@ -593,7 +608,7 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 		if err := s.logMutation(ctx, input.ReviewerUserID, "shop_review", existing.ReviewID, existing.Version, "shop_review.updated", audit.MutationPayload{
 			Before: before,
 			After:  existing,
-		}, "updated"); err != nil {
+		}, "updated", ""); err != nil {
 			return domain.ShopReview{}, err
 		}
 		return existing, nil
@@ -616,7 +631,7 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 	}
 	if err := s.logMutation(ctx, input.ReviewerUserID, "shop_review", review.ReviewID, review.Version, "shop_review.created", audit.MutationPayload{
 		After: review,
-	}, "created"); err != nil {
+	}, "created", ""); err != nil {
 		return domain.ShopReview{}, err
 	}
 	return review, nil
@@ -653,13 +668,13 @@ func (s *Service) DeleteReview(ctx context.Context, input DeleteReviewInput) (do
 	if err := s.logMutation(ctx, input.ReviewerUserID, "shop_review", existing.ReviewID, existing.Version, "shop_review.deleted", audit.MutationPayload{
 		Before: before,
 		After:  existing,
-	}, "deleted"); err != nil {
+	}, "deleted", ""); err != nil {
 		return domain.ShopReview{}, err
 	}
 	return existing, nil
 }
 
-func (s *Service) logMutation(ctx context.Context, actorUserID, resourceType, resourceID string, resourceVersion int, action string, payload any, status string) error {
+func (s *Service) logMutation(ctx context.Context, actorUserID, resourceType, resourceID string, resourceVersion int, action string, payload any, status, reason string) error {
 	if s.audit == nil {
 		return nil
 	}
@@ -670,6 +685,7 @@ func (s *Service) logMutation(ctx context.Context, actorUserID, resourceType, re
 		ResourceVersion: resourceVersion,
 		Action:          action,
 		Status:          status,
+		Reason:          strings.TrimSpace(reason),
 		Payload:         payload,
 	})
 }
@@ -1497,4 +1513,26 @@ func canOpenShop(role string) bool {
 	default:
 		return false
 	}
+}
+
+// A change to a signed record has to say why.
+//
+// The chain proved what changed and who changed it, but never why - so a buyer
+// reading "Giá: 184.000 đ → 193.000 đ" saw a number they could verify and an
+// intent they had to guess. Admin moderation always carried a note; the
+// seller's own edits did not.
+const (
+	minChangeReason = 5
+	maxChangeReason = 200
+)
+
+func validateChangeReason(reason string) (string, error) {
+	trimmed := strings.TrimSpace(reason)
+	if len([]rune(trimmed)) < minChangeReason {
+		return "", fmt.Errorf("%w: changeReason is required", ErrInvalidShop)
+	}
+	if len([]rune(trimmed)) > maxChangeReason {
+		return "", fmt.Errorf("%w: changeReason is too long", ErrInvalidShop)
+	}
+	return trimmed, nil
 }

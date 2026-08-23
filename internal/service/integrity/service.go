@@ -113,19 +113,25 @@ type Observer interface {
 }
 
 type pledgeHashPayload struct {
-	PledgeID        string    `json:"pledgeId"`
-	ShopID          string    `json:"shopId"`
-	ProductID       string    `json:"productId,omitempty"`
-	CreatedByUserID string    `json:"createdByUserId"`
-	Status          string    `json:"status"`
-	Version         int       `json:"version"`
-	Score           float64   `json:"score"`
-	Category        string    `json:"category"`
-	Confidence      float64   `json:"confidence"`
-	ImageHash       string    `json:"imageHash"`
-	ImageCID        string    `json:"imageCid,omitempty"`
-	CreatedAt       time.Time `json:"createdAt"`
-	UpdatedAt       time.Time `json:"updatedAt"`
+	PledgeID        string  `json:"pledgeId"`
+	ShopID          string  `json:"shopId"`
+	ProductID       string  `json:"productId,omitempty"`
+	CreatedByUserID string  `json:"createdByUserId"`
+	Status          string  `json:"status"`
+	Version         int     `json:"version"`
+	Score           float64 `json:"score"`
+	Category        string  `json:"category"`
+	Confidence      float64 `json:"confidence"`
+	ImageHash       string  `json:"imageHash"`
+	ImageCID        string  `json:"imageCid,omitempty"`
+
+	// Why the seller recorded this score. Inside the hash that gets anchored,
+	// so it cannot be rewritten afterwards - a note beside the chain would be
+	// a caption, not evidence. omitempty keeps the pledges anchored before this
+	// field existed hashing exactly as they did.
+	Note      string    `json:"note,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type shopHashPayload struct {
@@ -493,6 +499,7 @@ func HashPledge(pledge domain.Pledge) (string, error) {
 		Confidence:      pledge.Confidence,
 		ImageHash:       strings.TrimSpace(pledge.ImageHash),
 		ImageCID:        strings.TrimSpace(pledge.ImageCID),
+		Note:            strings.TrimSpace(pledge.Note),
 		CreatedAt:       pledge.CreatedAt.UTC(),
 		UpdatedAt:       pledge.UpdatedAt.UTC(),
 	}

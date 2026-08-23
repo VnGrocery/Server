@@ -235,6 +235,7 @@ func TestUpdateRejectsNonOwner(t *testing.T) {
 	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
 
 	_, err := service.Update(context.Background(), UpdateInput{
+		ChangeReason:    "Đổi thông tin cửa hàng",
 		ShopID:          "shop-1",
 		OwnerUserID:     "user-2",
 		ExpectedVersion: 1,
@@ -260,6 +261,7 @@ func TestUpdateRejectsVersionConflict(t *testing.T) {
 	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, nil)
 
 	_, err := service.Update(context.Background(), UpdateInput{
+		ChangeReason:    "Đổi thông tin cửa hàng",
 		ShopID:          "shop-1",
 		OwnerUserID:     "user-1",
 		ExpectedVersion: 3,
@@ -286,7 +288,7 @@ func TestDeleteMarksShopDeleted(t *testing.T) {
 		},
 	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{}, userRepositoryStub{}, auditLogger)
 
-	shop, err := service.Delete(context.Background(), DeleteInput{ShopID: "shop-1", OwnerUserID: "user-1", ExpectedVersion: 1})
+	shop, err := service.Delete(context.Background(), DeleteInput{ChangeReason: "Đóng cửa hàng", ShopID: "shop-1", OwnerUserID: "user-1", ExpectedVersion: 1})
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
@@ -753,5 +755,55 @@ func TestCreateShopRequiresSellerRole(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("an admin acting for a seller should be allowed, got %v", err)
+	}
+}
+
+// A signed record that says what changed but not why is a commit with no
+// message: the buyer sees "Giá: 184.000 đ → 193.000 đ" and has to guess.
+func TestUpdateShopRequiresAChangeReason(t *testing.T) {
+	service := NewService(
+		shopRepositoryStub{
+			save: func(ctx context.Context, shop domain.Shop) error { return nil },
+			getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+				return domain.Shop{
+					ShopID:      shopID,
+					OwnerUserID: "user-1",
+					Status:      ShopStatusActive,
+					Version:     1,
+				}, nil
+			},
+			list: func(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
+				return nil, nil
+			},
+		},
+		pledgeRepositoryStub{},
+		buyerCheckRepositoryStub{},
+		reviewRepositoryStub{},
+		userRepositoryStub{},
+		nil,
+	)
+
+	base := UpdateInput{
+		ShopID:          "shop-1",
+		OwnerUserID:     "user-1",
+		ExpectedVersion: 1,
+		Name:            "Rau Cô Ba",
+		Address:         "Chợ Bến Thành",
+		Latitude:        10.77,
+		Longitude:       106.70,
+	}
+
+	for _, reason := range []string{"", "   ", "ok"} {
+		input := base
+		input.ChangeReason = reason
+		if _, err := service.Update(context.Background(), input); !errors.Is(err, ErrInvalidShop) {
+			t.Fatalf("reason %q should be refused, got %v", reason, err)
+		}
+	}
+
+	input := base
+	input.ChangeReason = "  Đổi địa chỉ sạp  "
+	if _, err := service.Update(context.Background(), input); err != nil {
+		t.Fatalf("expected the update to go through, got %v", err)
 	}
 }

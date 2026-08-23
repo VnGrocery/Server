@@ -22,6 +22,7 @@ type ProductHistoryEntryResponse struct {
 	ActorUserID string    `json:"actorUserId"`
 	ActorName   string    `json:"actorName,omitempty"`
 	OccurredAt  time.Time `json:"occurredAt"`
+	Reason      string    `json:"reason,omitempty"`
 
 	Verified         bool `json:"verified"`
 	ContentHashValid bool `json:"contentHashValid"`

@@ -11,6 +11,10 @@ type SellerCommitRequest struct {
 	Confidence float64 `json:"confidence"`
 	ImageHash  string  `json:"imageHash"`
 	ImageCID   string  `json:"imageCid"`
+
+	// Why the seller is recording this score. Required; hashed and anchored
+	// with the rest of the pledge.
+	Note string `json:"note"`
 }
 
 type SellerCommitResponse struct {

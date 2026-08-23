@@ -23,6 +23,7 @@ import (
 	authservice "vngrocery/internal/service/auth"
 	bundletokenservice "vngrocery/internal/service/bundletoken"
 	buyerservice "vngrocery/internal/service/buyer"
+	commentservice "vngrocery/internal/service/comment"
 	integrityservice "vngrocery/internal/service/integrity"
 	productservice "vngrocery/internal/service/product"
 	recommendservice "vngrocery/internal/service/recommend"
@@ -88,6 +89,7 @@ func main() {
 	var productFreshnessReportRepository repository.ProductFreshnessReportRepository
 	var shopRepository repository.ShopRepository
 	var shopReviewRepository repository.ShopReviewRepository
+	var productCommentRepository repository.ProductCommentRepository
 	var voucherRepository repository.VoucherRepository
 	var userVoucherRepository repository.UserVoucherRepository
 	var userRepository repository.UserRepository
@@ -138,6 +140,7 @@ func main() {
 	productFreshnessReportRepository = mongorepo.NewProductFreshnessReportRepository(mongoApp.Database)
 	shopRepository = mongorepo.NewShopRepository(mongoApp.Database)
 	shopReviewRepository = mongorepo.NewShopReviewRepository(mongoApp.Database)
+	productCommentRepository = mongorepo.NewProductCommentRepository(mongoApp.Database)
 	voucherRepository = mongorepo.NewVoucherRepository(mongoApp.Database)
 	userVoucherRepository = mongorepo.NewUserVoucherRepository(mongoApp.Database)
 	userRepository = mongorepo.NewUserRepository(mongoApp.Database)
@@ -231,6 +234,16 @@ func main() {
 	shopManager := shopservice.NewService(shopRepository, pledgeRepository, buyerCheckRepository, shopReviewRepository, userRepository, auditLogger)
 	voucherManager := voucherservice.NewService(voucherRepository, userVoucherRepository, shopRepository)
 	sellerCommitService := sellerservice.NewService(pledgeRepository, shopRepository, productRepository, auditLogger)
+	commentManager := commentservice.NewService(
+		productCommentRepository,
+		shopRepository,
+		productRepository,
+		buyerCheckRepository,
+		userRepository,
+		auditLogger,
+	)
+	// The trust score reads comments; the comment service writes them.
+	shopManager.SetProductCommentRepository(productCommentRepository)
 	shopManager.SetPledgeIntegrityReader(integrityAdapter{service: integrityManager})
 	shopManager.SetShopIntegrityManager(integrityManager)
 	sellerCommitService.SetIntegrityManager(integrityManager)
@@ -264,6 +277,7 @@ func main() {
 	}
 	mediaHandler := handler.NewMediaHandler(ipfsUploadAdapterOrNil(ipfsClient), uploadCfg)
 	shopHandler := handler.NewShopHandler(shopManager)
+	commentHandler := handler.NewCommentHandler(commentManager)
 	voucherHandler := handler.NewVoucherHandler(voucherManager)
 	// Suggestions read the same shop listing the discovery screens use, so they
 	// can never point at a shop those screens would have hidden.
@@ -288,6 +302,7 @@ func main() {
 		SellerHandler:             sellerHandler,
 		BuyerHandler:              buyerHandler,
 		ShopHandler:               shopHandler,
+		CommentHandler:            commentHandler,
 		VoucherHandler:            voucherHandler,
 		RecommendationHandler:     recommendationHandler,
 		AuthMiddleware:            authMiddleware,

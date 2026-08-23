@@ -22,6 +22,7 @@ type Dependencies struct {
 	SellerHandler             *handler.SellerHandler
 	BuyerHandler              *handler.BuyerHandler
 	ShopHandler               *handler.ShopHandler
+	CommentHandler            *handler.CommentHandler
 	VoucherHandler            *handler.VoucherHandler
 	RecommendationHandler     *handler.RecommendationHandler
 	AuthMiddleware            *middleware.AuthRequired
@@ -119,6 +120,15 @@ func New(deps Dependencies) *gin.Engine {
 		v1.PUT("/shops/:shopId/products/:productId", deps.AuthMiddleware.Handle(), deps.ProductHandler.Update)
 		v1.DELETE("/shops/:shopId", deps.AuthMiddleware.Handle(), deps.ShopHandler.Delete)
 		v1.DELETE("/shops/:shopId/products/:productId", deps.AuthMiddleware.Handle(), deps.ProductHandler.Delete)
+		if deps.CommentHandler != nil {
+			// Reading comments needs a session too: the reply tells the caller
+			// whether they may write, and shows them their own comment while it
+			// waits for the shop.
+			v1.GET("/shops/:shopId/products/:productId/comments", deps.AuthMiddleware.Handle(), deps.CommentHandler.List)
+			v1.POST("/shops/:shopId/products/:productId/comments", deps.AuthMiddleware.Handle(), deps.CommentHandler.Create)
+			v1.POST("/shops/:shopId/comments/:commentId/moderation", deps.AuthMiddleware.Handle(), deps.CommentHandler.Moderate)
+			v1.DELETE("/shops/:shopId/comments/:commentId", deps.AuthMiddleware.Handle(), deps.CommentHandler.Delete)
+		}
 		v1.POST("/shops/:shopId/reviews", deps.AuthMiddleware.Handle(), deps.ShopHandler.CreateReview)
 		v1.DELETE("/shops/:shopId/reviews/me", deps.AuthMiddleware.Handle(), deps.ShopHandler.DeleteReview)
 		if deps.VoucherHandler != nil {

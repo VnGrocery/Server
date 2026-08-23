@@ -14,6 +14,11 @@ type UpsertShopRequest struct {
 	Address     string  `json:"address"`
 	Latitude    float64 `json:"latitude"`
 	Longitude   float64 `json:"longitude"`
+
+	// CommentModeration holds new product comments until the owner approves
+	// them. Buyers are told when it is on, and the trust score is discounted
+	// by how much of what was written never gets published.
+	CommentModeration bool `json:"commentModeration"`
 }
 
 type ModerateShopRequest struct {
@@ -43,7 +48,14 @@ type ShopTrustSummaryResponse struct {
 	BuyerCheckCount    int        `json:"buyerCheckCount"`
 	TrustedCheckCount  int        `json:"trustedCheckCount"`
 	HighRiskCheckCount int        `json:"highRiskCheckCount"`
-	Reasons            []string   `json:"reasons"`
+
+	CommentScore         float64 `json:"commentScore"`
+	CommentModeration    bool    `json:"commentModeration"`
+	CommentCount         int     `json:"commentCount"`
+	CommentPendingCount  int     `json:"commentPendingCount"`
+	CommentRejectedCount int     `json:"commentRejectedCount"`
+
+	Reasons []string `json:"reasons"`
 }
 
 type ShopRatingSummaryResponse struct {
@@ -88,6 +100,7 @@ type ShopResponse struct {
 	Latitude          float64                   `json:"latitude"`
 	Longitude         float64                   `json:"longitude"`
 	Status            string                    `json:"status"`
+	CommentModeration bool                      `json:"commentModeration"`
 	DataHash          string                    `json:"dataHash,omitempty"`
 	ChainTxHash       string                    `json:"chainTxHash,omitempty"`
 	ChainBlockNumber  int64                     `json:"chainBlockNumber,omitempty"`

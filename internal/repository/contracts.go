@@ -110,6 +110,20 @@ type ShopReviewRepository interface {
 	ListByReviewerUserID(ctx context.Context, reviewerUserID string) ([]domain.ShopReview, error)
 }
 
+type ProductCommentRepository interface {
+	Save(ctx context.Context, comment domain.ProductComment) error
+	GetByID(ctx context.Context, commentID string) (domain.ProductComment, error)
+	List(ctx context.Context, filter ProductCommentListFilter) ([]domain.ProductComment, error)
+}
+
+type ProductCommentListFilter struct {
+	CommentID    string
+	ShopID       string
+	ProductID    string
+	AuthorUserID string
+	Status       string
+}
+
 type VoucherRepository interface {
 	Save(ctx context.Context, voucher domain.Voucher) error
 	GetByID(ctx context.Context, voucherID string) (domain.Voucher, error)

@@ -70,6 +70,8 @@ type UpdateInput struct {
 	Address     string
 	Latitude    float64
 	Longitude   float64
+
+	CommentModeration bool
 }
 
 type ModerateInput struct {
@@ -160,7 +162,16 @@ type TrustSummary struct {
 	BuyerCheckCount    int
 	TrustedCheckCount  int
 	HighRiskCheckCount int
-	Reasons            []string
+
+	// Comments are the only part of the score the shop itself can suppress, so
+	// what was held back is reported next to what was published.
+	CommentScore         float64
+	CommentModeration    bool
+	CommentCount         int
+	CommentPendingCount  int
+	CommentRejectedCount int
+
+	Reasons []string
 }
 
 type RatingSummary struct {
@@ -191,6 +202,7 @@ type Service struct {
 	pledges       repository.PledgeRepository
 	checks        repository.BuyerCheckRepository
 	reviews       repository.ShopReviewRepository
+	comments      repository.ProductCommentRepository
 	users         repository.UserRepository
 	audit         AuditLogger
 	integrity     PledgeIntegrityReader
@@ -303,6 +315,13 @@ func NewService(shops repository.ShopRepository, pledges repository.PledgeReposi
 		audit:   auditLogger,
 		now:     time.Now,
 	}
+}
+
+// SetProductCommentRepository gives the trust score access to product
+// comments. It is a setter rather than a constructor argument because the
+// comment service owns writing them; this side only reads, to score them.
+func (s *Service) SetProductCommentRepository(comments repository.ProductCommentRepository) {
+	s.comments = comments
 }
 
 func (s *Service) SetPledgeIntegrityReader(reader PledgeIntegrityReader) {
@@ -420,6 +439,7 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Shop, e
 	existing.Address = strings.TrimSpace(input.Address)
 	existing.Latitude = input.Latitude
 	existing.Longitude = input.Longitude
+	existing.CommentModeration = input.CommentModeration
 	existing.Version++
 	existing.UpdatedAt = s.now().UTC()
 
@@ -1095,24 +1115,37 @@ func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView
 			return ShopView{}, err
 		}
 	}
-	applyTrustScore(&shopView.TrustSummary, shopView.RatingSummary, pledges, reviews, checks)
+	var comments []domain.ProductComment
+	if s.comments != nil {
+		var err error
+		comments, err = s.comments.List(ctx, repository.ProductCommentListFilter{ShopID: shop.ShopID})
+		if err != nil {
+			return ShopView{}, err
+		}
+	}
+	applyTrustScore(&shopView.TrustSummary, shopView.RatingSummary, pledges, reviews, checks, shop.CommentModeration, comments)
 	return shopView, nil
 }
 
-const trustScoreFormulaVersion = "trust_score_v2"
+// v3 added the comment component and took the weight for it out of the review
+// and buyer-check shares. Scores computed under v2 are not comparable, which is
+// why the version travels with every summary.
+const trustScoreFormulaVersion = "trust_score_v3"
 
-func applyTrustScore(summary *TrustSummary, rating RatingSummary, pledges []domain.Pledge, reviews []domain.ShopReview, checks []domain.BuyerCheck) {
+func applyTrustScore(summary *TrustSummary, rating RatingSummary, pledges []domain.Pledge, reviews []domain.ShopReview, checks []domain.BuyerCheck, moderationOn bool, comments []domain.ProductComment) {
 	pledgeScore, pledgeReasons := calculatePledgeTrustScore(pledges)
 	reviewScore, reviewReasons := calculateReviewTrustScore(rating, len(reviews))
 	buyerCheckScore, trustedChecks, highRiskChecks, checkReasons := calculateBuyerCheckTrustScore(checks)
 	consistencyScore, consistencyReasons := calculateConsistencyScore(pledges, checks)
 	recencyScore, recencyReasons := calculateRecencyScore(pledges, reviews, checks)
 	coverageScore, coverageReasons := calculateCoverageScore(pledges, reviews, checks)
+	commentScore, commentCounts, commentReasons := calculateCommentTrustScore(moderationOn, comments)
 
 	weights := []weightedTrustComponent{
 		{score: pledgeScore, weight: 0.30, available: len(pledges) > 0},
-		{score: reviewScore, weight: 0.20, available: len(reviews) > 0},
-		{score: buyerCheckScore, weight: 0.20, available: len(checks) > 0},
+		{score: reviewScore, weight: 0.15, available: len(reviews) > 0},
+		{score: buyerCheckScore, weight: 0.15, available: len(checks) > 0},
+		{score: commentScore, weight: 0.10, available: commentCounts.total() > 0},
 		{score: consistencyScore, weight: 0.15, available: len(pledges) > 0 || len(checks) > 0},
 		{score: recencyScore, weight: 0.10, available: len(pledges) > 0 || len(reviews) > 0 || len(checks) > 0},
 		{score: coverageScore, weight: 0.05, available: true},
@@ -1125,6 +1158,7 @@ func applyTrustScore(summary *TrustSummary, rating RatingSummary, pledges []doma
 	reasons = append(reasons, consistencyReasons...)
 	reasons = append(reasons, recencyReasons...)
 	reasons = append(reasons, coverageReasons...)
+	reasons = append(reasons, commentReasons...)
 
 	summary.Score = round(score, 1)
 	summary.Grade = trustGrade(summary.Score)
@@ -1135,6 +1169,11 @@ func applyTrustScore(summary *TrustSummary, rating RatingSummary, pledges []doma
 	summary.ConsistencyScore = round(consistencyScore, 1)
 	summary.RecencyScore = round(recencyScore, 1)
 	summary.CoverageScore = round(coverageScore, 1)
+	summary.CommentScore = round(commentScore, 1)
+	summary.CommentModeration = moderationOn
+	summary.CommentCount = commentCounts.approved
+	summary.CommentPendingCount = commentCounts.pending
+	summary.CommentRejectedCount = commentCounts.rejected
 	summary.BuyerCheckCount = len(checks)
 	summary.TrustedCheckCount = trustedChecks
 	summary.HighRiskCheckCount = highRiskChecks
@@ -1194,6 +1233,79 @@ func calculatePledgeTrustScore(pledges []domain.Pledge) (float64, []string) {
 		reasons = append(reasons, "some_pledges_low_confidence")
 	}
 	return total / totalWeight, reasons
+}
+
+type commentCounts struct {
+	approved int
+	pending  int
+	rejected int
+}
+
+func (c commentCounts) total() int { return c.approved + c.pending + c.rejected }
+
+// calculateCommentTrustScore turns product comments into a trust component.
+//
+// Two things are being measured. Volume is the easy half: comments can only be
+// written by someone who checked the product at the stall, so five of them is
+// five people who showed up and said something on the record.
+//
+// Openness is the half the shop controls. With moderation off, everything
+// written is published and there is nothing to discount. With it on, the shop
+// decides what a buyer gets to read, and the component is scaled by the share
+// that actually made it through - a stall that publishes four comments and
+// buries six scores as a stall that publishes four out of ten, not as one with
+// four happy customers. Holding a comment back costs the same as rejecting it
+// while it is held: silence and refusal read identically to the buyer standing
+// there.
+//
+// A shop with moderation on and nothing written yet is not penalised. There is
+// no evidence either way, and inventing a number for it would be the same sin
+// as inventing a rating.
+func calculateCommentTrustScore(moderationOn bool, comments []domain.ProductComment) (float64, commentCounts, []string) {
+	counts := commentCounts{}
+	for _, comment := range comments {
+		switch comment.Status {
+		case "approved":
+			counts.approved++
+		case "pending":
+			counts.pending++
+		case "rejected":
+			counts.rejected++
+		}
+	}
+
+	reasons := []string{}
+	if moderationOn {
+		reasons = append(reasons, "comment_moderation_on")
+	}
+	if counts.total() == 0 {
+		if moderationOn {
+			reasons = append(reasons, "comment_moderation_untested")
+		} else {
+			reasons = append(reasons, "no_product_comments")
+		}
+		return 50, counts, reasons
+	}
+
+	volume := clamp(float64(counts.approved)*20, 0, 100)
+	openness := 100.0
+	if moderationOn {
+		withheld := counts.pending + counts.rejected
+		openness = clamp(float64(counts.approved)/float64(counts.total())*100, 0, 100)
+		if withheld > 0 {
+			reasons = append(reasons, "comments_withheld")
+		}
+	}
+	score := clamp(openness*0.6+volume*0.4, 0, 100)
+
+	if counts.approved >= 5 {
+		reasons = append(reasons, "several_verified_comments")
+	} else if counts.approved > 0 {
+		reasons = append(reasons, "few_verified_comments")
+	} else {
+		reasons = append(reasons, "no_published_comments")
+	}
+	return score, counts, reasons
 }
 
 func calculateReviewTrustScore(rating RatingSummary, reviewCount int) (float64, []string) {

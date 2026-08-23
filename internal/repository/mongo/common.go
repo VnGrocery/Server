@@ -24,6 +24,7 @@ const (
 	pledgesCollection                 = "pledges"
 	buyerChecksCollection             = "buyer_checks"
 	shopReviewsCollection             = "shop_reviews"
+	productCommentsCollection         = "product_comments"
 	vouchersCollection                = "vouchers"
 	userVouchersCollection            = "user_vouchers"
 	eventLogsCollection               = "event_logs"

@@ -115,6 +115,8 @@ func (h *ShopHandler) Update(c *gin.Context) {
 		Address:         request.Address,
 		Latitude:        request.Latitude,
 		Longitude:       request.Longitude,
+
+		CommentModeration: request.CommentModeration,
 	})
 	if err != nil {
 		h.writeError(c, err)
@@ -537,6 +539,7 @@ func toShopResponse(view shopsvc.ShopView) dto.ShopResponse {
 		Name:              shop.Name,
 		Description:       shop.Description,
 		Address:           shop.Address,
+		CommentModeration: shop.CommentModeration,
 		Latitude:          shop.Latitude,
 		Longitude:         shop.Longitude,
 		Status:            shop.Status,
@@ -570,7 +573,13 @@ func toShopResponse(view shopsvc.ShopView) dto.ShopResponse {
 			BuyerCheckCount:    view.TrustSummary.BuyerCheckCount,
 			TrustedCheckCount:  view.TrustSummary.TrustedCheckCount,
 			HighRiskCheckCount: view.TrustSummary.HighRiskCheckCount,
-			Reasons:            view.TrustSummary.Reasons,
+
+			CommentScore:         view.TrustSummary.CommentScore,
+			CommentModeration:    view.TrustSummary.CommentModeration,
+			CommentCount:         view.TrustSummary.CommentCount,
+			CommentPendingCount:  view.TrustSummary.CommentPendingCount,
+			CommentRejectedCount: view.TrustSummary.CommentRejectedCount,
+			Reasons:              view.TrustSummary.Reasons,
 		},
 		RatingSummary: dto.ShopRatingSummaryResponse{
 			RatingCount:   view.RatingSummary.RatingCount,

@@ -397,7 +397,7 @@ func TestListReturnsTrustSummary(t *testing.T) {
 	if result.Items[0].TrustSummary.TrustedCheckCount != 1 {
 		t.Fatalf("expected trusted check count 1, got %d", result.Items[0].TrustSummary.TrustedCheckCount)
 	}
-	if result.Items[0].TrustSummary.FormulaVersion != "trust_score_v2" {
+	if result.Items[0].TrustSummary.FormulaVersion != "trust_score_v3" {
 		t.Fatalf("unexpected formula version: %s", result.Items[0].TrustSummary.FormulaVersion)
 	}
 	if result.Items[0].TrustSummary.CoverageScore <= 0 || result.Items[0].TrustSummary.RecencyScore <= 0 {
@@ -806,4 +806,55 @@ func TestUpdateShopRequiresAChangeReason(t *testing.T) {
 	if _, err := service.Update(context.Background(), input); err != nil {
 		t.Fatalf("expected the update to go through, got %v", err)
 	}
+}
+
+func TestCommentTrustScoreDiscountsWhatTheShopHeldBack(t *testing.T) {
+	published := []domain.ProductComment{
+		{Status: "approved"}, {Status: "approved"},
+		{Status: "approved"}, {Status: "approved"},
+	}
+	open, _, openReasons := calculateCommentTrustScore(false, published)
+
+	// Same four published comments, but six more the shop never let through.
+	withheld := append([]domain.ProductComment{}, published...)
+	for i := 0; i < 3; i++ {
+		withheld = append(withheld, domain.ProductComment{Status: "pending"})
+		withheld = append(withheld, domain.ProductComment{Status: "rejected"})
+	}
+	moderated, counts, moderatedReasons := calculateCommentTrustScore(true, withheld)
+
+	if moderated >= open {
+		t.Fatalf("hiding six of ten comments did not cost the shop anything: open=%v moderated=%v", open, moderated)
+	}
+	if counts.approved != 4 || counts.pending != 3 || counts.rejected != 3 {
+		t.Fatalf("unexpected counts: %+v", counts)
+	}
+	if !containsString(moderatedReasons, "comments_withheld") || !containsString(moderatedReasons, "comment_moderation_on") {
+		t.Fatalf("the discount was applied without saying why: %v", moderatedReasons)
+	}
+	if containsString(openReasons, "comment_moderation_on") {
+		t.Fatalf("an unmoderated shop was labelled as moderating: %v", openReasons)
+	}
+}
+
+func TestCommentTrustScoreInventsNothingWithoutComments(t *testing.T) {
+	score, counts, reasons := calculateCommentTrustScore(true, nil)
+	if counts.total() != 0 {
+		t.Fatalf("unexpected counts: %+v", counts)
+	}
+	if score != 50 {
+		t.Fatalf("a shop with no comments was scored on them: %v", score)
+	}
+	if !containsString(reasons, "comment_moderation_untested") {
+		t.Fatalf("expected the untested reason, got %v", reasons)
+	}
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

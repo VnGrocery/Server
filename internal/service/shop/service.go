@@ -18,12 +18,13 @@ import (
 )
 
 var (
-	ErrInvalidShop       = errors.New("invalid shop request")
-	ErrForbidden         = errors.New("forbidden")
-	ErrNotFound          = errors.New("shop not found")
-	ErrAdminRequired     = errors.New("admin role is required")
-	ErrVersionConflict   = errors.New("version conflict")
-	ErrShopAlreadyExists = errors.New("account already owns a shop")
+	ErrInvalidShop        = errors.New("invalid shop request")
+	ErrForbidden          = errors.New("forbidden")
+	ErrNotFound           = errors.New("shop not found")
+	ErrAdminRequired      = errors.New("admin role is required")
+	ErrVersionConflict    = errors.New("version conflict")
+	ErrShopAlreadyExists  = errors.New("account already owns a shop")
+	ErrSellerRoleRequired = errors.New("account is not approved to open a shop")
 )
 
 const (
@@ -42,6 +43,12 @@ const (
 
 type CreateInput struct {
 	OwnerUserID string
+
+	// The role on the caller's token. Opening a shop is not self-service: an
+	// admin grants the seller role first, so this is checked here rather than
+	// left to the client, which used to decide it by flipping a local switch.
+	OwnerRole string
+
 	Name        string
 	Description string
 	Address     string
@@ -317,6 +324,9 @@ type DeleteReviewInput struct {
 func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Shop, error) {
 	if err := validate(input.OwnerUserID, input.Name, input.Address, input.Latitude, input.Longitude); err != nil {
 		return domain.Shop{}, err
+	}
+	if !canOpenShop(input.OwnerRole) {
+		return domain.Shop{}, ErrSellerRoleRequired
 	}
 	if s.shops == nil {
 		return domain.Shop{}, fmt.Errorf("shop repository is not configured")
@@ -1474,4 +1484,17 @@ func validate(ownerUserID, name, address string, latitude, longitude float64) er
 		return fmt.Errorf("%w: longitude must be between -180 and 180", ErrInvalidShop)
 	}
 	return nil
+}
+
+// RoleSeller is the role an admin grants before an account may open a shop.
+const RoleSeller = "seller"
+
+// Who may open a shop: an approved seller, or an admin acting for one.
+func canOpenShop(role string) bool {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case "seller", "admin":
+		return true
+	default:
+		return false
+	}
 }

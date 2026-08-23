@@ -293,3 +293,35 @@ func TestBackfillAccountKeyRejectsExistingMetadata(t *testing.T) {
 		t.Fatalf("expected ErrInvalidUser, got %v", err)
 	}
 }
+
+// An admin promoting a buyer to seller is how an account becomes able to open
+// a shop at all; the role vocabulary used to be admin/user only, while the
+// admin web already offered "seller" and got a 400 back.
+func TestUpdateRoleAcceptsSeller(t *testing.T) {
+	var saved domain.User
+	service := NewService(userRepositoryStub{
+		getByID: func(ctx context.Context, userID string) (domain.User, error) {
+			if userID == "admin-1" {
+				return domain.User{UserID: userID, Role: RoleAdmin, Status: "active", Version: 1}, nil
+			}
+			return domain.User{UserID: userID, Role: RoleUser, Status: "active", Version: 2}, nil
+		},
+		save: func(ctx context.Context, user domain.User) error {
+			saved = user
+			return nil
+		},
+	}, authUserRepositoryStub{}, nil, &auditLoggerStub{})
+
+	user, err := service.UpdateRole(context.Background(), UpdateRoleInput{
+		ActorUserID:     "admin-1",
+		TargetUserID:    "user-9",
+		ExpectedVersion: 2,
+		Role:            RoleSeller,
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if user.Role != RoleSeller || saved.Role != RoleSeller {
+		t.Fatalf("expected the seller role to be saved, got %q / %q", user.Role, saved.Role)
+	}
+}

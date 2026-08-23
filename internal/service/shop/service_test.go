@@ -205,6 +205,7 @@ func TestCreateShop(t *testing.T) {
 
 	shop, err := service.Create(context.Background(), CreateInput{
 		OwnerUserID: "user-1",
+		OwnerRole:   RoleSeller,
 		Name:        "Green Shop",
 		Description: "Fresh daily",
 		Address:     "123 Main St",
@@ -316,6 +317,7 @@ func TestCreateRejectsInvalidCoordinates(t *testing.T) {
 
 	_, err := service.Create(context.Background(), CreateInput{
 		OwnerUserID: "user-1",
+		OwnerRole:   RoleSeller,
 		Name:        "Shop",
 		Address:     "Address",
 		Latitude:    200,
@@ -597,6 +599,7 @@ func TestCreateShopWritesAuditLog(t *testing.T) {
 
 	if _, err := service.Create(context.Background(), CreateInput{
 		OwnerUserID: "user-1",
+		OwnerRole:   RoleSeller,
 		Name:        "Green Shop",
 		Address:     "123 Main St",
 		Latitude:    10,
@@ -670,6 +673,7 @@ func TestCreateShopRejectsDuplicate(t *testing.T) {
 
 	_, err := service.Create(context.Background(), CreateInput{
 		OwnerUserID: "user-1",
+		OwnerRole:   RoleSeller,
 		Name:        "Second Shop",
 		Address:     "456 Side St",
 		Latitude:    10.762622,
@@ -693,6 +697,7 @@ func TestCreateShopAllowsAfterDeletedShop(t *testing.T) {
 
 	shop, err := service.Create(context.Background(), CreateInput{
 		OwnerUserID: "user-1",
+		OwnerRole:   RoleSeller,
 		Name:        "New Shop",
 		Address:     "789 New St",
 		Latitude:    10.762622,
@@ -703,5 +708,50 @@ func TestCreateShopAllowsAfterDeletedShop(t *testing.T) {
 	}
 	if shop.ShopID == "" {
 		t.Fatal("expected shop id")
+	}
+}
+
+// Opening a shop is not self-service: an admin grants the seller role first.
+// The app used to decide this by flipping a switch on the phone.
+func TestCreateShopRequiresSellerRole(t *testing.T) {
+	service := NewService(
+		shopRepositoryStub{
+			save: func(ctx context.Context, shop domain.Shop) error { return nil },
+			getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+				return domain.Shop{}, nil
+			},
+			list: func(ctx context.Context, filter repository.ShopListFilter) ([]domain.Shop, error) {
+				return nil, nil
+			},
+		},
+		pledgeRepositoryStub{},
+		buyerCheckRepositoryStub{},
+		reviewRepositoryStub{},
+		userRepositoryStub{},
+		nil,
+	)
+
+	_, err := service.Create(context.Background(), CreateInput{
+		OwnerUserID: "user-1",
+		OwnerRole:   "user",
+		Name:        "Green Shop",
+		Address:     "123 Main St",
+		Latitude:    10.762622,
+		Longitude:   106.660172,
+	})
+	if !errors.Is(err, ErrSellerRoleRequired) {
+		t.Fatalf("expected ErrSellerRoleRequired, got %v", err)
+	}
+
+	_, err = service.Create(context.Background(), CreateInput{
+		OwnerUserID: "admin-1",
+		OwnerRole:   "admin",
+		Name:        "Green Shop",
+		Address:     "123 Main St",
+		Latitude:    10.762622,
+		Longitude:   106.660172,
+	})
+	if err != nil {
+		t.Fatalf("an admin acting for a seller should be allowed, got %v", err)
 	}
 }

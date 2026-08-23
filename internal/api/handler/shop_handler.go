@@ -56,6 +56,7 @@ func (h *ShopHandler) Create(c *gin.Context) {
 
 	shop, err := h.shops.Create(c.Request.Context(), shopsvc.CreateInput{
 		OwnerUserID: principal.UserID,
+		OwnerRole:   principal.Role,
 		Name:        request.Name,
 		Description: request.Description,
 		Address:     request.Address,
@@ -511,7 +512,9 @@ func (h *ShopHandler) writeError(c *gin.Context, err error) {
 		status = http.StatusBadRequest
 	case errors.Is(err, shopsvc.ErrVersionConflict):
 		status = http.StatusConflict
-	case errors.Is(err, shopsvc.ErrForbidden), errors.Is(err, shopsvc.ErrAdminRequired):
+	case errors.Is(err, shopsvc.ErrForbidden),
+		errors.Is(err, shopsvc.ErrAdminRequired),
+		errors.Is(err, shopsvc.ErrSellerRoleRequired):
 		status = http.StatusForbidden
 	case errors.Is(err, shopsvc.ErrShopAlreadyExists):
 		status = http.StatusConflict

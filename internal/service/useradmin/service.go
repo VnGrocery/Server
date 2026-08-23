@@ -22,8 +22,13 @@ var (
 )
 
 const (
-	RoleAdmin       = "admin"
-	RoleUser        = "user"
+	RoleAdmin = "admin"
+	RoleUser  = "user"
+
+	// A seller is a user an admin has cleared to open a shop. Opening one is
+	// not self-service: the shop is what the whole signed record hangs off, so
+	// somebody has to vouch for the account behind it first.
+	RoleSeller      = "seller"
 	StatusActive    = "active"
 	StatusSuspended = "suspended"
 	StatusDeleted   = "deleted"
@@ -120,7 +125,7 @@ func (s *Service) UpdateRole(ctx context.Context, input UpdateRoleInput) (domain
 		return domain.User{}, fmt.Errorf("%w: actorUserId and targetUserId are required", ErrInvalidUser)
 	}
 	role := strings.TrimSpace(input.Role)
-	if role != RoleAdmin && role != RoleUser {
+	if role != RoleAdmin && role != RoleUser && role != RoleSeller {
 		return domain.User{}, fmt.Errorf("%w: unsupported role", ErrInvalidUser)
 	}
 	if input.ExpectedVersion <= 0 {

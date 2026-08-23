@@ -2,6 +2,7 @@ package vision
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -53,5 +54,46 @@ func TestOpenAIClientScoreImage(t *testing.T) {
 	}
 	if result.Score != 8.5 {
 		t.Fatalf("unexpected score: %v", result.Score)
+	}
+}
+
+// A refused key, a spent quota or an OpenAI outage is not our server failing.
+// Every one of these used to come back as a plain error, which the API layer
+// reported as 500 - so the seller was told the app had broken.
+func TestOpenAIClientClassifiesProviderErrors(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		want   error
+	}{
+		{"rejected key", http.StatusUnauthorized, visionservice.ErrProviderUnavailable},
+		{"spent quota", http.StatusTooManyRequests, visionservice.ErrProviderUnavailable},
+		{"provider outage", http.StatusBadGateway, visionservice.ErrProviderUnavailable},
+		{"image refused", http.StatusBadRequest, visionservice.ErrInvalidImage},
+	}
+
+	for _, testCase := range cases {
+		t.Run(testCase.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(testCase.status)
+				_, _ = w.Write([]byte(`{"error":{"message":"nope"}}`))
+			}))
+			defer server.Close()
+
+			client := NewOpenAIClient(config.Config{
+				OpenAIAPIKey:  "test-key",
+				OpenAIBaseURL: server.URL,
+				OpenAIModel:   "gpt-4o-mini",
+			})
+
+			_, err := client.ScoreImage(context.Background(), visionservice.ImagePayload{
+				Filename:    "store.jpg",
+				ContentType: "image/jpeg",
+				Data:        []byte{0xff, 0xd8, 0xff},
+			})
+			if !errors.Is(err, testCase.want) {
+				t.Fatalf("expected %v, got %v", testCase.want, err)
+			}
+		})
 	}
 }

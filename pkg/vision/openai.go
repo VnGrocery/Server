@@ -109,7 +109,11 @@ func (c *OpenAIClient) ScoreImage(ctx context.Context, image visionservice.Image
 	}
 
 	if response.StatusCode >= http.StatusBadRequest {
-		return visionservice.ScoreResult{}, fmt.Errorf("OpenAI API returned status %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		// Classify by the provider's status. Everything here used to come back
+		// as a plain error, which the handler reported as 500 - telling the
+		// seller our server had broken when in fact the key was rejected, the
+		// quota was spent, or OpenAI itself was down.
+		return visionservice.ScoreResult{}, fmt.Errorf("%w: OpenAI API returned status %d: %s", providerErrorFor(response.StatusCode), response.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var parsed openAIResponse
@@ -170,4 +174,19 @@ type openAIFormat struct {
 
 type openAIResponse struct {
 	OutputText string `json:"output_text"`
+}
+
+// providerErrorFor maps an OpenAI HTTP status onto the vision service's own
+// error vocabulary, which the API layer turns into a status the app can act on.
+func providerErrorFor(status int) error {
+	switch {
+	case status == http.StatusBadRequest, status == http.StatusUnprocessableEntity, status == http.StatusRequestEntityTooLarge:
+		// The image itself was refused; a different photo may work.
+		return visionservice.ErrInvalidImage
+	case status == http.StatusUnauthorized, status == http.StatusForbidden,
+		status == http.StatusTooManyRequests, status >= http.StatusInternalServerError:
+		return visionservice.ErrProviderUnavailable
+	default:
+		return visionservice.ErrProviderUnavailable
+	}
 }

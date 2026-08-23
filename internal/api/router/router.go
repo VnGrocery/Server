@@ -126,6 +126,7 @@ func New(deps Dependencies) *gin.Engine {
 			// waits for the shop.
 			v1.GET("/shops/:shopId/products/:productId/comments", deps.AuthMiddleware.Handle(), deps.CommentHandler.List)
 			v1.POST("/shops/:shopId/products/:productId/comments", deps.AuthMiddleware.Handle(), deps.CommentHandler.Create)
+			v1.GET("/seller/shops/:shopId/comments", deps.AuthMiddleware.Handle(), deps.CommentHandler.ListForShop)
 			v1.POST("/shops/:shopId/comments/:commentId/moderation", deps.AuthMiddleware.Handle(), deps.CommentHandler.Moderate)
 			v1.DELETE("/shops/:shopId/comments/:commentId", deps.AuthMiddleware.Handle(), deps.CommentHandler.Delete)
 		}

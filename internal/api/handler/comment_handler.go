@@ -16,6 +16,7 @@ import (
 type CommentService interface {
 	Create(ctx context.Context, input commentsvc.CreateInput) (domain.ProductComment, error)
 	List(ctx context.Context, input commentsvc.ListInput) ([]commentsvc.View, commentsvc.Summary, error)
+	ListForShop(ctx context.Context, input commentsvc.ShopQueueInput) ([]commentsvc.View, commentsvc.Summary, error)
 	Moderate(ctx context.Context, input commentsvc.ModerateInput) (domain.ProductComment, error)
 	Delete(ctx context.Context, input commentsvc.DeleteInput) (domain.ProductComment, error)
 }
@@ -54,6 +55,35 @@ func (h *CommentHandler) List(c *gin.Context) {
 		PendingCount:  summary.PendingCount,
 		RejectedCount: summary.RejectedCount,
 		CanComment:    summary.CanComment,
+	})
+}
+
+// ListForShop serves the owner's moderation queue.
+func (h *CommentHandler) ListForShop(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+	views, summary, err := h.comments.ListForShop(c.Request.Context(), commentsvc.ShopQueueInput{
+		ShopID:      c.Param("shopId"),
+		OwnerUserID: principal.UserID,
+		Status:      c.Query("status"),
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	items := make([]dto.ProductCommentResponse, 0, len(views))
+	for _, view := range views {
+		items = append(items, toProductCommentResponse(view.Comment, view.AuthorName))
+	}
+	c.JSON(http.StatusOK, dto.ProductCommentListResponse{
+		Items:         items,
+		Moderation:    summary.ModerationOn,
+		ApprovedCount: summary.ApprovedCount,
+		PendingCount:  summary.PendingCount,
+		RejectedCount: summary.RejectedCount,
 	})
 }
 

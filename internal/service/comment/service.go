@@ -101,6 +101,15 @@ type ListInput struct {
 	ActorUserID string
 }
 
+type ShopQueueInput struct {
+	ShopID      string
+	OwnerUserID string
+
+	// Status narrows the queue, e.g. "pending". Empty returns everything the
+	// owner can act on.
+	Status string
+}
+
 type ModerateInput struct {
 	ShopID          string
 	CommentID       string
@@ -234,6 +243,53 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Product
 		return domain.ProductComment{}, err
 	}
 	return comment, nil
+}
+
+// ListForShop is the owner's moderation queue: everything written across the
+// shop, newest first, optionally narrowed to one status.
+//
+// Owner only. The per-product list is what buyers read; this one exists so the
+// seller does not have to walk their own catalogue looking for what is waiting.
+func (s *Service) ListForShop(ctx context.Context, input ShopQueueInput) ([]View, Summary, error) {
+	shopID := strings.TrimSpace(input.ShopID)
+	if shopID == "" {
+		return nil, Summary{}, fmt.Errorf("%w: shopId is required", ErrInvalidComment)
+	}
+	if s.comments == nil || s.shops == nil {
+		return nil, Summary{}, fmt.Errorf("comment dependencies are not configured")
+	}
+	shop, err := s.shops.GetByID(ctx, shopID)
+	if err != nil || shop.ShopID == "" {
+		return nil, Summary{}, ErrNotFound
+	}
+	if shop.OwnerUserID != strings.TrimSpace(input.OwnerUserID) {
+		return nil, Summary{}, ErrForbidden
+	}
+	all, err := s.comments.List(ctx, repository.ProductCommentListFilter{ShopID: shopID})
+	if err != nil {
+		return nil, Summary{}, err
+	}
+
+	summary := Summary{ModerationOn: shop.CommentModeration}
+	views := make([]View, 0, len(all))
+	for _, item := range all {
+		switch item.Status {
+		case StatusApproved:
+			summary.ApprovedCount++
+		case StatusPending:
+			summary.PendingCount++
+		case StatusRejected:
+			summary.RejectedCount++
+		}
+		if item.Status == StatusDeleted {
+			continue
+		}
+		if status := strings.TrimSpace(input.Status); status != "" && item.Status != status {
+			continue
+		}
+		views = append(views, View{Comment: item, AuthorName: s.displayName(ctx, item.AuthorUserID)})
+	}
+	return views, summary, nil
 }
 
 func (s *Service) List(ctx context.Context, input ListInput) ([]View, Summary, error) {

@@ -16,14 +16,11 @@ type VoucherResponse struct {
 	Note          string    `json:"note"`
 	CodeFormat    string    `json:"codeFormat"`
 
-	// TotalQuantity 0 means the offer is not rationed. Remaining is only
-	// meaningful when it is, and the client hides the figure otherwise rather
-	// than printing a zero that reads as sold out.
-	TotalQuantity int  `json:"totalQuantity"`
-	ClaimedCount  int  `json:"claimedCount"`
-	Remaining     int  `json:"remaining"`
-	Limited       bool `json:"limited"`
-	SoldOut       bool `json:"soldOut"`
+	// TotalQuantity 0 means the offer is not rationed. How many are left is
+	// these two subtracted, which the client does rather than the wire
+	// carrying the same fact three more times.
+	TotalQuantity int `json:"totalQuantity"`
+	ClaimedCount  int `json:"claimedCount"`
 }
 
 type CreateVoucherRequest struct {

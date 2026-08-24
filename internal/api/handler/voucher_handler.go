@@ -191,11 +191,6 @@ func (h *VoucherHandler) writeError(c *gin.Context, err error) {
 }
 
 func toVoucherResponse(v domain.Voucher) dto.VoucherResponse {
-	limited := v.TotalQuantity > 0
-	remaining := 0
-	if limited {
-		remaining = max(v.TotalQuantity-v.ClaimedCount, 0)
-	}
 	return dto.VoucherResponse{
 		VoucherID: v.VoucherID, ShopID: v.ShopID, Code: v.Code, Title: v.Title,
 		DiscountValue: v.DiscountValue, IsPercent: v.IsPercent, MinSpend: v.MinSpend,
@@ -203,9 +198,6 @@ func toVoucherResponse(v domain.Voucher) dto.VoucherResponse {
 		CodeFormat:    v.CodeFormat,
 		TotalQuantity: v.TotalQuantity,
 		ClaimedCount:  v.ClaimedCount,
-		Remaining:     remaining,
-		Limited:       limited,
-		SoldOut:       limited && remaining == 0,
 	}
 }
 

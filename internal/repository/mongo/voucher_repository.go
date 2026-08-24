@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -50,6 +51,29 @@ func (r *VoucherRepository) ListActive(ctx context.Context) ([]domain.Voucher, e
 	// Newest first. Expiry is left to the caller, which owns the clock.
 	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt.After(items[j].CreatedAt) })
 	return items, nil
+}
+
+// ClaimSlot takes one claim off a rationed voucher in a single update, so two
+// buyers reaching for the last one cannot both be told yes.
+//
+// A voucher with totalQuantity 0 is not rationed; the filter lets it through
+// and still counts the claim, which is what the shop's "đã phát" figure reads.
+func (r *VoucherRepository) ClaimSlot(ctx context.Context, voucherID string) (bool, error) {
+	result, err := r.collection.UpdateOne(
+		ctx,
+		bson.M{
+			"_id": voucherID,
+			"$or": []bson.M{
+				{"totalQuantity": bson.M{"$lte": 0}},
+				{"$expr": bson.M{"$lt": []string{"$claimedCount", "$totalQuantity"}}},
+			},
+		},
+		bson.M{"$inc": bson.M{"claimedCount": 1}},
+	)
+	if err != nil {
+		return false, fmt.Errorf("claim slot %s: %w", r.collection.Name(), err)
+	}
+	return result.ModifiedCount > 0, nil
 }
 
 type UserVoucherRepository struct{ collection *mongo.Collection }

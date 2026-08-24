@@ -133,6 +133,13 @@ type VoucherRepository interface {
 	// ListActive spans every shop. The home screen advertises offers the
 	// reader has not been to yet, so it cannot start from a shop id.
 	ListActive(ctx context.Context) ([]domain.Voucher, error)
+
+	// ClaimSlot takes one of a rationed voucher's remaining claims and
+	// reports whether there was one to take. It has to be atomic: a
+	// read-then-write would hand the last voucher to everyone who asked at
+	// the same moment. An unrationed voucher (totalQuantity 0) always
+	// succeeds and still counts the claim.
+	ClaimSlot(ctx context.Context, voucherID string) (bool, error)
 }
 
 type UserVoucherRepository interface {

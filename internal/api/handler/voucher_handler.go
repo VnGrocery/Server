@@ -95,7 +95,7 @@ func (h *VoucherHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
 		return
 	}
-	voucher, err := h.service.Create(c.Request.Context(), vouchersvc.CreateInput{ShopID: c.Param("shopId"), OwnerUserID: principal.UserID, Code: request.Code, Title: request.Title, DiscountValue: request.DiscountValue, IsPercent: request.IsPercent, MinSpend: request.MinSpend, ExpiresAt: request.ExpiresAt, Note: request.Note, CodeFormat: request.CodeFormat})
+	voucher, err := h.service.Create(c.Request.Context(), vouchersvc.CreateInput{ShopID: c.Param("shopId"), OwnerUserID: principal.UserID, Code: request.Code, Title: request.Title, DiscountValue: request.DiscountValue, IsPercent: request.IsPercent, MinSpend: request.MinSpend, ExpiresAt: request.ExpiresAt, Note: request.Note, CodeFormat: request.CodeFormat, TotalQuantity: request.TotalQuantity})
 	if err != nil {
 		h.writeError(c, err)
 		return
@@ -182,14 +182,31 @@ func (h *VoucherHandler) writeError(c *gin.Context, err error) {
 		status = http.StatusNotFound
 	case errors.Is(err, vouchersvc.ErrForbidden):
 		status = http.StatusForbidden
-	case errors.Is(err, vouchersvc.ErrUsed):
+	case errors.Is(err, vouchersvc.ErrSoldOut),
+		errors.Is(err, vouchersvc.ErrExpired),
+		errors.Is(err, vouchersvc.ErrUsed):
 		status = http.StatusConflict
 	}
 	c.JSON(status, gin.H{"error": err.Error()})
 }
 
 func toVoucherResponse(v domain.Voucher) dto.VoucherResponse {
-	return dto.VoucherResponse{VoucherID: v.VoucherID, ShopID: v.ShopID, Code: v.Code, Title: v.Title, DiscountValue: v.DiscountValue, IsPercent: v.IsPercent, MinSpend: v.MinSpend, ExpiresAt: v.ExpiresAt, Active: v.Active, Manual: v.Manual, Note: v.Note, CodeFormat: v.CodeFormat}
+	limited := v.TotalQuantity > 0
+	remaining := 0
+	if limited {
+		remaining = max(v.TotalQuantity-v.ClaimedCount, 0)
+	}
+	return dto.VoucherResponse{
+		VoucherID: v.VoucherID, ShopID: v.ShopID, Code: v.Code, Title: v.Title,
+		DiscountValue: v.DiscountValue, IsPercent: v.IsPercent, MinSpend: v.MinSpend,
+		ExpiresAt: v.ExpiresAt, Active: v.Active, Manual: v.Manual, Note: v.Note,
+		CodeFormat:    v.CodeFormat,
+		TotalQuantity: v.TotalQuantity,
+		ClaimedCount:  v.ClaimedCount,
+		Remaining:     remaining,
+		Limited:       limited,
+		SoldOut:       limited && remaining == 0,
+	}
 }
 
 func toUserVoucherResponse(item vouchersvc.WalletItem) dto.UserVoucherResponse {

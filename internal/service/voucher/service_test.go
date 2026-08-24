@@ -2,6 +2,8 @@ package voucher
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sort"
 	"testing"
 	"time"
@@ -46,6 +48,21 @@ func (r *voucherRepoStub) ListActive(_ context.Context) ([]domain.Voucher, error
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Code < result[j].Code })
 	return result, nil
+}
+
+// Mirrors the atomic update in Mongo: an unrationed voucher always yields a
+// slot, a rationed one only while claims remain.
+func (r *voucherRepoStub) ClaimSlot(_ context.Context, voucherID string) (bool, error) {
+	item, ok := r.items[voucherID]
+	if !ok {
+		return false, nil
+	}
+	if item.TotalQuantity > 0 && item.ClaimedCount >= item.TotalQuantity {
+		return false, nil
+	}
+	item.ClaimedCount++
+	r.items[voucherID] = item
+	return true, nil
 }
 
 type walletRepoStub struct{ items map[string]domain.UserVoucher }
@@ -191,5 +208,141 @@ func TestFeaturedOffersRespectTheLimit(t *testing.T) {
 	}
 	if len(featured) != 2 {
 		t.Fatalf("expected 2, got %d", len(featured))
+	}
+}
+
+func liveVoucher(service *Service, quantity int) domain.Voucher {
+	return domain.Voucher{
+		VoucherID: "v-1", ShopID: "shop-1", Code: "RAUSACH10", Title: "Giảm 10%",
+		DiscountValue: 10, IsPercent: true, Active: true,
+		TotalQuantity: quantity,
+		ExpiresAt:     service.now().AddDate(0, 1, 0),
+	}
+}
+
+func TestClaimingStopsAtTheQuantityTheShopOffered(t *testing.T) {
+	service, vouchers, _ := newTestService()
+	vouchers.items["v-1"] = liveVoucher(service, 2)
+
+	for _, buyer := range []string{"buyer-1", "buyer-2"} {
+		if _, err := service.SaveToWallet(context.Background(), buyer, "v-1"); err != nil {
+			t.Fatalf("%s could not claim: %v", buyer, err)
+		}
+	}
+
+	// The third buyer is told no rather than handed a voucher the shop never
+	// offered.
+	if _, err := service.SaveToWallet(context.Background(), "buyer-3", "v-1"); !errors.Is(err, ErrSoldOut) {
+		t.Fatalf("expected sold out, got %v", err)
+	}
+	if vouchers.items["v-1"].ClaimedCount != 2 {
+		t.Fatalf("claimed count drifted: %d", vouchers.items["v-1"].ClaimedCount)
+	}
+}
+
+func TestClaimingTwiceCostsOnlyOneOfTheQuantity(t *testing.T) {
+	service, vouchers, _ := newTestService()
+	vouchers.items["v-1"] = liveVoucher(service, 1)
+
+	first, err := service.SaveToWallet(context.Background(), "buyer-1", "v-1")
+	if err != nil {
+		t.Fatalf("first claim: %v", err)
+	}
+	second, err := service.SaveToWallet(context.Background(), "buyer-1", "v-1")
+	if err != nil {
+		t.Fatalf("claiming what you already hold must not fail: %v", err)
+	}
+
+	if first.UserVoucher.UserVoucherID != second.UserVoucher.UserVoucherID {
+		t.Fatal("a second claim minted a second wallet entry")
+	}
+	if vouchers.items["v-1"].ClaimedCount != 1 {
+		t.Fatalf("a repeat claim ate another slot: %d", vouchers.items["v-1"].ClaimedCount)
+	}
+}
+
+func TestAnUnrationedOfferNeverRunsOut(t *testing.T) {
+	service, vouchers, _ := newTestService()
+	// Zero is what every voucher created before quantity existed carries.
+	vouchers.items["v-1"] = liveVoucher(service, 0)
+
+	for i := range 5 {
+		if _, err := service.SaveToWallet(context.Background(), fmt.Sprintf("buyer-%d", i), "v-1"); err != nil {
+			t.Fatalf("claim %d: %v", i, err)
+		}
+	}
+	// It still counts, because the shop wants to know how many went out.
+	if vouchers.items["v-1"].ClaimedCount != 5 {
+		t.Fatalf("expected 5 claims counted, got %d", vouchers.items["v-1"].ClaimedCount)
+	}
+}
+
+func TestAnExpiredOrPausedOfferCannotBeClaimed(t *testing.T) {
+	service, vouchers, _ := newTestService()
+
+	expired := liveVoucher(service, 0)
+	expired.ExpiresAt = service.now().AddDate(0, 0, -1)
+	vouchers.items["v-1"] = expired
+	if _, err := service.SaveToWallet(context.Background(), "buyer-1", "v-1"); !errors.Is(err, ErrExpired) {
+		t.Fatalf("expected expired, got %v", err)
+	}
+
+	paused := liveVoucher(service, 0)
+	paused.Active = false
+	vouchers.items["v-1"] = paused
+	if _, err := service.SaveToWallet(context.Background(), "buyer-2", "v-1"); !errors.Is(err, ErrExpired) {
+		t.Fatalf("expected paused to be refused, got %v", err)
+	}
+
+	// Neither attempt may spend a slot.
+	if vouchers.items["v-1"].ClaimedCount != 0 {
+		t.Fatalf("a refused claim still counted: %d", vouchers.items["v-1"].ClaimedCount)
+	}
+}
+
+func TestFullyClaimedOffersLeaveTheAdvertSlot(t *testing.T) {
+	service, vouchers, _ := newTestService()
+	sold := liveVoucher(service, 1)
+	sold.ClaimedCount = 1
+	vouchers.items["v-1"] = sold
+
+	featured, err := service.ListFeatured(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("list featured: %v", err)
+	}
+	// Advertising an offer nobody can still claim is the same mistake as
+	// advertising an expired one.
+	if len(featured) != 0 {
+		t.Fatalf("a sold-out offer was still advertised: %d", len(featured))
+	}
+}
+
+func TestCreateRefusesAQuantityThatMakesNoSense(t *testing.T) {
+	service, _, _ := newTestService()
+	base := CreateInput{
+		ShopID: "shop-1", OwnerUserID: "seller-1", Code: "NEW10", Title: "Giảm 10%",
+		DiscountValue: 10, IsPercent: true, ExpiresAt: service.now().AddDate(0, 1, 0),
+	}
+
+	negative := base
+	negative.TotalQuantity = -1
+	if _, err := service.Create(context.Background(), negative); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("expected invalid for a negative quantity, got %v", err)
+	}
+
+	past := base
+	past.ExpiresAt = service.now().AddDate(0, 0, -1)
+	if _, err := service.Create(context.Background(), past); !errors.Is(err, ErrInvalid) {
+		t.Fatalf("an offer that has already expired is not an offer: %v", err)
+	}
+
+	ok := base
+	ok.TotalQuantity = 50
+	created, err := service.Create(context.Background(), ok)
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if created.TotalQuantity != 50 || created.ClaimedCount != 0 {
+		t.Fatalf("quantity not stored: %#v", created)
 	}
 }

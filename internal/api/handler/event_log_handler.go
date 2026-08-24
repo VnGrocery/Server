@@ -14,6 +14,7 @@ import (
 	grpcstatus "google.golang.org/grpc/status"
 
 	"vngrocery/internal/api/dto"
+	"vngrocery/internal/api/middleware"
 	auditsvc "vngrocery/internal/service/audit"
 )
 
@@ -59,10 +60,19 @@ func (h *EventLogHandler) List(c *gin.Context) {
 		return
 	}
 
+	// Only an admin may read someone else's trail. Left to the query string
+	// this endpoint hands any session holder a directory of what everyone
+	// else has done, which is the opposite of what a signed log is for.
+	actorUserID := strings.TrimSpace(c.Query("actorUserId"))
+	principal, _ := middleware.GetPrincipal(c)
+	if !strings.EqualFold(strings.TrimSpace(principal.Role), "admin") {
+		actorUserID = principal.UserID
+	}
+
 	result, err := h.events.List(c.Request.Context(), auditsvc.ListInput{
 		ResourceType:  c.Query("resourceType"),
 		ResourceID:    c.Query("resourceId"),
-		ActorUserID:   c.Query("actorUserId"),
+		ActorUserID:   actorUserID,
 		Action:        c.Query("action"),
 		Status:        c.Query("status"),
 		MinSequence:   minSequence,

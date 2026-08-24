@@ -248,6 +248,8 @@ func main() {
 	shopManager.SetShopIntegrityManager(integrityManager)
 	sellerCommitService.SetIntegrityManager(integrityManager)
 	buyerCheckService := buyerservice.NewService(pledgeRepository, buyerCheckRepository, userRepository, visionScorer, auditLogger)
+	// Names for the reader's own check history; ids alone are unreadable.
+	buyerCheckService.SetCatalogue(productRepository, shopRepository)
 	bundleTokenService := bundletokenservice.NewService(cfg.JWTSecret, "vngrocery", 30*time.Minute, bundleTokenUseRepository)
 	bundleTokenService.SetObserver(metrics)
 	bundleTokenService.StartCleanup(appCtx, 10*time.Minute, 500)

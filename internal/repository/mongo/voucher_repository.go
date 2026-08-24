@@ -42,6 +42,16 @@ func (r *VoucherRepository) ListByShopID(ctx context.Context, shopID string) ([]
 	return items, nil
 }
 
+func (r *VoucherRepository) ListActive(ctx context.Context) ([]domain.Voucher, error) {
+	items, err := listDocuments[domain.Voucher](ctx, r.collection, bson.M{"active": true})
+	if err != nil {
+		return nil, err
+	}
+	// Newest first. Expiry is left to the caller, which owns the clock.
+	sort.Slice(items, func(i, j int) bool { return items[i].CreatedAt.After(items[j].CreatedAt) })
+	return items, nil
+}
+
 type UserVoucherRepository struct{ collection *mongo.Collection }
 
 func NewUserVoucherRepository(db *mongo.Database) *UserVoucherRepository {

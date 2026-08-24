@@ -106,6 +106,7 @@ func New(deps Dependencies) *gin.Engine {
 			v1.GET("/vouchers/:voucherId", deps.VoucherHandler.Get)
 			v1.POST("/vouchers/check", deps.VoucherHandler.Check)
 			v1.GET("/shops/:shopId/vouchers", deps.VoucherHandler.ListShop)
+			v1.GET("/vouchers", deps.VoucherHandler.ListFeatured)
 		}
 		v1.GET("/me", deps.AuthMiddleware.Handle(), deps.AuthHandler.Me)
 		v1.GET("/me/shop", deps.AuthMiddleware.Handle(), deps.ShopHandler.GetMine)
@@ -139,6 +140,7 @@ func New(deps Dependencies) *gin.Engine {
 			v1.POST("/me/vouchers/manual", deps.AuthMiddleware.Handle(), deps.VoucherHandler.AddManual)
 			v1.POST("/me/vouchers/:userVoucherId/use", deps.AuthMiddleware.Handle(), deps.VoucherHandler.Use)
 			v1.GET("/me/recommendations", deps.AuthMiddleware.Handle(), deps.RecommendationHandler.List)
+			v1.GET("/me/checks", deps.AuthMiddleware.Handle(), deps.BuyerHandler.ListMine)
 		}
 		v1.GET("/admin/shops", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.ShopHandler.AdminList)
 		v1.PATCH("/admin/shops/:shopId/moderation", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.ShopHandler.Moderate)

@@ -3,6 +3,8 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -38,6 +40,29 @@ func (h *VoucherHandler) ListShop(c *gin.Context) {
 		responses = append(responses, toVoucherResponse(item))
 	}
 	c.JSON(http.StatusOK, dto.VoucherListResponse{Items: responses})
+}
+
+// ListFeatured serves the home screen's offer slot.
+func (h *VoucherHandler) ListFeatured(c *gin.Context) {
+	limit := 5
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 && parsed <= 20 {
+			limit = parsed
+		}
+	}
+	items, err := h.service.ListFeatured(c.Request.Context(), limit)
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	responses := make([]dto.FeaturedVoucherResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, dto.FeaturedVoucherResponse{
+			VoucherResponse: toVoucherResponse(item.Voucher),
+			ShopName:        item.ShopName,
+		})
+	}
+	c.JSON(http.StatusOK, dto.FeaturedVoucherListResponse{Items: responses})
 }
 
 func (h *VoucherHandler) Check(c *gin.Context) {

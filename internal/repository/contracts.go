@@ -129,6 +129,10 @@ type VoucherRepository interface {
 	GetByID(ctx context.Context, voucherID string) (domain.Voucher, error)
 	GetByCode(ctx context.Context, code string) (domain.Voucher, error)
 	ListByShopID(ctx context.Context, shopID string) ([]domain.Voucher, error)
+
+	// ListActive spans every shop. The home screen advertises offers the
+	// reader has not been to yet, so it cannot start from a shop id.
+	ListActive(ctx context.Context) ([]domain.Voucher, error)
 }
 
 type UserVoucherRepository interface {

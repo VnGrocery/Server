@@ -2,6 +2,7 @@ package voucher
 
 import (
 	"context"
+	"sort"
 	"testing"
 	"time"
 
@@ -33,6 +34,17 @@ func (r *voucherRepoStub) ListByShopID(_ context.Context, shopID string) ([]doma
 			result = append(result, item)
 		}
 	}
+	return result, nil
+}
+
+func (r *voucherRepoStub) ListActive(_ context.Context) ([]domain.Voucher, error) {
+	var result []domain.Voucher
+	for _, item := range r.items {
+		if item.Active {
+			result = append(result, item)
+		}
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Code < result[j].Code })
 	return result, nil
 }
 
@@ -79,7 +91,7 @@ func (r shopRepoStub) List(context.Context, repository.ShopListFilter) ([]domain
 func newTestService() (*Service, *voucherRepoStub, *walletRepoStub) {
 	vouchers := &voucherRepoStub{items: map[string]domain.Voucher{}}
 	wallets := &walletRepoStub{items: map[string]domain.UserVoucher{}}
-	service := NewService(vouchers, wallets, shopRepoStub{shop: domain.Shop{ShopID: "shop-1", OwnerUserID: "seller-1"}})
+	service := NewService(vouchers, wallets, shopRepoStub{shop: domain.Shop{ShopID: "shop-1", OwnerUserID: "seller-1", Name: "Rau Sạch Cô Ba"}})
 	service.now = func() time.Time { return time.Date(2026, 7, 14, 0, 0, 0, 0, time.UTC) }
 	return service, vouchers, wallets
 }
@@ -123,5 +135,61 @@ func TestManualVoucherBelongsOnlyToAuthenticatedWallet(t *testing.T) {
 	}
 	if _, err := service.Use(context.Background(), "buyer-2", item.UserVoucher.UserVoucherID); err != ErrForbidden {
 		t.Fatalf("expected forbidden, got %v", err)
+	}
+}
+
+func TestFeaturedOffersLeaveOutWhatNobodyCouldRedeem(t *testing.T) {
+	service, vouchers, _ := newTestService()
+	now := service.now()
+
+	vouchers.items["live"] = domain.Voucher{
+		VoucherID: "live", ShopID: "shop-1", Code: "AAA", Title: "Giảm 10%",
+		Active: true, ExpiresAt: now.AddDate(0, 1, 0),
+	}
+	vouchers.items["expired"] = domain.Voucher{
+		VoucherID: "expired", ShopID: "shop-1", Code: "BBB", Title: "Hết hạn",
+		Active: true, ExpiresAt: now.AddDate(0, 0, -1),
+	}
+	vouchers.items["paused"] = domain.Voucher{
+		VoucherID: "paused", ShopID: "shop-1", Code: "CCC", Title: "Tạm khóa",
+		Active: false, ExpiresAt: now.AddDate(0, 1, 0),
+	}
+	vouchers.items["orphan"] = domain.Voucher{
+		VoucherID: "orphan", ShopID: "shop-gone", Code: "DDD", Title: "Cửa hàng đã đóng",
+		Active: true, ExpiresAt: now.AddDate(0, 1, 0),
+	}
+
+	featured, err := service.ListFeatured(context.Background(), 10)
+	if err != nil {
+		t.Fatalf("list featured: %v", err)
+	}
+	// Advertising an offer that cannot be used is worse than advertising none.
+	if len(featured) != 1 {
+		t.Fatalf("expected only the live offer, got %d", len(featured))
+	}
+	if featured[0].Voucher.VoucherID != "live" {
+		t.Fatalf("wrong offer featured: %s", featured[0].Voucher.VoucherID)
+	}
+	if featured[0].ShopName == "" {
+		t.Fatal("an offer without a shop name says nothing the reader can act on")
+	}
+}
+
+func TestFeaturedOffersRespectTheLimit(t *testing.T) {
+	service, vouchers, _ := newTestService()
+	now := service.now()
+	for _, code := range []string{"A", "B", "C", "D"} {
+		vouchers.items[code] = domain.Voucher{
+			VoucherID: code, ShopID: "shop-1", Code: code, Title: code,
+			Active: true, ExpiresAt: now.AddDate(0, 1, 0),
+		}
+	}
+
+	featured, err := service.ListFeatured(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("list featured: %v", err)
+	}
+	if len(featured) != 2 {
+		t.Fatalf("expected 2, got %d", len(featured))
 	}
 }

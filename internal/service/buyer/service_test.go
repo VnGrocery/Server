@@ -530,3 +530,91 @@ func TestCheckReturnsExistingWhenBundleTokenReplayedWithSameImage(t *testing.T) 
 		t.Fatalf("unexpected replay fallback result: %#v", result)
 	}
 }
+
+type mineProductRepositoryStub struct{ product domain.Product }
+
+func (p mineProductRepositoryStub) Save(context.Context, domain.Product) error { return nil }
+func (p mineProductRepositoryStub) GetByID(_ context.Context, id string) (domain.Product, error) {
+	if p.product.ProductID != id {
+		return domain.Product{}, errors.New("not found")
+	}
+	return p.product, nil
+}
+func (p mineProductRepositoryStub) List(context.Context, repository.ProductListFilter) ([]domain.Product, error) {
+	return nil, errors.New("not implemented")
+}
+
+type mineShopRepositoryStub struct{ shop domain.Shop }
+
+func (s mineShopRepositoryStub) Save(context.Context, domain.Shop) error { return nil }
+func (s mineShopRepositoryStub) GetByID(_ context.Context, id string) (domain.Shop, error) {
+	if s.shop.ShopID != id {
+		return domain.Shop{}, errors.New("not found")
+	}
+	return s.shop, nil
+}
+func (s mineShopRepositoryStub) List(context.Context, repository.ShopListFilter) ([]domain.Shop, error) {
+	return []domain.Shop{s.shop}, nil
+}
+
+func TestListMineNamesWhatTheReaderChecked(t *testing.T) {
+	service := NewService(
+		pledgeRepositoryStub{},
+		buyerCheckRepositoryStub{
+			listByBuyerUserID: func(_ context.Context, buyerUserID string) ([]domain.BuyerCheck, error) {
+				if buyerUserID != "buyer-1" {
+					t.Fatalf("asked for the wrong reader: %q", buyerUserID)
+				}
+				return []domain.BuyerCheck{
+					{CheckID: "check-1", ShopID: "shop-1", ProductID: "product-1", Verdict: "trusted"},
+					{CheckID: "check-2", ShopID: "shop-1", ProductID: "gone", Verdict: "warning"},
+				}, nil
+			},
+		},
+		userRepositoryStub{},
+		nil,
+		nil,
+	)
+	service.SetCatalogue(
+		mineProductRepositoryStub{product: domain.Product{ProductID: "product-1", Name: "Cải ngọt Đà Lạt"}},
+		mineShopRepositoryStub{shop: domain.Shop{ShopID: "shop-1", Name: "Rau Sạch Cô Ba"}},
+	)
+
+	items, err := service.ListMine(context.Background(), "buyer-1")
+	if err != nil {
+		t.Fatalf("list mine: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 checks, got %d", len(items))
+	}
+	if items[0].ProductName != "Cải ngọt Đà Lạt" || items[0].ShopName != "Rau Sạch Cô Ba" {
+		t.Fatalf("names missing: %#v", items[0])
+	}
+	// A product that has since been removed still leaves its check in the
+	// reader's history; the row loses its name, not its place.
+	if items[1].ProductName != "" || items[1].ShopName != "Rau Sạch Cô Ba" {
+		t.Fatalf("a deleted product should blank only its own name: %#v", items[1])
+	}
+}
+
+func TestListMineWithoutACatalogueStillReturnsTheChecks(t *testing.T) {
+	service := NewService(
+		pledgeRepositoryStub{},
+		buyerCheckRepositoryStub{
+			listByBuyerUserID: func(context.Context, string) ([]domain.BuyerCheck, error) {
+				return []domain.BuyerCheck{{CheckID: "check-1"}}, nil
+			},
+		},
+		userRepositoryStub{},
+		nil,
+		nil,
+	)
+
+	items, err := service.ListMine(context.Background(), "buyer-1")
+	if err != nil {
+		t.Fatalf("list mine: %v", err)
+	}
+	if len(items) != 1 || items[0].Check.CheckID != "check-1" {
+		t.Fatalf("unexpected result: %#v", items)
+	}
+}

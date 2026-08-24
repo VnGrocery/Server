@@ -69,6 +69,15 @@ type ListResult struct {
 	Total    int
 }
 
+// MineItem is one of the reader's own checks with enough context to read it
+// back weeks later. A row that says only "trusted" and a hash is a receipt for
+// a purchase nobody can identify.
+type MineItem struct {
+	Check       domain.BuyerCheck
+	ProductName string
+	ShopName    string
+}
+
 type CheckResult struct {
 	CheckID          string
 	ShopID           string
@@ -102,11 +111,16 @@ type Service struct {
 	pledges repository.PledgeRepository
 	checks  repository.BuyerCheckRepository
 	users   repository.UserRepository
-	scorer  visionservice.ImageScorer
-	audit   AuditLogger
-	tokens  BundleTokenVerifier
-	stats   Observer
-	now     func() time.Time
+
+	// Set through SetCatalogue; nil leaves the names blank rather than
+	// failing the list.
+	products repository.ProductRepository
+	shops    repository.ShopRepository
+	scorer   visionservice.ImageScorer
+	audit    AuditLogger
+	tokens   BundleTokenVerifier
+	stats    Observer
+	now      func() time.Time
 }
 
 type AuditLogger interface {
@@ -491,6 +505,77 @@ func normalizeLocationStatus(raw string) (string, error) {
 	default:
 		return "", fmt.Errorf("%w: invalid locationStatus", ErrInvalidCheck)
 	}
+}
+
+// SetCatalogue gives the service the names behind the ids. It is a setter
+// rather than a constructor argument so that every existing caller and test
+// keeps working; without it ListMine still returns the checks, just unnamed.
+func (s *Service) SetCatalogue(products repository.ProductRepository, shops repository.ShopRepository) {
+	s.products = products
+	s.shops = shops
+}
+
+// ListMine returns the reader's own checks, newest first.
+//
+// This is the only list a buyer can ask for, and it is the whole gate on the
+// account entry that shows it: a reader who has never photographed anything at
+// a stall has nothing here, and the screen says so rather than inventing rows.
+func (s *Service) ListMine(ctx context.Context, buyerUserID string) ([]MineItem, error) {
+	buyerUserID = strings.TrimSpace(buyerUserID)
+	if buyerUserID == "" {
+		return nil, fmt.Errorf("%w: buyerUserId is required", ErrInvalidCheck)
+	}
+	if s.checks == nil {
+		return nil, fmt.Errorf("buyer check list dependencies are not configured")
+	}
+	checks, err := s.checks.ListByBuyerUserID(ctx, buyerUserID)
+	if err != nil {
+		return nil, err
+	}
+
+	productNames := make(map[string]string)
+	shopNames := make(map[string]string)
+	items := make([]MineItem, 0, len(checks))
+	for _, check := range checks {
+		items = append(items, MineItem{
+			Check:       check,
+			ProductName: s.lookupProductName(ctx, check.ProductID, productNames),
+			ShopName:    s.lookupShopName(ctx, check.ShopID, shopNames),
+		})
+	}
+	return items, nil
+}
+
+func (s *Service) lookupProductName(ctx context.Context, productID string, cache map[string]string) string {
+	productID = strings.TrimSpace(productID)
+	if s.products == nil || productID == "" {
+		return ""
+	}
+	if name, ok := cache[productID]; ok {
+		return name
+	}
+	name := ""
+	if product, err := s.products.GetByID(ctx, productID); err == nil {
+		name = product.Name
+	}
+	cache[productID] = name
+	return name
+}
+
+func (s *Service) lookupShopName(ctx context.Context, shopID string, cache map[string]string) string {
+	shopID = strings.TrimSpace(shopID)
+	if s.shops == nil || shopID == "" {
+		return ""
+	}
+	if name, ok := cache[shopID]; ok {
+		return name
+	}
+	name := ""
+	if shop, err := s.shops.GetByID(ctx, shopID); err == nil {
+		name = shop.Name
+	}
+	cache[shopID] = name
+	return name
 }
 
 func (s *Service) ensureQuota(ctx context.Context, buyerUserID string) error {

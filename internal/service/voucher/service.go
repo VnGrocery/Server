@@ -111,6 +111,53 @@ func (s *Service) ListShop(ctx context.Context, shopID string) ([]domain.Voucher
 	return s.vouchers.ListByShopID(ctx, shopID)
 }
 
+// Featured is one live offer plus the shop it belongs to, ready to advertise.
+type Featured struct {
+	Voucher  domain.Voucher
+	ShopName string
+}
+
+// ListFeatured returns offers that a reader could actually use right now:
+// active, not expired, and belonging to a shop that still exists. An offer the
+// reader cannot redeem is worse than no offer at all, so none of those filters
+// is optional.
+func (s *Service) ListFeatured(ctx context.Context, limit int) ([]Featured, error) {
+	if limit <= 0 {
+		limit = 5
+	}
+	vouchers, err := s.vouchers.ListActive(ctx)
+	if err != nil {
+		return nil, err
+	}
+	now := s.now()
+	featured := make([]Featured, 0, limit)
+	names := make(map[string]string)
+	for _, voucher := range vouchers {
+		if len(featured) >= limit {
+			break
+		}
+		if now.After(voucher.ExpiresAt) {
+			continue
+		}
+		name, ok := names[voucher.ShopID]
+		if !ok {
+			shop, err := s.shops.GetByID(ctx, voucher.ShopID)
+			if err != nil || shop.ShopID == "" {
+				// A voucher whose shop is gone cannot be redeemed anywhere.
+				names[voucher.ShopID] = ""
+				continue
+			}
+			name = shop.Name
+			names[voucher.ShopID] = name
+		}
+		if name == "" {
+			continue
+		}
+		featured = append(featured, Featured{Voucher: voucher, ShopName: name})
+	}
+	return featured, nil
+}
+
 func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, error) {
 	if input.OrderValue < 0 || strings.TrimSpace(input.Code) == "" || strings.TrimSpace(input.ShopID) == "" {
 		return CheckResult{}, ErrInvalid

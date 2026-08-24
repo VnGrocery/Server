@@ -270,37 +270,7 @@ func (h *BuyerHandler) ListAdmin(c *gin.Context) {
 
 	items := make([]dto.BuyerCheckResponse, 0, len(result.Items))
 	for _, check := range result.Items {
-		items = append(items, dto.BuyerCheckResponse{
-			CheckID:           check.CheckID,
-			ShopID:            check.ShopID,
-			ProductID:         check.ProductID,
-			BundleID:          check.BundleID,
-			BuyerUserID:       check.BuyerUserID,
-			Status:            check.Status,
-			Version:           check.Version,
-			PolicyVersion:     check.PolicyVersion,
-			HasPledge:         strings.TrimSpace(check.PledgeID) != "",
-			PledgeID:          check.PledgeID,
-			Trusted:           check.Trusted,
-			Verdict:           check.Verdict,
-			PledgedScore:      check.PledgedScore,
-			ActualScore:       check.ActualScore,
-			ScoreDelta:        check.ScoreDelta,
-			ScoreDeltaAbs:     check.ScoreDeltaAbs,
-			PledgedCategory:   check.PledgedCategory,
-			ActualCategory:    check.ActualCategory,
-			ActualConfidence:  check.ActualConfidence,
-			LocationStatus:    check.LocationStatus,
-			CategoryMatch:     check.CategoryMatch,
-			ImageHash:         check.ImageHash,
-			ImageCID:          check.ImageCID,
-			Reasons:           check.Reasons,
-			ModeratedByUserID: check.ModeratedByUserID,
-			ModerationNote:    check.ModerationNote,
-			ModeratedAt:       check.ModeratedAt,
-			CreatedAt:         check.CreatedAt,
-			UpdatedAt:         check.UpdatedAt,
-		})
+		items = append(items, toBuyerCheckResponse(check))
 	}
 	totalPages := 0
 	if result.Total > 0 {
@@ -315,4 +285,70 @@ func (h *BuyerHandler) ListAdmin(c *gin.Context) {
 			TotalPages: totalPages,
 		},
 	})
+}
+
+// ListMine serves the reader their own checks. There is no filtering and no
+// paging: it is a personal history, and the only way a row gets into it is by
+// standing at a stall and photographing the goods.
+func (h *BuyerHandler) ListMine(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+	lister, ok := h.checker.(interface {
+		ListMine(ctx context.Context, buyerUserID string) ([]buyerservice.MineItem, error)
+	})
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "buyer check list is not configured"})
+		return
+	}
+	mine, err := lister.ListMine(c.Request.Context(), principal.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	items := make([]dto.MyBuyerCheckResponse, 0, len(mine))
+	for _, item := range mine {
+		items = append(items, dto.MyBuyerCheckResponse{
+			BuyerCheckResponse: toBuyerCheckResponse(item.Check),
+			ProductName:        item.ProductName,
+			ShopName:           item.ShopName,
+		})
+	}
+	c.JSON(http.StatusOK, dto.MyBuyerCheckListResponse{Items: items})
+}
+
+func toBuyerCheckResponse(check domain.BuyerCheck) dto.BuyerCheckResponse {
+	return dto.BuyerCheckResponse{
+		CheckID:           check.CheckID,
+		ShopID:            check.ShopID,
+		ProductID:         check.ProductID,
+		BundleID:          check.BundleID,
+		BuyerUserID:       check.BuyerUserID,
+		Status:            check.Status,
+		Version:           check.Version,
+		PolicyVersion:     check.PolicyVersion,
+		HasPledge:         strings.TrimSpace(check.PledgeID) != "",
+		PledgeID:          check.PledgeID,
+		Trusted:           check.Trusted,
+		Verdict:           check.Verdict,
+		PledgedScore:      check.PledgedScore,
+		ActualScore:       check.ActualScore,
+		ScoreDelta:        check.ScoreDelta,
+		ScoreDeltaAbs:     check.ScoreDeltaAbs,
+		PledgedCategory:   check.PledgedCategory,
+		ActualCategory:    check.ActualCategory,
+		ActualConfidence:  check.ActualConfidence,
+		LocationStatus:    check.LocationStatus,
+		CategoryMatch:     check.CategoryMatch,
+		ImageHash:         check.ImageHash,
+		ImageCID:          check.ImageCID,
+		Reasons:           check.Reasons,
+		ModeratedByUserID: check.ModeratedByUserID,
+		ModerationNote:    check.ModerationNote,
+		ModeratedAt:       check.ModeratedAt,
+		CreatedAt:         check.CreatedAt,
+		UpdatedAt:         check.UpdatedAt,
+	}
 }

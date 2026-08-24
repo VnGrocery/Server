@@ -40,6 +40,18 @@ type ModerateBuyerCheckRequest struct {
 	ModerationNote  string `json:"moderationNote"`
 }
 
+// MyBuyerCheckResponse is the reader's own check with the names behind the
+// ids, so the list reads as a history of visits rather than of identifiers.
+type MyBuyerCheckResponse struct {
+	BuyerCheckResponse
+	ProductName string `json:"productName,omitempty"`
+	ShopName    string `json:"shopName,omitempty"`
+}
+
+type MyBuyerCheckListResponse struct {
+	Items []MyBuyerCheckResponse `json:"items"`
+}
+
 type BuyerCheckListResponse struct {
 	Items      []BuyerCheckResponse `json:"items"`
 	Pagination PaginationResponse   `json:"pagination"`

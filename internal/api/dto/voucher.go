@@ -62,6 +62,17 @@ type UserVoucherResponse struct {
 	Voucher       VoucherResponse `json:"voucher"`
 }
 
+// FeaturedVoucherResponse carries the shop name with the offer: an advert for
+// a discount at an unnamed stall tells the reader nothing they can act on.
+type FeaturedVoucherResponse struct {
+	VoucherResponse
+	ShopName string `json:"shopName"`
+}
+
+type FeaturedVoucherListResponse struct {
+	Items []FeaturedVoucherResponse `json:"items"`
+}
+
 type VoucherListResponse struct {
 	Items []VoucherResponse `json:"items"`
 }

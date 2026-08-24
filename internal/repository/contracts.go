@@ -175,3 +175,17 @@ type EventLogListFilter struct {
 	CreatedAfter  time.Time
 	CreatedBefore time.Time
 }
+
+// EngagementRepository stores the marks people leave on shops and products,
+// and the per-target totals that get anchored.
+type EngagementRepository interface {
+	Save(ctx context.Context, mark domain.Engagement) error
+	Delete(ctx context.Context, engagementID string) error
+	Has(ctx context.Context, engagementID string) (bool, error)
+	CountKind(ctx context.Context, targetType, targetID, kind string) (int, error)
+	ListKindsByUser(ctx context.Context, userID, targetType, targetID string) ([]string, error)
+
+	SaveCount(ctx context.Context, count domain.EngagementCount) error
+	GetCount(ctx context.Context, countID string) (domain.EngagementCount, error)
+	ListCountsByChainAnchorStatus(ctx context.Context, status string, limit int) ([]domain.EngagementCount, error)
+}

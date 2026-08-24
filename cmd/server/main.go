@@ -24,6 +24,7 @@ import (
 	bundletokenservice "vngrocery/internal/service/bundletoken"
 	buyerservice "vngrocery/internal/service/buyer"
 	commentservice "vngrocery/internal/service/comment"
+	engagementservice "vngrocery/internal/service/engagement"
 	integrityservice "vngrocery/internal/service/integrity"
 	productservice "vngrocery/internal/service/product"
 	recommendservice "vngrocery/internal/service/recommend"
@@ -91,6 +92,7 @@ func main() {
 	var shopReviewRepository repository.ShopReviewRepository
 	var productCommentRepository repository.ProductCommentRepository
 	var voucherRepository repository.VoucherRepository
+	var engagementRepository repository.EngagementRepository
 	var userVoucherRepository repository.UserVoucherRepository
 	var userRepository repository.UserRepository
 	var authUserRepository repository.AuthUserRepository
@@ -142,6 +144,7 @@ func main() {
 	shopReviewRepository = mongorepo.NewShopReviewRepository(mongoApp.Database)
 	productCommentRepository = mongorepo.NewProductCommentRepository(mongoApp.Database)
 	voucherRepository = mongorepo.NewVoucherRepository(mongoApp.Database)
+	engagementRepository = mongorepo.NewEngagementRepository(mongoApp.Database)
 	userVoucherRepository = mongorepo.NewUserVoucherRepository(mongoApp.Database)
 	userRepository = mongorepo.NewUserRepository(mongoApp.Database)
 	authUserRepository = mongorepo.NewAuthUserRepository(mongoApp.Database)
@@ -212,6 +215,7 @@ func main() {
 		alertpkg.NewTelegramClient(cfg.AlertTelegramBotToken, cfg.AlertTelegramChatID, time.Duration(mustParseInt(cfg.AlertTimeoutSec, 5))*time.Second),
 		alertpkg.NewSMTPClient(cfg.AlertSMTPHost, cfg.AlertSMTPPort, cfg.AlertSMTPUsername, cfg.AlertSMTPPassword, cfg.AlertSMTPFrom, cfg.AlertSMTPTo),
 	)
+	integrityManager.SetEngagementRepository(engagementRepository)
 	integrityManager.SetNotifier(alertAdapter{client: alertNotifier})
 	integrityManager.SetObserver(metrics)
 	accountService := authservice.NewAccountService(
@@ -281,6 +285,16 @@ func main() {
 	shopHandler := handler.NewShopHandler(shopManager)
 	commentHandler := handler.NewCommentHandler(commentManager)
 	voucherHandler := handler.NewVoucherHandler(voucherManager)
+	// Follows and hearts count towards nothing the seller controls, so they go
+	// on chain as a running total rather than being trusted from the database.
+	engagementManager := engagementservice.NewService(
+		engagementRepository,
+		shopRepository,
+		productRepository,
+		auditLogger,
+		integrityManager,
+	)
+	engagementHandler := handler.NewEngagementHandler(engagementManager)
 	// Suggestions read the same shop listing the discovery screens use, so they
 	// can never point at a shop those screens would have hidden.
 	recommendationManager := recommendservice.NewService(
@@ -307,6 +321,7 @@ func main() {
 		CommentHandler:            commentHandler,
 		VoucherHandler:            voucherHandler,
 		RecommendationHandler:     recommendationHandler,
+		EngagementHandler:         engagementHandler,
 		AuthMiddleware:            authMiddleware,
 		AdminMiddleware:           adminMiddleware,
 		Metrics:                   metrics,

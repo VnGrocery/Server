@@ -59,13 +59,14 @@ type Notifier interface {
 }
 
 type Service struct {
-	pledges  repository.PledgeRepository
-	shops    repository.ShopRepository
-	chain    ChainClient
-	audit    AuditLogger
-	notifier Notifier
-	observer Observer
-	now      func() time.Time
+	pledges     repository.PledgeRepository
+	shops       repository.ShopRepository
+	engagements repository.EngagementRepository
+	chain       ChainClient
+	audit       AuditLogger
+	notifier    Notifier
+	observer    Observer
+	now         func() time.Time
 }
 
 type IntegrityView struct {

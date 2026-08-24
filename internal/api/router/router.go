@@ -25,6 +25,7 @@ type Dependencies struct {
 	CommentHandler            *handler.CommentHandler
 	VoucherHandler            *handler.VoucherHandler
 	RecommendationHandler     *handler.RecommendationHandler
+	EngagementHandler         *handler.EngagementHandler
 	AuthMiddleware            *middleware.AuthRequired
 	AdminMiddleware           *middleware.AdminRequired
 	Metrics                   *middleware.Metrics
@@ -130,6 +131,12 @@ func New(deps Dependencies) *gin.Engine {
 			v1.GET("/seller/shops/:shopId/comments", deps.AuthMiddleware.Handle(), deps.CommentHandler.ListForShop)
 			v1.POST("/shops/:shopId/comments/:commentId/moderation", deps.AuthMiddleware.Handle(), deps.CommentHandler.Moderate)
 			v1.DELETE("/shops/:shopId/comments/:commentId", deps.AuthMiddleware.Handle(), deps.CommentHandler.Delete)
+		}
+		if deps.EngagementHandler != nil {
+			// Reading needs a session too: the reply says which of the marks
+			// belong to the caller, not just how many there are.
+			v1.GET("/engagements", deps.AuthMiddleware.Handle(), deps.EngagementHandler.Get)
+			v1.POST("/engagements", deps.AuthMiddleware.Handle(), deps.EngagementHandler.Toggle)
 		}
 		v1.POST("/shops/:shopId/reviews", deps.AuthMiddleware.Handle(), deps.ShopHandler.CreateReview)
 		v1.DELETE("/shops/:shopId/reviews/me", deps.AuthMiddleware.Handle(), deps.ShopHandler.DeleteReview)

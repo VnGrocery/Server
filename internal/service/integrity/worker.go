@@ -14,7 +14,7 @@ type WorkerConfig struct {
 }
 
 func (s *Service) StartBackground(ctx context.Context, cfg WorkerConfig) {
-	if s == nil || s.chain == nil || (s.pledges == nil && s.shops == nil) {
+	if s == nil || s.chain == nil || (s.pledges == nil && s.shops == nil && s.engagements == nil) {
 		return
 	}
 
@@ -44,6 +44,12 @@ func (s *Service) StartBackground(ctx context.Context, cfg WorkerConfig) {
 			}
 			if err := s.ProcessPendingShops(ctx, pendingBatch); err != nil {
 				log.Printf("integrity pending shop anchor worker failed: %v", err)
+			}
+			// Follows and hearts move far more often than shops do. Anchoring
+			// on the tick rather than on the tap is what keeps a popular
+			// product from costing one transaction per heart.
+			if err := s.ProcessPendingEngagementCounts(ctx, pendingBatch); err != nil {
+				log.Printf("integrity pending engagement anchor worker failed: %v", err)
 			}
 			select {
 			case <-ctx.Done():

@@ -28,8 +28,11 @@ type ProductCommentResponse struct {
 	// Empty when the account has no display name; the client shows a generic
 	// label rather than printing the raw user id.
 	AuthorName string `json:"authorName"`
-	Body       string `json:"body"`
-	Status     string `json:"status"`
+	// Only the shop-wide moderation queue sets this: that list crosses
+	// products, so a row without a product name is a decision made blind.
+	ProductName string `json:"productName,omitempty"`
+	Body        string `json:"body"`
+	Status      string `json:"status"`
 
 	// The buyer check behind the comment. Its presence is what lets the client
 	// say "checked this at the stall" instead of taking the words on faith.

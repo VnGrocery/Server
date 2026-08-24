@@ -137,6 +137,12 @@ type DeleteInput struct {
 type View struct {
 	Comment    domain.ProductComment
 	AuthorName string
+
+	// ProductName is filled for the owner's queue only. That queue spans every
+	// product in the shop, so without it the owner is deciding whether a
+	// sentence belongs on goods they cannot see. A product screen already
+	// knows which product it is standing on and leaves this empty.
+	ProductName string
 }
 
 // Summary is what a product screen needs to be honest about the comment
@@ -272,6 +278,9 @@ func (s *Service) ListForShop(ctx context.Context, input ShopQueueInput) ([]View
 
 	summary := Summary{ModerationOn: shop.CommentModeration}
 	views := make([]View, 0, len(all))
+	// One shop's queue routinely holds several comments per product, so the
+	// names are looked up once each rather than once per comment.
+	names := make(map[string]string)
 	for _, item := range all {
 		switch item.Status {
 		case StatusApproved:
@@ -287,7 +296,11 @@ func (s *Service) ListForShop(ctx context.Context, input ShopQueueInput) ([]View
 		if status := strings.TrimSpace(input.Status); status != "" && item.Status != status {
 			continue
 		}
-		views = append(views, View{Comment: item, AuthorName: s.displayName(ctx, item.AuthorUserID)})
+		views = append(views, View{
+			Comment:     item,
+			AuthorName:  s.displayName(ctx, item.AuthorUserID),
+			ProductName: s.productName(ctx, item.ProductID, names),
+		})
 	}
 	return views, summary, nil
 }
@@ -497,6 +510,25 @@ func (s *Service) byAuthor(ctx context.Context, shopID, productID, authorID stri
 		}
 	}
 	return domain.ProductComment{}, nil
+}
+
+func (s *Service) productName(ctx context.Context, productID string, cache map[string]string) string {
+	productID = strings.TrimSpace(productID)
+	if s.products == nil || productID == "" {
+		return ""
+	}
+	if name, ok := cache[productID]; ok {
+		return name
+	}
+	// A deleted product leaves the name empty rather than failing the queue:
+	// the comment still has to be decided on.
+	product, err := s.products.GetByID(ctx, productID)
+	name := ""
+	if err == nil {
+		name = product.Name
+	}
+	cache[productID] = name
+	return name
 }
 
 func (s *Service) displayName(ctx context.Context, userID string) string {

@@ -76,7 +76,10 @@ func (h *CommentHandler) ListForShop(c *gin.Context) {
 	}
 	items := make([]dto.ProductCommentResponse, 0, len(views))
 	for _, view := range views {
-		items = append(items, toProductCommentResponse(view.Comment, view.AuthorName))
+		item := toProductCommentResponse(view.Comment, view.AuthorName)
+		// The queue spans the whole shop, so each row has to name its product.
+		item.ProductName = view.ProductName
+		items = append(items, item)
 	}
 	c.JSON(http.StatusOK, dto.ProductCommentListResponse{
 		Items:         items,

@@ -136,7 +136,7 @@ func newFixture(moderationOn bool, checks []domain.BuyerCheck) fixture {
 	service := NewService(
 		comments,
 		shopRepositoryStub{shop: domain.Shop{ShopID: "s1", OwnerUserID: "owner", CommentModeration: moderationOn}},
-		productRepositoryStub{product: domain.Product{ProductID: "p1", ShopID: "s1"}},
+		productRepositoryStub{product: domain.Product{ProductID: "p1", ShopID: "s1", Name: "Rau muống"}},
 		checkRepositoryStub{checks: checks},
 		userRepositoryStub{},
 		auditLog,
@@ -351,5 +351,33 @@ func TestTheShopCannotDeleteABuyersComment(t *testing.T) {
 		ExpectedVersion: comment.Version, Reason: "Tôi nhầm sản phẩm",
 	}); err != nil {
 		t.Fatalf("the author could not withdraw their own comment: %v", err)
+	}
+}
+
+func TestTheOwnerQueueNamesTheProductBeingJudged(t *testing.T) {
+	// The queue crosses every product in the shop, and one of the rejection
+	// reasons the app offers is "posted on the wrong product" - which nobody
+	// can tell without the product's name on the row.
+	f := newFixture(true, checkedProduct())
+	if _, err := f.service.Create(context.Background(), CreateInput{
+		ShopID: "s1", ProductID: "p1", AuthorUserID: "u1", Body: "Rau còn tươi đúng như ghi nhận",
+	}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	views, summary, err := f.service.ListForShop(context.Background(), ShopQueueInput{
+		ShopID: "s1", OwnerUserID: "owner", Status: StatusPending,
+	})
+	if err != nil {
+		t.Fatalf("list for shop: %v", err)
+	}
+	if len(views) != 1 {
+		t.Fatalf("expected one pending comment, got %d", len(views))
+	}
+	if views[0].ProductName != "Rau muống" {
+		t.Fatalf("queue row does not name its product: %q", views[0].ProductName)
+	}
+	if summary.PendingCount != 1 {
+		t.Fatalf("expected one pending, got %d", summary.PendingCount)
 	}
 }

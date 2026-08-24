@@ -52,6 +52,10 @@ func (r *voucherRepoStub) ListActive(_ context.Context) ([]domain.Voucher, error
 
 // Mirrors the atomic update in Mongo: an unrationed voucher always yields a
 // slot, a rationed one only while claims remain.
+//
+// Go zero values stand in for absent Mongo fields here, which is exactly the
+// case that got the real query wrong - see TestClaimingWorksOnVouchersOlderThanQuantity
+// and the $ifNull in the repository.
 func (r *voucherRepoStub) ClaimSlot(_ context.Context, voucherID string) (bool, error) {
 	item, ok := r.items[voucherID]
 	if !ok {
@@ -344,5 +348,21 @@ func TestCreateRefusesAQuantityThatMakesNoSense(t *testing.T) {
 	}
 	if created.TotalQuantity != 50 || created.ClaimedCount != 0 {
 		t.Fatalf("quantity not stored: %#v", created)
+	}
+}
+
+func TestClaimingWorksOnVouchersOlderThanQuantity(t *testing.T) {
+	// Every voucher seeded before the quantity fields existed carries neither
+	// of them. In Mongo that is an absent field, not a zero, and a plain
+	// comparison never matches one - which refused every claim on every offer
+	// already in the database. The repository reads both through $ifNull; this
+	// is the service-level guard that the zero case stays claimable.
+	service, vouchers, _ := newTestService()
+	legacy := liveVoucher(service, 0)
+	legacy.ClaimedCount = 0
+	vouchers.items["v-1"] = legacy
+
+	if _, err := service.SaveToWallet(context.Background(), "buyer-1", "v-1"); err != nil {
+		t.Fatalf("a voucher with no quantity set must still be claimable: %v", err)
 	}
 }

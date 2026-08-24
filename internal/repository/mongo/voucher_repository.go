@@ -59,14 +59,20 @@ func (r *VoucherRepository) ListActive(ctx context.Context) ([]domain.Voucher, e
 // A voucher with totalQuantity 0 is not rationed; the filter lets it through
 // and still counts the claim, which is what the shop's "đã phát" figure reads.
 func (r *VoucherRepository) ClaimSlot(ctx context.Context, voucherID string) (bool, error) {
+	// Every voucher written before quantity existed has neither field, and a
+	// plain comparison never matches a field that is absent - which refused
+	// every claim on every seeded offer. $ifNull reads both as zero.
+	total := bson.M{"$ifNull": []any{"$totalQuantity", 0}}
+	claimed := bson.M{"$ifNull": []any{"$claimedCount", 0}}
+
 	result, err := r.collection.UpdateOne(
 		ctx,
 		bson.M{
 			"_id": voucherID,
-			"$or": []bson.M{
-				{"totalQuantity": bson.M{"$lte": 0}},
-				{"$expr": bson.M{"$lt": []string{"$claimedCount", "$totalQuantity"}}},
-			},
+			"$expr": bson.M{"$or": []bson.M{
+				{"$lte": []any{total, 0}},
+				{"$lt": []any{claimed, total}},
+			}},
 		},
 		bson.M{"$inc": bson.M{"claimedCount": 1}},
 	)

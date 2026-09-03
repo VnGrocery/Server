@@ -42,10 +42,11 @@ func New(deps Dependencies) *gin.Engine {
 	if metrics == nil {
 		metrics = middleware.NewMetrics()
 	}
+	// No floor under maxRequests: 0 is how a deployment switches the limiter
+	// off, and RateLimitWithStore already lets everything through at 0.
+	// No floor under maxRequests: 0 is how a deployment switches the limiter
+	// off, and RateLimitWithStore already lets everything through at 0.
 	maxRequests := deps.RateLimitMaxRequests
-	if maxRequests <= 0 {
-		maxRequests = 120
-	}
 	window := deps.RateLimitWindow
 	if window <= 0 {
 		window = time.Minute

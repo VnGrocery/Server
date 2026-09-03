@@ -81,6 +81,28 @@ func TestRouterHealth(t *testing.T) {
 	}
 }
 
+// A cap of 0 is the only way to switch the limiter off, so the router must not
+// quietly floor it back to a default the way it used to.
+func TestRouterRateLimitOffAtZero(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	deps := newTestDependencies(testVerifier{
+		verify: func(ctx context.Context, token string) (authservice.Principal, error) {
+			return authservice.Principal{}, nil
+		},
+	})
+	deps.RateLimitMaxRequests = 0
+	engine := New(deps)
+
+	for i := 0; i < 200; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/health", nil)
+		rec := httptest.NewRecorder()
+		engine.ServeHTTP(rec, req)
+		if rec.Code == http.StatusTooManyRequests {
+			t.Fatalf("request %d was rate limited with the limiter switched off", i)
+		}
+	}
+}
+
 func TestRouterMeUnauthorized(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	engine := New(newTestDependencies(testVerifier{

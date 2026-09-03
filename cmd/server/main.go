@@ -326,9 +326,9 @@ func main() {
 		AdminMiddleware:           adminMiddleware,
 		Metrics:                   metrics,
 		RateLimitStore:            rateLimitStore,
-		RateLimitMaxRequests:      mustParseInt(cfg.RateLimitMaxRequests, 120),
+		RateLimitMaxRequests:      parseLimit(cfg.RateLimitMaxRequests, 120),
 		RateLimitWindow:           time.Duration(mustParseInt(cfg.RateLimitWindowSec, 60)) * time.Second,
-		AdminRateLimitMaxRequests: mustParseInt(cfg.AdminRateLimitMaxRequests, 30),
+		AdminRateLimitMaxRequests: parseLimit(cfg.AdminRateLimitMaxRequests, 30),
 		AdminRateLimitWindow:      time.Duration(mustParseInt(cfg.AdminRateLimitWindowSec, 60)) * time.Second,
 	})
 
@@ -512,6 +512,19 @@ func (a integrityAdapter) RevokePledge(ctx context.Context, pledge domain.Pledge
 func mustParseInt(raw string, fallback int) int {
 	value, err := strconv.Atoi(raw)
 	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
+}
+
+// parseLimit reads a request cap that 0 is allowed to switch off.
+//
+// mustParseInt folds 0 back into its fallback, which is right for a TTL or a
+// pool size but leaves no way to turn a rate limit off: the middleware already
+// treats a cap of 0 as "let everything through" and could never be reached.
+func parseLimit(raw string, fallback int) int {
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
 		return fallback
 	}
 	return value

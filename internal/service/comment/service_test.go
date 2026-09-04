@@ -259,6 +259,33 @@ func TestOnlyTheOwnerModerates(t *testing.T) {
 	}
 }
 
+func TestShopRepliesToAComment(t *testing.T) {
+	f := newFixture(true, checkedProduct())
+	comment, err := f.service.Create(context.Background(), CreateInput{
+		ShopID: "s1", ProductID: "p1", AuthorUserID: "u1", Body: "Giá cao hơn niêm yết",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	replied, err := f.service.Reply(context.Background(), ReplyInput{
+		ShopID: "s1", CommentID: comment.CommentID, OwnerUserID: "owner",
+		ExpectedVersion: comment.Version, Body: "Cảm ơn góp ý, shop đã điều chỉnh giá",
+	})
+	if err != nil {
+		t.Fatalf("reply: %v", err)
+	}
+	if replied.ShopReplyBody != "Cảm ơn góp ý, shop đã điều chỉnh giá" || replied.ShopRepliedAt == nil {
+		t.Fatalf("reply was not recorded: %+v", replied)
+	}
+
+	if _, err := f.service.Reply(context.Background(), ReplyInput{
+		ShopID: "s1", CommentID: comment.CommentID, OwnerUserID: "someone-else",
+		ExpectedVersion: replied.Version, Body: "Không phải chủ shop",
+	}); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("a stranger replied on the shop's behalf: %v", err)
+	}
+}
+
 func TestListHidesHeldCommentsFromStrangersButCountsThem(t *testing.T) {
 	f := newFixture(true, checkedProduct())
 	if _, err := f.service.Create(context.Background(), CreateInput{

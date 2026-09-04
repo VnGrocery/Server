@@ -18,6 +18,7 @@ type CommentService interface {
 	List(ctx context.Context, input commentsvc.ListInput) ([]commentsvc.View, commentsvc.Summary, error)
 	ListForShop(ctx context.Context, input commentsvc.ShopQueueInput) ([]commentsvc.View, commentsvc.Summary, error)
 	Moderate(ctx context.Context, input commentsvc.ModerateInput) (domain.ProductComment, error)
+	Reply(ctx context.Context, input commentsvc.ReplyInput) (domain.ProductComment, error)
 	Delete(ctx context.Context, input commentsvc.DeleteInput) (domain.ProductComment, error)
 }
 
@@ -142,6 +143,31 @@ func (h *CommentHandler) Moderate(c *gin.Context) {
 	c.JSON(http.StatusOK, toProductCommentResponse(comment, ""))
 }
 
+func (h *CommentHandler) Reply(c *gin.Context) {
+	principal, ok := middleware.GetPrincipal(c)
+	if !ok {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "authenticated principal was not found in request context"})
+		return
+	}
+	var request dto.ReplyProductCommentRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid JSON payload"})
+		return
+	}
+	comment, err := h.comments.Reply(c.Request.Context(), commentsvc.ReplyInput{
+		ShopID:          c.Param("shopId"),
+		CommentID:       c.Param("commentId"),
+		OwnerUserID:     principal.UserID,
+		ExpectedVersion: request.ExpectedVersion,
+		Body:            request.Body,
+	})
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, toProductCommentResponse(comment, ""))
+}
+
 func (h *CommentHandler) Delete(c *gin.Context) {
 	principal, ok := middleware.GetPrincipal(c)
 	if !ok {
@@ -195,6 +221,8 @@ func toProductCommentResponse(comment domain.ProductComment, authorName string) 
 		ModeratedByUserID: comment.ModeratedByUserID,
 		ModerationReason:  comment.ModerationReason,
 		ModeratedAt:       comment.ModeratedAt,
+		ShopReplyBody:     comment.ShopReplyBody,
+		ShopRepliedAt:     comment.ShopRepliedAt,
 		Version:           comment.Version,
 		CreatedAt:         comment.CreatedAt,
 		UpdatedAt:         comment.UpdatedAt,

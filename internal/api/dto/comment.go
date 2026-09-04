@@ -15,6 +15,11 @@ type ModerateProductCommentRequest struct {
 	Reason string `json:"reason"`
 }
 
+type ReplyProductCommentRequest struct {
+	ExpectedVersion int    `json:"expectedVersion"`
+	Body            string `json:"body"`
+}
+
 type DeleteProductCommentRequest struct {
 	ExpectedVersion int    `json:"expectedVersion"`
 	Reason          string `json:"reason"`
@@ -42,6 +47,9 @@ type ProductCommentResponse struct {
 	ModeratedByUserID string     `json:"moderatedByUserId,omitempty"`
 	ModerationReason  string     `json:"moderationReason,omitempty"`
 	ModeratedAt       *time.Time `json:"moderatedAt,omitempty"`
+
+	ShopReplyBody string     `json:"shopReplyBody,omitempty"`
+	ShopRepliedAt *time.Time `json:"shopRepliedAt,omitempty"`
 
 	Version   int       `json:"version"`
 	CreatedAt time.Time `json:"createdAt"`

@@ -131,6 +131,7 @@ func New(deps Dependencies) *gin.Engine {
 			v1.POST("/shops/:shopId/products/:productId/comments", deps.AuthMiddleware.Handle(), deps.CommentHandler.Create)
 			v1.GET("/seller/shops/:shopId/comments", deps.AuthMiddleware.Handle(), deps.CommentHandler.ListForShop)
 			v1.POST("/shops/:shopId/comments/:commentId/moderation", deps.AuthMiddleware.Handle(), deps.CommentHandler.Moderate)
+			v1.POST("/shops/:shopId/comments/:commentId/reply", deps.AuthMiddleware.Handle(), deps.CommentHandler.Reply)
 			v1.DELETE("/shops/:shopId/comments/:commentId", deps.AuthMiddleware.Handle(), deps.CommentHandler.Delete)
 		}
 		if deps.EngagementHandler != nil {

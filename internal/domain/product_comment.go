@@ -24,6 +24,12 @@ type ProductComment struct {
 	ModerationReason  string     `firestore:"moderationReason"`
 	ModeratedAt       *time.Time `firestore:"moderatedAt"`
 
+	// The shop's public reply, one per comment. Rewriting it replaces the old
+	// text rather than stacking a thread - the same one-slot rule the comment
+	// itself already follows for its author.
+	ShopReplyBody string     `firestore:"shopReplyBody"`
+	ShopRepliedAt *time.Time `firestore:"shopRepliedAt"`
+
 	Version   int       `firestore:"version"`
 	CreatedAt time.Time `firestore:"createdAt"`
 	UpdatedAt time.Time `firestore:"updatedAt"`

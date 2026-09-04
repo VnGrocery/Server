@@ -124,6 +124,14 @@ type ModerateInput struct {
 	Reason string
 }
 
+type ReplyInput struct {
+	ShopID          string
+	CommentID       string
+	OwnerUserID     string
+	ExpectedVersion int
+	Body            string
+}
+
 type DeleteInput struct {
 	ShopID          string
 	CommentID       string
@@ -412,6 +420,47 @@ func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.Pro
 		return domain.ProductComment{}, err
 	}
 	if err := s.log(ctx, input.OwnerUserID, comment, action, comment.Status, reason, audit.MutationPayload{
+		Before: before,
+		After:  comment,
+	}); err != nil {
+		return domain.ProductComment{}, err
+	}
+	return comment, nil
+}
+
+// Reply sets the shop's public reply to a comment. There is one slot, not a
+// thread: a second reply replaces the first, the same rule a rewritten
+// comment already follows.
+func (s *Service) Reply(ctx context.Context, input ReplyInput) (domain.ProductComment, error) {
+	body, err := validateBody(input.Body)
+	if err != nil {
+		return domain.ProductComment{}, err
+	}
+	comment, shop, err := s.load(ctx, input.ShopID, input.CommentID)
+	if err != nil {
+		return domain.ProductComment{}, err
+	}
+	if shop.OwnerUserID != strings.TrimSpace(input.OwnerUserID) {
+		return domain.ProductComment{}, ErrForbidden
+	}
+	if input.ExpectedVersion <= 0 || comment.Version != input.ExpectedVersion {
+		return domain.ProductComment{}, ErrInvalidComment
+	}
+	if comment.Status == StatusDeleted {
+		return domain.ProductComment{}, ErrNotFound
+	}
+
+	before := comment
+	now := s.now().UTC()
+	comment.ShopReplyBody = body
+	comment.ShopRepliedAt = &now
+	comment.Version++
+	comment.UpdatedAt = now
+
+	if err := s.comments.Save(ctx, comment); err != nil {
+		return domain.ProductComment{}, err
+	}
+	if err := s.log(ctx, input.OwnerUserID, comment, "product_comment.replied", comment.Status, "", audit.MutationPayload{
 		Before: before,
 		After:  comment,
 	}); err != nil {

@@ -62,4 +62,8 @@ secrets/*
 # Photos downloaded by `./scripts/vng seed-images`. Re-fetched on demand; the
 # credits file next to them is regenerated with them.
 scripts/.image-cache/
+
+# QR images from `./scripts/make_bundle_qr.py`. Each one carries a live signed
+# bundle token, so they are credentials with a short fuse, not test fixtures.
+scripts/.qr/
 .serena

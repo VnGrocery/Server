@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""Mint a real bundle token for a pledge and draw it as a scannable QR.
+"""Draw the QR codes a pledge can carry.
 
-For testing the buyer check without a printed label. The token is the genuine
-one the server issues to a seller, not a stand-in: the app parses its claims and
-the server verifies its signature, so a faked payload would be rejected at the
-first check and prove nothing.
+There are two, and they do different jobs:
 
-Two consequences of that worth knowing before you use it:
+  --label   the lot code, as printed on a crate. Never expires, anyone can
+            scan it, and it resolves to what the seller pledged.
+  (default) a real bundle token, as the seller's screen shows it. Expires and
+            is consumed by the first check, which is what a recorded buyer
+            check needs.
+
+The token is the genuine one the server issues to a seller, not a stand-in: the
+app parses its claims and the server verifies its signature, so a faked payload
+would be rejected at the first check and prove nothing.
+
+Two consequences of that worth knowing before you use the default mode:
 
   * the token expires (30 minutes by default), so regenerate rather than
     keeping an old PNG around
@@ -16,6 +23,7 @@ Two consequences of that worth knowing before you use it:
     ./scripts/make_bundle_qr.py                   # newest pledge in the demo shop
     ./scripts/make_bundle_qr.py --pledge <id>
     ./scripts/make_bundle_qr.py --all             # one PNG per pledge in the shop
+    ./scripts/make_bundle_qr.py --label --all     # the printed labels instead
 
 To scan it on the Android emulator, hang it in the virtual scene:
 
@@ -78,6 +86,28 @@ def call(method, path, token=None, body=None):
         sys.exit(f"{method} {path} could not reach {API}: {error.reason}")
 
 
+def write_label_qr(pledge, out_dir):
+    """The QR that goes on a printed crate label: just the lot code.
+
+    Tiny next to the token QR - a lot code is 18 characters, so this comes out
+    around version 2 instead of 18 - which is why it scans off paper, off a
+    curved crate and off a screen at arm's length.
+    """
+    code = qrcode.QRCode(
+        # High, because this one gets printed and then knocked about.
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=14,
+        border=4,
+    )
+    code.add_data(pledge["bundleId"])
+    code.make(fit=True)
+    image = code.make_image().convert("RGB")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / f"label-{pledge['bundleId']}.png"
+    image.save(path)
+    return path, code.version
+
+
 def write_qr(token, pledge, out_dir):
     # A bundle token is ~670 characters, which is a dense QR however it is
     # drawn. Two things keep it readable off a screen:
@@ -110,6 +140,11 @@ def main():
     parser.add_argument("--password", default=PASSWORD)
     parser.add_argument("--pledge", help="Pledge id; default is the newest one")
     parser.add_argument("--all", action="store_true", help="One QR per pledge")
+    parser.add_argument(
+        "--label",
+        action="store_true",
+        help="The printed-label QR: the lot code, no token, never expires",
+    )
     parser.add_argument("--out", default=str(OUT_DIR))
     args = parser.parse_args()
 
@@ -136,6 +171,13 @@ def main():
 
     out_dir = pathlib.Path(args.out)
     for pledge in pledges:
+        if args.label:
+            path, version = write_label_qr(pledge, out_dir)
+            print(f"{path}")
+            print(f"  bundle    {pledge['bundleId']}")
+            print(f"  product   {pledge.get('productId', '')}")
+            print(f"  qr        version {version}, never expires")
+            continue
         issued = call(
             "POST",
             f"/v1/shops/{args.shop}/pledges/{pledge['pledgeId']}/bundle-token",

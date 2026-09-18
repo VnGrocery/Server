@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"fmt"
 	"sort"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -22,6 +23,18 @@ func (r *PledgeRepository) Save(ctx context.Context, pledge domain.Pledge) error
 func (r *PledgeRepository) GetByID(ctx context.Context, pledgeID string) (domain.Pledge, error) {
 	return getByID[domain.Pledge](ctx, r.collection, pledgeID)
 }
+func (r *PledgeRepository) GetByBundleID(ctx context.Context, bundleID string) (domain.Pledge, error) {
+	var doc bson.M
+	if err := r.collection.FindOne(ctx, bson.M{"bundleId": bundleID}).Decode(&doc); err != nil {
+		return domain.Pledge{}, fmt.Errorf("get pledge by bundleId: %w", err)
+	}
+	var pledge domain.Pledge
+	if err := decodeDocument(doc, &pledge); err != nil {
+		return domain.Pledge{}, err
+	}
+	return pledge, nil
+}
+
 func (r *PledgeRepository) ListByShopID(ctx context.Context, shopID string) ([]domain.Pledge, error) {
 	items, err := listDocuments[domain.Pledge](ctx, r.collection, bson.M{"shopId": shopID})
 	if err != nil {

@@ -97,6 +97,9 @@ func New(deps Dependencies) *gin.Engine {
 		v1.GET("/events/:eventId/verify", deps.AuthMiddleware.Handle(), deps.EventLogHandler.VerifyEvent)
 		v1.GET("/shops", deps.ShopHandler.List)
 		v1.GET("/shops/:shopId", deps.ShopHandler.GetByID)
+		// Unauthenticated: this is what the QR on a printed crate label
+		// resolves to, and a shopper holding the crate has no account.
+		v1.GET("/bundles/:bundleId", deps.ShopHandler.GetPledgeByBundle)
 		v1.GET("/shops/:shopId/pledges", deps.ShopHandler.ListPledges)
 		v1.GET("/shops/:shopId/pledges/:pledgeId/integrity", deps.ShopHandler.GetPledgeIntegrity)
 		v1.GET("/shops/:shopId/pledges/:pledgeId/proof", deps.ShopHandler.GetPledgeProof)

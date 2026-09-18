@@ -982,6 +982,13 @@ func buildPaths() gin.H {
 				"responses": mergeResponses(success(http.StatusOK, "ShopResponse"), errorResponse),
 			},
 		},
+		"/v1/bundles/{bundleId}": gin.H{
+			"get": gin.H{
+				"summary":    "Resolve the lot code printed on a crate label",
+				"parameters": []gin.H{pathParam("bundleId")},
+				"responses":  mergeResponses(success(http.StatusOK, "PledgeResponse"), errorResponse),
+			},
+		},
 		"/v1/shops/{shopId}/pledges": gin.H{
 			"get": gin.H{
 				"summary": "List seller pledge history for buyer UI",

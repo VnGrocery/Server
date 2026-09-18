@@ -880,6 +880,34 @@ func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error)
 	}, nil
 }
 
+// GetPledgeByBundleID resolves the lot code printed on a label.
+//
+// Public on purpose: a label on a crate is read by whoever is holding the
+// crate, and the point of printing it is that they do not need an account to
+// see what the seller committed to.
+func (s *Service) GetPledgeByBundleID(ctx context.Context, bundleID string) (domain.Pledge, error) {
+	code := strings.TrimSpace(bundleID)
+	if code == "" {
+		return domain.Pledge{}, fmt.Errorf("%w: bundleId is required", ErrInvalidShop)
+	}
+	if s.pledges == nil {
+		return domain.Pledge{}, fmt.Errorf("pledge repository is not configured")
+	}
+	pledge, err := s.pledges.GetByBundleID(ctx, code)
+	if err != nil {
+		return domain.Pledge{}, fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
+	// A label outlives the shop it was printed for, so a deleted shop has to
+	// read as gone rather than quietly serving its last pledge.
+	if s.shops != nil {
+		shop, err := s.shops.GetByID(ctx, pledge.ShopID)
+		if err != nil || shop.Status == ShopStatusDeleted {
+			return domain.Pledge{}, ErrNotFound
+		}
+	}
+	return pledge, nil
+}
+
 func (s *Service) ListPledges(ctx context.Context, input PledgeHistoryInput) ([]domain.Pledge, error) {
 	shopID := strings.TrimSpace(input.ShopID)
 	if shopID == "" {

@@ -18,6 +18,11 @@ type pledgeRepositoryStub struct {
 	getByID func(ctx context.Context, pledgeID string) (domain.Pledge, error)
 }
 
+// No test here mints a lot code, so every code reads as free.
+func (s pledgeRepositoryStub) GetByBundleID(ctx context.Context, bundleID string) (domain.Pledge, error) {
+	return domain.Pledge{}, errors.New("not found")
+}
+
 func (s pledgeRepositoryStub) Save(ctx context.Context, pledge domain.Pledge) error {
 	return nil
 }

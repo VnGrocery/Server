@@ -243,6 +243,11 @@ func TestCreateFreshnessReport(t *testing.T) {
 			if report.ProductID != "product-1" || report.ShopID != "shop-1" || report.ReporterUserID != "buyer-1" || report.Status != FreshnessReportStatusActive || report.Version != 1 {
 				t.Fatalf("unexpected report: %#v", report)
 			}
+			// Stored, not derived at read time: a row that does not say who
+			// scored it cannot be told apart from an AI one later.
+			if report.ReviewStatus != FreshnessReviewSelfReported {
+				t.Fatalf("expected reviewStatus %q, got %q", FreshnessReviewSelfReported, report.ReviewStatus)
+			}
 			return nil
 		},
 	}, shopRepositoryStub{

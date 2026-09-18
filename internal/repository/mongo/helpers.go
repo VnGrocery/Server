@@ -42,6 +42,24 @@ func encodeValue(v reflect.Value) any {
 		}
 		return encodeValue(v.Elem())
 	}
+	// Struct slices go through encodeDocument so that they are written with the
+	// firestore tags this package reads back. Handing them to the driver whole
+	// would name the keys by its own lowercasing rule, which only happens to
+	// agree with the tags while every field name is a single word.
+	if v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Struct &&
+		v.Type().Elem() != reflect.TypeOf(time.Time{}) {
+		docs := make([]any, 0, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			doc, err := encodeDocument(v.Index(i).Interface())
+			if err != nil {
+				// Not reachable for a struct element, but falling back to the
+				// raw value keeps a future type from silently writing nothing.
+				return v.Interface()
+			}
+			docs = append(docs, doc)
+		}
+		return docs
+	}
 	return v.Interface()
 }
 
@@ -130,6 +148,29 @@ func assignValue(target reflect.Value, raw any) error {
 			target.Set(reflect.ValueOf(values))
 			return nil
 		}
+		// Slices of structs - a product's spec rows and description blocks -
+		// decode element by element under the same firestore-tag rules as a
+		// top-level document, mirroring how encodeValue writes them.
+		if target.Type().Elem().Kind() == reflect.Struct {
+			items, err := asSlice(raw)
+			if err != nil {
+				return err
+			}
+			values := reflect.MakeSlice(target.Type(), 0, len(items))
+			for _, item := range items {
+				doc, err := asDocument(item)
+				if err != nil {
+					return err
+				}
+				elem := reflect.New(target.Type().Elem())
+				if err := decodeDocument(doc, elem.Interface()); err != nil {
+					return err
+				}
+				values = reflect.Append(values, elem.Elem())
+			}
+			target.Set(values)
+			return nil
+		}
 		return fmt.Errorf("unsupported slice type: %s", target.Type())
 	default:
 		return fmt.Errorf("unsupported target type: %s", target.Type())
@@ -209,6 +250,30 @@ func asStringSlice(raw any) ([]string, error) {
 		return out, nil
 	default:
 		return nil, fmt.Errorf("unsupported string slice value %T", raw)
+	}
+}
+
+func asSlice(raw any) ([]any, error) {
+	switch v := raw.(type) {
+	case primitive.A:
+		return []any(v), nil
+	case []any:
+		return v, nil
+	default:
+		return nil, fmt.Errorf("unsupported slice value %T", raw)
+	}
+}
+
+func asDocument(raw any) (bson.M, error) {
+	switch v := raw.(type) {
+	case bson.M:
+		return v, nil
+	case map[string]any:
+		return bson.M(v), nil
+	case bson.D:
+		return v.Map(), nil
+	default:
+		return nil, fmt.Errorf("unsupported document value %T", raw)
 	}
 }
 

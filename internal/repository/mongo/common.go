@@ -30,6 +30,7 @@ const (
 	eventLogsCollection               = "event_logs"
 	engagementsCollection             = "engagements"
 	engagementCountsCollection        = "engagement_counts"
+	settingsCollection                = "settings"
 )
 
 func saveByID(ctx context.Context, collection *mongo.Collection, id string, value any) error {

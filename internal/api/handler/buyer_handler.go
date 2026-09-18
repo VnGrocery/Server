@@ -99,12 +99,13 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		},
 	})
 	if err != nil {
+		if writeRateLimited(c, err) {
+			return
+		}
 		status := http.StatusInternalServerError
 		switch {
 		case errors.Is(err, buyerservice.ErrInvalidCheck):
 			status = http.StatusBadRequest
-		case errors.Is(err, buyerservice.ErrRateLimited):
-			status = http.StatusTooManyRequests
 		case errors.Is(err, visionservice.ErrInvalidImage):
 			status = http.StatusBadRequest
 		case errors.Is(err, visionservice.ErrProviderUnavailable):
@@ -174,12 +175,13 @@ func (h *BuyerHandler) Moderate(c *gin.Context) {
 		ModerationNote:  request.ModerationNote,
 	})
 	if err != nil {
+		if writeRateLimited(c, err) {
+			return
+		}
 		status := http.StatusInternalServerError
 		switch {
 		case errors.Is(err, buyerservice.ErrInvalidCheck):
 			status = http.StatusBadRequest
-		case errors.Is(err, buyerservice.ErrRateLimited):
-			status = http.StatusTooManyRequests
 		}
 		c.JSON(status, gin.H{"error": err.Error()})
 		return

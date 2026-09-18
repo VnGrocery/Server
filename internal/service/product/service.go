@@ -30,6 +30,11 @@ const (
 	ProductStatusPublished        = "published"
 	ProductStatusArchived         = "archived"
 	ProductStatusDeleted          = "deleted"
+	// FreshnessReviewSelfReported marks a score the buyer gave the produce
+	// themselves. It is the only value today; AI review adds its own rather
+	// than overwriting what this one means.
+	FreshnessReviewSelfReported = "self_reported"
+
 	FreshnessReportStatusActive   = "active"
 	FreshnessReportStatusFlagged  = "flagged"
 	FreshnessReportStatusRejected = "rejected"
@@ -43,6 +48,8 @@ type CreateInput struct {
 	Category       string
 	Tags           []string
 	ImageURLs      []string
+	Specs          []domain.SpecItem
+	DescBlocks     []domain.DescBlock
 	FreshnessNote  string
 	FreshnessScore float64
 	Price          float64
@@ -65,6 +72,8 @@ type UpdateInput struct {
 	Category        string
 	Tags            []string
 	ImageURLs       []string
+	Specs           []domain.SpecItem
+	DescBlocks      []domain.DescBlock
 	FreshnessNote   string
 	FreshnessScore  float64
 	Price           float64
@@ -172,6 +181,9 @@ type Service struct {
 	audit    AuditLogger
 	events   repository.EventLogRepository
 	verifier ChainVerifier
+
+	// Set through SetSettings; nil falls back to the default limits.
+	settings SettingsReader
 	now      func() time.Time
 }
 
@@ -232,6 +244,8 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Product
 		Category:       strings.TrimSpace(input.Category),
 		Tags:           normalizeStringSlice(input.Tags),
 		ImageURLs:      normalizeStringSlice(input.ImageURLs),
+		Specs:          normalizeSpecs(input.Specs),
+		DescBlocks:     normalizeDescBlocks(input.DescBlocks),
 		FreshnessNote:  strings.TrimSpace(input.FreshnessNote),
 		FreshnessScore: input.FreshnessScore,
 		Price:          input.Price,
@@ -287,6 +301,8 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Product
 	existing.Category = strings.TrimSpace(input.Category)
 	existing.Tags = normalizeStringSlice(input.Tags)
 	existing.ImageURLs = normalizeStringSlice(input.ImageURLs)
+	existing.Specs = normalizeSpecs(input.Specs)
+	existing.DescBlocks = normalizeDescBlocks(input.DescBlocks)
 	existing.FreshnessNote = strings.TrimSpace(input.FreshnessNote)
 	existing.FreshnessScore = input.FreshnessScore
 	existing.Price = input.Price
@@ -545,6 +561,7 @@ func (s *Service) CreateFreshnessReport(ctx context.Context, input FreshnessRepo
 		ShopID:         product.ShopID,
 		ReporterUserID: strings.TrimSpace(input.ReporterUserID),
 		Status:         FreshnessReportStatusActive,
+		ReviewStatus:   FreshnessReviewSelfReported,
 		Version:        1,
 		Score:          input.Score,
 		Category:       strings.TrimSpace(input.Category),
@@ -805,20 +822,53 @@ func validateFreshnessReportStatus(status string) (string, error) {
 	}
 }
 
+// SettingsReader is the slice of the settings service the quota check needs.
+type SettingsReader interface {
+	Get(ctx context.Context) (domain.RuntimeSettings, error)
+}
+
+func (s *Service) SetSettings(reader SettingsReader) { s.settings = reader }
+
+// runtimeSettings falls back to the defaults when no reader is wired or the
+// read fails, so a settings outage cannot silently remove the limit.
+func (s *Service) runtimeSettings(ctx context.Context) domain.RuntimeSettings {
+	if s.settings == nil {
+		return domain.DefaultRuntimeSettings()
+	}
+	loaded, err := s.settings.Get(ctx)
+	if err != nil {
+		return domain.DefaultRuntimeSettings()
+	}
+	return loaded.Normalized()
+}
+
 func (s *Service) ensureFreshnessReportQuota(ctx context.Context, reporterUserID string) error {
-	reports, err := s.reports.ListByReporterUserID(ctx, strings.TrimSpace(reporterUserID))
+	limits := s.runtimeSettings(ctx)
+	window := limits.RateLimitWindow()
+	now := s.now().UTC()
+
+	// Filtered in the query rather than listing every report the user has ever
+	// filed: sending one photo should not cost more because they have sent
+	// many before.
+	reports, err := s.reports.List(ctx, repository.ProductFreshnessReportListFilter{
+		ReporterUserID: strings.TrimSpace(reporterUserID),
+		CreatedAfter:   now.Add(-window),
+	})
 	if err != nil {
 		return err
 	}
-	since := s.now().UTC().Add(-1 * time.Hour)
-	count := 0
-	for _, report := range reports {
-		if report.CreatedAt.After(since) {
-			count++
+	if len(reports) >= limits.FreshnessReportPerHour {
+		// A rate-limit error, not an invalid-product one: hitting the quota used
+		// to answer 400 "invalid product", which told the reporter their photo
+		// was wrong when the only problem was timing.
+		//
+		// List sorts newest first, so the last entry leaves the window first.
+		oldest := reports[len(reports)-1].CreatedAt
+		wait := oldest.Add(window).Sub(now)
+		if wait < 0 {
+			wait = 0
 		}
-	}
-	if count >= 10 {
-		return fmt.Errorf("%w: freshness report rate limit exceeded", ErrInvalidProduct)
+		return domain.RateLimitedError{RetryAfter: wait}
 	}
 	return nil
 }
@@ -849,6 +899,74 @@ func normalizeStringSlice(values []string) []string {
 		}
 		seen[key] = struct{}{}
 		result = append(result, trimmed)
+	}
+	return result
+}
+
+// normalizeSpecs drops rows the seller left blank.
+//
+// The form shows empty rows by default, so submitting untouched ones is the
+// normal case rather than a mistake: they are skipped, not rejected. A row
+// with a value but no label is kept - losing the value silently would be
+// worse than showing it unlabelled.
+func normalizeSpecs(items []domain.SpecItem) []domain.SpecItem {
+	result := make([]domain.SpecItem, 0, len(items))
+	for _, item := range items {
+		key := strings.TrimSpace(item.Key)
+		value := strings.TrimSpace(item.Value)
+		if key == "" && value == "" {
+			continue
+		}
+		result = append(result, domain.SpecItem{Key: key, Value: value})
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+// normalizeDescBlocks drops empty blocks and anything of an unknown type.
+//
+// The type is what the renderer switches on, so an unrecognised one would
+// reach the buyer's screen as a blank gap.
+func normalizeDescBlocks(blocks []domain.DescBlock) []domain.DescBlock {
+	result := make([]domain.DescBlock, 0, len(blocks))
+	for _, block := range blocks {
+		normalized := domain.DescBlock{
+			Type:    strings.ToLower(strings.TrimSpace(block.Type)),
+			Text:    strings.TrimSpace(block.Text),
+			Items:   normalizeStringSlice(block.Items),
+			CID:     strings.TrimSpace(block.CID),
+			Caption: strings.TrimSpace(block.Caption),
+		}
+		switch normalized.Type {
+		case domain.DescBlockHeading, domain.DescBlockParagraph:
+			if normalized.Text == "" {
+				continue
+			}
+			normalized.Items = nil
+			normalized.CID = ""
+			normalized.Caption = ""
+		case domain.DescBlockBullets:
+			if len(normalized.Items) == 0 {
+				continue
+			}
+			normalized.Text = ""
+			normalized.CID = ""
+			normalized.Caption = ""
+		case domain.DescBlockImage:
+			if normalized.CID == "" {
+				continue
+			}
+			normalized.Text = ""
+			normalized.Items = nil
+		default:
+			continue
+		}
+		result = append(result, normalized)
+	}
+	if len(result) == 0 {
+		return nil
 	}
 	return result
 }

@@ -16,6 +16,7 @@ type Dependencies struct {
 	DocsHandler               *handler.DocsHandler
 	AuthHandler               *handler.AuthHandler
 	AdminUserHandler          *handler.AdminUserHandler
+	SettingsHandler           *handler.SettingsHandler
 	EventLogHandler           *handler.EventLogHandler
 	MediaHandler              *handler.MediaHandler
 	ProductHandler            *handler.ProductHandler
@@ -160,6 +161,8 @@ func New(deps Dependencies) *gin.Engine {
 		v1.PATCH("/admin/buyer-checks/:checkId/moderation", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.BuyerHandler.Moderate)
 		v1.GET("/admin/buyer-checks", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.BuyerHandler.ListAdmin)
 		v1.GET("/admin/product-freshness-reports", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.ProductHandler.ListFreshnessReportsAdmin)
+		v1.GET("/admin/settings", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.SettingsHandler.Get)
+		v1.PUT("/admin/settings", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.SettingsHandler.Update)
 		v1.GET("/admin/users", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.AdminUserHandler.List)
 		v1.PATCH("/admin/users/:userId/role", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.AdminUserHandler.UpdateRole)
 		v1.PATCH("/admin/users/:userId/status", deps.AuthMiddleware.Handle(), deps.AdminMiddleware.Handle(), deps.AdminUserHandler.UpdateStatus)

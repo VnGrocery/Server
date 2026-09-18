@@ -176,6 +176,9 @@ type Service struct {
 	audit    AuditLogger
 	events   repository.EventLogRepository
 	verifier ChainVerifier
+
+	// Set through SetSettings; nil falls back to the default limits.
+	settings SettingsReader
 	now      func() time.Time
 }
 
@@ -813,20 +816,53 @@ func validateFreshnessReportStatus(status string) (string, error) {
 	}
 }
 
+// SettingsReader is the slice of the settings service the quota check needs.
+type SettingsReader interface {
+	Get(ctx context.Context) (domain.RuntimeSettings, error)
+}
+
+func (s *Service) SetSettings(reader SettingsReader) { s.settings = reader }
+
+// runtimeSettings falls back to the defaults when no reader is wired or the
+// read fails, so a settings outage cannot silently remove the limit.
+func (s *Service) runtimeSettings(ctx context.Context) domain.RuntimeSettings {
+	if s.settings == nil {
+		return domain.DefaultRuntimeSettings()
+	}
+	loaded, err := s.settings.Get(ctx)
+	if err != nil {
+		return domain.DefaultRuntimeSettings()
+	}
+	return loaded.Normalized()
+}
+
 func (s *Service) ensureFreshnessReportQuota(ctx context.Context, reporterUserID string) error {
-	reports, err := s.reports.ListByReporterUserID(ctx, strings.TrimSpace(reporterUserID))
+	limits := s.runtimeSettings(ctx)
+	window := limits.RateLimitWindow()
+	now := s.now().UTC()
+
+	// Filtered in the query rather than listing every report the user has ever
+	// filed: sending one photo should not cost more because they have sent
+	// many before.
+	reports, err := s.reports.List(ctx, repository.ProductFreshnessReportListFilter{
+		ReporterUserID: strings.TrimSpace(reporterUserID),
+		CreatedAfter:   now.Add(-window),
+	})
 	if err != nil {
 		return err
 	}
-	since := s.now().UTC().Add(-1 * time.Hour)
-	count := 0
-	for _, report := range reports {
-		if report.CreatedAt.After(since) {
-			count++
+	if len(reports) >= limits.FreshnessReportPerHour {
+		// A rate-limit error, not an invalid-product one: hitting the quota used
+		// to answer 400 "invalid product", which told the reporter their photo
+		// was wrong when the only problem was timing.
+		//
+		// List sorts newest first, so the last entry leaves the window first.
+		oldest := reports[len(reports)-1].CreatedAt
+		wait := oldest.Add(window).Sub(now)
+		if wait < 0 {
+			wait = 0
 		}
-	}
-	if count >= 10 {
-		return fmt.Errorf("%w: freshness report rate limit exceeded", ErrInvalidProduct)
+		return domain.RateLimitedError{RetryAfter: wait}
 	}
 	return nil
 }

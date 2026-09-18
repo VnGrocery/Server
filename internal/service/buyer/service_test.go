@@ -396,7 +396,10 @@ func TestCheckRejectsWhenQuotaExceeded(t *testing.T) {
 	service := NewService(
 		pledgeRepositoryStub{},
 		buyerCheckRepositoryStub{
-			listByBuyerUserID: func(ctx context.Context, buyerUserID string) ([]domain.BuyerCheck, error) {
+			list: func(ctx context.Context, filter repository.BuyerCheckListFilter) ([]domain.BuyerCheck, error) {
+				if filter.CreatedAfter.IsZero() {
+					t.Fatalf("expected the quota check to ask only for the window, got %#v", filter)
+				}
 				now := time.Now().UTC()
 				items := make([]domain.BuyerCheck, 0, 10)
 				for i := 0; i < 10; i++ {
@@ -427,6 +430,80 @@ func TestCheckRejectsWhenQuotaExceeded(t *testing.T) {
 	if !errors.Is(err, ErrRateLimited) {
 		t.Fatalf("expected rate limit error, got %v", err)
 	}
+}
+
+// A limit raised in settings has to take effect without a redeploy, otherwise
+// the settings screen is decoration.
+func TestCheckHonoursSettingsLimit(t *testing.T) {
+	service := NewService(
+		pledgeRepositoryStub{},
+		buyerCheckRepositoryStub{
+			list: func(ctx context.Context, filter repository.BuyerCheckListFilter) ([]domain.BuyerCheck, error) {
+				now := time.Now().UTC()
+				items := make([]domain.BuyerCheck, 0, 10)
+				for i := 0; i < 10; i++ {
+					items = append(items, domain.BuyerCheck{CheckID: "check", CreatedAt: now})
+				}
+				return items, nil
+			},
+		},
+		userRepositoryStub{},
+		scorerStub{
+			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
+				return visionservice.ScoreResult{}, nil
+			},
+		},
+		nil,
+	)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{})
+	service.SetSettings(settingsReaderStub{settings: domain.RuntimeSettings{
+		BuyerCheckPerHour:      25,
+		FreshnessReportPerHour: 25,
+		RateLimitWindowMinutes: 60,
+	}})
+
+	err := service.ensureQuota(context.Background(), "buyer-1")
+	if err != nil {
+		t.Fatalf("10 checks under a limit of 25 should pass, got %v", err)
+	}
+}
+
+// The wait is the only part of a rate-limit answer someone can act on, so it
+// has to reach the caller rather than being recomputed at the edge.
+func TestQuotaErrorCarriesRetryWindow(t *testing.T) {
+	now := time.Now().UTC()
+	service := NewService(
+		pledgeRepositoryStub{},
+		buyerCheckRepositoryStub{
+			list: func(ctx context.Context, filter repository.BuyerCheckListFilter) ([]domain.BuyerCheck, error) {
+				items := make([]domain.BuyerCheck, 0, 10)
+				for i := 0; i < 10; i++ {
+					// Newest first, matching how the repository sorts; the
+					// oldest is 45 minutes back, so 15 minutes remain.
+					items = append(items, domain.BuyerCheck{CheckID: "check", CreatedAt: now.Add(-time.Duration(i*5) * time.Minute)})
+				}
+				return items, nil
+			},
+		},
+		userRepositoryStub{},
+		scorerStub{},
+		nil,
+	)
+	service.now = func() time.Time { return now }
+
+	var limited domain.RateLimitedError
+	if err := service.ensureQuota(context.Background(), "buyer-1"); !errors.As(err, &limited) {
+		t.Fatalf("expected a rate limit error carrying a wait, got %v", err)
+	}
+	if got := limited.RetryAfterMinutes(); got != 15 {
+		t.Fatalf("expected 15 minutes until the oldest check leaves the window, got %d", got)
+	}
+}
+
+type settingsReaderStub struct{ settings domain.RuntimeSettings }
+
+func (s settingsReaderStub) Get(ctx context.Context) (domain.RuntimeSettings, error) {
+	return s.settings, nil
 }
 
 func TestListBuyerChecksForAdmin(t *testing.T) {

@@ -390,6 +390,9 @@ func (h *ProductHandler) ModerateFreshnessReport(c *gin.Context) {
 }
 
 func (h *ProductHandler) writeError(c *gin.Context, err error) {
+	if writeRateLimited(c, err) {
+		return
+	}
 	status := http.StatusInternalServerError
 	switch {
 	case errors.Is(err, productsvc.ErrInvalidProduct):

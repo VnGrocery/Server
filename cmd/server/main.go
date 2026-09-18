@@ -29,6 +29,7 @@ import (
 	productservice "vngrocery/internal/service/product"
 	recommendservice "vngrocery/internal/service/recommend"
 	sellerservice "vngrocery/internal/service/seller"
+	settingsservice "vngrocery/internal/service/settings"
 	shopservice "vngrocery/internal/service/shop"
 	useradminservice "vngrocery/internal/service/useradmin"
 	visionservice "vngrocery/internal/service/vision"
@@ -152,6 +153,7 @@ func main() {
 	passwordResetTokenRepository = mongorepo.NewPasswordResetTokenRepository(mongoApp.Database)
 	bundleTokenUseRepository = mongorepo.NewBundleTokenUseRepository(mongoApp.Database)
 	eventLogRepository = mongorepo.NewEventLogRepository(mongoApp.Database)
+	settingsRepository := mongorepo.NewSettingsRepository(mongoApp.Database)
 	rateLimitStore = middleware.NewMemoryRateLimitStore()
 	if cfg.RateLimitBackend == "firestore" {
 		log.Printf("RATE_LIMIT_BACKEND=firestore ignored because MongoDB is active; using memory rate limit store")
@@ -259,12 +261,18 @@ func main() {
 	bundleTokenService.StartCleanup(appCtx, 10*time.Minute, 500)
 	buyerCheckService.SetBundleTokenVerifier(bundleTokenService)
 	buyerCheckService.SetObserver(metrics)
+	// Both per-user quotas read their limits from the same settings document,
+	// so an admin raising one does not have to know which service enforces it.
+	settingsService := settingsservice.NewService(settingsRepository, auditLogger)
+	productManager.SetSettings(settingsService)
+	buyerCheckService.SetSettings(settingsService)
 	authMiddleware := middleware.NewAuthRequired(jwtService)
 	adminMiddleware := middleware.NewAdminRequired(userRepository)
 	healthHandler := handler.NewHealthHandler()
 	docsHandler := handler.NewDocsHandler()
 	authHandler := handler.NewAuthHandler(accountService)
 	adminUserHandler := handler.NewAdminUserHandler(userAdminService)
+	settingsHandler := handler.NewSettingsHandler(settingsService)
 	eventLogHandler := handler.NewEventLogHandler(auditQueryService)
 	productHandler := handler.NewProductHandler(productManager)
 	sellerHandler := handler.NewSellerHandler(visionScorer, sellerCommitService)
@@ -312,6 +320,7 @@ func main() {
 		DocsHandler:               docsHandler,
 		AuthHandler:               authHandler,
 		AdminUserHandler:          adminUserHandler,
+		SettingsHandler:           settingsHandler,
 		EventLogHandler:           eventLogHandler,
 		MediaHandler:              mediaHandler,
 		ProductHandler:            productHandler,

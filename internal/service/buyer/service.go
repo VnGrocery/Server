@@ -18,7 +18,10 @@ import (
 )
 
 var ErrInvalidCheck = errors.New("invalid buyer check request")
-var ErrRateLimited = errors.New("buyer check rate limit exceeded")
+
+// ErrRateLimited is the shared sentinel, kept under this name because handlers
+// and tests already match on it.
+var ErrRateLimited = domain.ErrRateLimited
 
 const (
 	BuyerCheckStatusCompleted = "completed"
@@ -120,8 +123,18 @@ type Service struct {
 	audit    AuditLogger
 	tokens   BundleTokenVerifier
 	stats    Observer
+
+	// Set through SetSettings; nil falls back to the default limits.
+	settings SettingsReader
 	now      func() time.Time
 }
+
+// SettingsReader is the slice of the settings service the quota check needs.
+type SettingsReader interface {
+	Get(ctx context.Context) (domain.RuntimeSettings, error)
+}
+
+func (s *Service) SetSettings(reader SettingsReader) { s.settings = reader }
 
 type AuditLogger interface {
 	Log(ctx context.Context, input audit.Input) error
@@ -579,21 +592,49 @@ func (s *Service) lookupShopName(ctx context.Context, shopID string, cache map[s
 }
 
 func (s *Service) ensureQuota(ctx context.Context, buyerUserID string) error {
-	checks, err := s.checks.ListByBuyerUserID(ctx, buyerUserID)
+	limits := s.runtimeSettings(ctx)
+	window := limits.RateLimitWindow()
+	now := s.now().UTC()
+
+	// Filtered in the query rather than listing a buyer's whole history and
+	// counting in memory: the cost of one check should not grow with every
+	// check they have ever made.
+	checks, err := s.checks.List(ctx, repository.BuyerCheckListFilter{
+		BuyerUserID:  buyerUserID,
+		CreatedAfter: now.Add(-window),
+	})
 	if err != nil {
 		return err
 	}
-	since := s.now().UTC().Add(-1 * time.Hour)
-	count := 0
-	for _, check := range checks {
-		if check.CreatedAt.After(since) {
-			count++
-		}
-	}
-	if count >= 10 {
-		return ErrRateLimited
+	if len(checks) >= limits.BuyerCheckPerHour {
+		// List sorts newest first, so the last entry is the one that falls out
+		// of the window first.
+		oldest := checks[len(checks)-1].CreatedAt
+		return domain.RateLimitedError{RetryAfter: retryAfter(oldest, window, now)}
 	}
 	return nil
+}
+
+// retryAfter is how long until the oldest entry drops out of the window.
+func retryAfter(oldest time.Time, window time.Duration, now time.Time) time.Duration {
+	wait := oldest.Add(window).Sub(now)
+	if wait < 0 {
+		return 0
+	}
+	return wait
+}
+
+// runtimeSettings falls back to the defaults when no reader is wired or the
+// read fails, so a settings outage cannot silently remove the limit.
+func (s *Service) runtimeSettings(ctx context.Context) domain.RuntimeSettings {
+	if s.settings == nil {
+		return domain.DefaultRuntimeSettings()
+	}
+	loaded, err := s.settings.Get(ctx)
+	if err != nil {
+		return domain.DefaultRuntimeSettings()
+	}
+	return loaded.Normalized()
 }
 
 func (s *Service) ensureAdmin(ctx context.Context, userID string) error {

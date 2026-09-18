@@ -65,6 +65,12 @@ type ProductFreshnessReportRepository interface {
 	List(ctx context.Context, filter ProductFreshnessReportListFilter) ([]domain.ProductFreshnessReport, error)
 }
 
+// SettingsRepository stores the single runtime settings document.
+type SettingsRepository interface {
+	Get(ctx context.Context) (domain.RuntimeSettings, error)
+	Save(ctx context.Context, settings domain.RuntimeSettings) error
+}
+
 type PledgeRepository interface {
 	Save(ctx context.Context, pledge domain.Pledge) error
 	GetByID(ctx context.Context, pledgeID string) (domain.Pledge, error)

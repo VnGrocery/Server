@@ -43,6 +43,8 @@ type CreateInput struct {
 	Category       string
 	Tags           []string
 	ImageURLs      []string
+	Specs          []domain.SpecItem
+	DescBlocks     []domain.DescBlock
 	FreshnessNote  string
 	FreshnessScore float64
 	Price          float64
@@ -65,6 +67,8 @@ type UpdateInput struct {
 	Category        string
 	Tags            []string
 	ImageURLs       []string
+	Specs           []domain.SpecItem
+	DescBlocks      []domain.DescBlock
 	FreshnessNote   string
 	FreshnessScore  float64
 	Price           float64
@@ -232,6 +236,8 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (domain.Product
 		Category:       strings.TrimSpace(input.Category),
 		Tags:           normalizeStringSlice(input.Tags),
 		ImageURLs:      normalizeStringSlice(input.ImageURLs),
+		Specs:          normalizeSpecs(input.Specs),
+		DescBlocks:     normalizeDescBlocks(input.DescBlocks),
 		FreshnessNote:  strings.TrimSpace(input.FreshnessNote),
 		FreshnessScore: input.FreshnessScore,
 		Price:          input.Price,
@@ -287,6 +293,8 @@ func (s *Service) Update(ctx context.Context, input UpdateInput) (domain.Product
 	existing.Category = strings.TrimSpace(input.Category)
 	existing.Tags = normalizeStringSlice(input.Tags)
 	existing.ImageURLs = normalizeStringSlice(input.ImageURLs)
+	existing.Specs = normalizeSpecs(input.Specs)
+	existing.DescBlocks = normalizeDescBlocks(input.DescBlocks)
 	existing.FreshnessNote = strings.TrimSpace(input.FreshnessNote)
 	existing.FreshnessScore = input.FreshnessScore
 	existing.Price = input.Price
@@ -849,6 +857,74 @@ func normalizeStringSlice(values []string) []string {
 		}
 		seen[key] = struct{}{}
 		result = append(result, trimmed)
+	}
+	return result
+}
+
+// normalizeSpecs drops rows the seller left blank.
+//
+// The form shows empty rows by default, so submitting untouched ones is the
+// normal case rather than a mistake: they are skipped, not rejected. A row
+// with a value but no label is kept - losing the value silently would be
+// worse than showing it unlabelled.
+func normalizeSpecs(items []domain.SpecItem) []domain.SpecItem {
+	result := make([]domain.SpecItem, 0, len(items))
+	for _, item := range items {
+		key := strings.TrimSpace(item.Key)
+		value := strings.TrimSpace(item.Value)
+		if key == "" && value == "" {
+			continue
+		}
+		result = append(result, domain.SpecItem{Key: key, Value: value})
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
+}
+
+// normalizeDescBlocks drops empty blocks and anything of an unknown type.
+//
+// The type is what the renderer switches on, so an unrecognised one would
+// reach the buyer's screen as a blank gap.
+func normalizeDescBlocks(blocks []domain.DescBlock) []domain.DescBlock {
+	result := make([]domain.DescBlock, 0, len(blocks))
+	for _, block := range blocks {
+		normalized := domain.DescBlock{
+			Type:    strings.ToLower(strings.TrimSpace(block.Type)),
+			Text:    strings.TrimSpace(block.Text),
+			Items:   normalizeStringSlice(block.Items),
+			CID:     strings.TrimSpace(block.CID),
+			Caption: strings.TrimSpace(block.Caption),
+		}
+		switch normalized.Type {
+		case domain.DescBlockHeading, domain.DescBlockParagraph:
+			if normalized.Text == "" {
+				continue
+			}
+			normalized.Items = nil
+			normalized.CID = ""
+			normalized.Caption = ""
+		case domain.DescBlockBullets:
+			if len(normalized.Items) == 0 {
+				continue
+			}
+			normalized.Text = ""
+			normalized.CID = ""
+			normalized.Caption = ""
+		case domain.DescBlockImage:
+			if normalized.CID == "" {
+				continue
+			}
+			normalized.Text = ""
+			normalized.Items = nil
+		default:
+			continue
+		}
+		result = append(result, normalized)
+	}
+	if len(result) == 0 {
+		return nil
 	}
 	return result
 }

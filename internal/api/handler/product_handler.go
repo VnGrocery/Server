@@ -57,6 +57,8 @@ func (h *ProductHandler) Create(c *gin.Context) {
 		Category:       request.Category,
 		Tags:           request.Tags,
 		ImageURLs:      request.ImageURLs,
+		Specs:          toDomainSpecs(request.Specs),
+		DescBlocks:     toDomainDescBlocks(request.DescBlocks),
 		FreshnessNote:  request.FreshnessNote,
 		FreshnessScore: request.FreshnessScore,
 		Price:          request.Price,
@@ -94,6 +96,8 @@ func (h *ProductHandler) Update(c *gin.Context) {
 		Category:        request.Category,
 		Tags:            request.Tags,
 		ImageURLs:       request.ImageURLs,
+		Specs:           toDomainSpecs(request.Specs),
+		DescBlocks:      toDomainDescBlocks(request.DescBlocks),
 		FreshnessNote:   request.FreshnessNote,
 		FreshnessScore:  request.FreshnessScore,
 		Price:           request.Price,
@@ -422,6 +426,62 @@ func toProductFreshnessReportResponse(report domain.ProductFreshnessReport) dto.
 	}
 }
 
+func toDomainSpecs(items []dto.SpecItem) []domain.SpecItem {
+	if len(items) == 0 {
+		return nil
+	}
+	result := make([]domain.SpecItem, 0, len(items))
+	for _, item := range items {
+		result = append(result, domain.SpecItem{Key: item.Key, Value: item.Value})
+	}
+	return result
+}
+
+func toDomainDescBlocks(blocks []dto.DescBlock) []domain.DescBlock {
+	if len(blocks) == 0 {
+		return nil
+	}
+	result := make([]domain.DescBlock, 0, len(blocks))
+	for _, block := range blocks {
+		result = append(result, domain.DescBlock{
+			Type:    block.Type,
+			Text:    block.Text,
+			Items:   block.Items,
+			CID:     block.CID,
+			Caption: block.Caption,
+		})
+	}
+	return result
+}
+
+func toSpecResponse(items []domain.SpecItem) []dto.SpecItem {
+	if len(items) == 0 {
+		return nil
+	}
+	result := make([]dto.SpecItem, 0, len(items))
+	for _, item := range items {
+		result = append(result, dto.SpecItem{Key: item.Key, Value: item.Value})
+	}
+	return result
+}
+
+func toDescBlockResponse(blocks []domain.DescBlock) []dto.DescBlock {
+	if len(blocks) == 0 {
+		return nil
+	}
+	result := make([]dto.DescBlock, 0, len(blocks))
+	for _, block := range blocks {
+		result = append(result, dto.DescBlock{
+			Type:    block.Type,
+			Text:    block.Text,
+			Items:   block.Items,
+			CID:     block.CID,
+			Caption: block.Caption,
+		})
+	}
+	return result
+}
+
 func toProductResponse(product domain.Product) dto.ProductResponse {
 	return dto.ProductResponse{
 		ProductID:         product.ProductID,
@@ -432,6 +492,8 @@ func toProductResponse(product domain.Product) dto.ProductResponse {
 		Category:          product.Category,
 		Tags:              product.Tags,
 		ImageURLs:         product.ImageURLs,
+		Specs:             toSpecResponse(product.Specs),
+		DescBlocks:        toDescBlockResponse(product.DescBlocks),
 		FreshnessNote:     product.FreshnessNote,
 		FreshnessScore:    product.FreshnessScore,
 		Price:             product.Price,

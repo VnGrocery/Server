@@ -62,3 +62,4 @@ secrets/*
 # Photos downloaded by `./scripts/vng seed-images`. Re-fetched on demand; the
 # credits file next to them is regenerated with them.
 scripts/.image-cache/
+.serena

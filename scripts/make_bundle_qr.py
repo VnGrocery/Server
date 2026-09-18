@@ -33,11 +33,17 @@ Two things that are easy to lose an hour to:
 
   * the AVD needs `hw.camera.back = virtualscene` in its config.ini. The
     default `emulated` draws a fixed colour-block pattern and silently ignores
-    posters, so the flag looks broken rather than unused.
-  * the scene camera does not start facing that wall, and nothing on the
-    console moves it - not `sensor set`, not `physics`. Drag with the left
-    mouse button inside the emulator window to turn around until the QR is in
-    view. `wall` and `table` are the only poster names the stock scene has.
+    posters, so the flag looks broken rather than unused. `wall` and `table`
+    are the only poster names the stock scene has; anything else logs
+    "Could not find poster with name" and is otherwise ignored.
+  * the scene camera does not start facing that wall. `sensor set` and
+    `physics` do not move it, but the emulator ships a macro that walks to it:
+
+        adb emu automation play \\
+          $ANDROID_HOME/emulator/resources/macros/Walk_to_image_room
+
+    Play it with the scanner already open - it takes a few seconds to arrive,
+    and the scan fires the moment the QR is in frame.
 
 Scanning the PNG off the host screen with a real phone works too, and skips
 all of the above.

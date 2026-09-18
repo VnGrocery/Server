@@ -97,6 +97,7 @@ type ProductFreshnessReportResponse struct {
 	ShopID            string     `json:"shopId"`
 	ReporterUserID    string     `json:"reporterUserId"`
 	Status            string     `json:"status"`
+	ReviewStatus      string     `json:"reviewStatus,omitempty"`
 	Version           int        `json:"version"`
 	Score             float64    `json:"score"`
 	Category          string     `json:"category"`

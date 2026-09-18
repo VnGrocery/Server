@@ -414,6 +414,7 @@ func toProductFreshnessReportResponse(report domain.ProductFreshnessReport) dto.
 		ShopID:            report.ShopID,
 		ReporterUserID:    report.ReporterUserID,
 		Status:            report.Status,
+		ReviewStatus:      report.ReviewStatus,
 		Version:           report.Version,
 		Score:             report.Score,
 		Category:          report.Category,

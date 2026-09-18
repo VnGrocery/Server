@@ -428,6 +428,7 @@ func buildSchemas() gin.H {
 				"shopId":            gin.H{"type": "string"},
 				"reporterUserId":    gin.H{"type": "string"},
 				"status":            gin.H{"type": "string"},
+				"reviewStatus":      gin.H{"type": "string", "enum": []string{"self_reported"}},
 				"version":           gin.H{"type": "integer"},
 				"score":             gin.H{"type": "number"},
 				"category":          gin.H{"type": "string"},

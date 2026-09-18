@@ -30,6 +30,11 @@ const (
 	ProductStatusPublished        = "published"
 	ProductStatusArchived         = "archived"
 	ProductStatusDeleted          = "deleted"
+	// FreshnessReviewSelfReported marks a score the buyer gave the produce
+	// themselves. It is the only value today; AI review adds its own rather
+	// than overwriting what this one means.
+	FreshnessReviewSelfReported = "self_reported"
+
 	FreshnessReportStatusActive   = "active"
 	FreshnessReportStatusFlagged  = "flagged"
 	FreshnessReportStatusRejected = "rejected"
@@ -556,6 +561,7 @@ func (s *Service) CreateFreshnessReport(ctx context.Context, input FreshnessRepo
 		ShopID:         product.ShopID,
 		ReporterUserID: strings.TrimSpace(input.ReporterUserID),
 		Status:         FreshnessReportStatusActive,
+		ReviewStatus:   FreshnessReviewSelfReported,
 		Version:        1,
 		Score:          input.Score,
 		Category:       strings.TrimSpace(input.Category),

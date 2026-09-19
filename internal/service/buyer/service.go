@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"strings"
 	"time"
@@ -526,7 +527,12 @@ func (s *Service) persistCheck(ctx context.Context, result CheckResult) (CheckRe
 			Status:          check.Status,
 			Payload:         audit.MutationPayload{After: check},
 		}); err != nil {
-			return CheckResult{}, err
+			// The check is already in the database at this point. Returning the
+			// error here reported a success as a failure: the buyer saw it fail,
+			// retried, and spent a second bundle token on a row that existed.
+			// The missing audit entry is real and is logged as such, but it is
+			// the operator's problem, not something to charge the buyer for.
+			log.Printf("buyer check %s saved without an audit entry: %v", check.CheckID, err)
 		}
 	}
 

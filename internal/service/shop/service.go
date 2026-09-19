@@ -163,6 +163,11 @@ type TrustSummary struct {
 	TrustedCheckCount  int
 	HighRiskCheckCount int
 
+	// Buyer photos recorded but not yet scored. Reported so a shop can see
+	// that evidence exists and is simply not counted yet, rather than the
+	// checks appearing to have vanished.
+	PendingCheckCount int
+
 	// Comments are the only part of the score the shop itself can suppress, so
 	// what was held back is reported next to what was published.
 	CommentScore         float64
@@ -1161,6 +1166,22 @@ func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView
 const trustScoreFormulaVersion = "trust_score_v3"
 
 func applyTrustScore(summary *TrustSummary, rating RatingSummary, pledges []domain.Pledge, reviews []domain.ShopReview, checks []domain.BuyerCheck, moderationOn bool, comments []domain.ProductComment) {
+	// Dropped here rather than inside each component: a check nothing has
+	// scored yet has no verdict to weigh, no delta to compare and no
+	// confirmation to count, so every one of the five users of `checks` below
+	// would otherwise have to remember to skip it. A photo starts counting
+	// once the scorer has looked at it, not when the buyer uploads it.
+	pendingChecks := 0
+	scoredChecks := make([]domain.BuyerCheck, 0, len(checks))
+	for _, check := range checks {
+		if check.Status == buyerCheckStatusPendingReview {
+			pendingChecks++
+			continue
+		}
+		scoredChecks = append(scoredChecks, check)
+	}
+	checks = scoredChecks
+
 	pledgeScore, pledgeReasons := calculatePledgeTrustScore(pledges)
 	reviewScore, reviewReasons := calculateReviewTrustScore(rating, len(reviews))
 	buyerCheckScore, trustedChecks, highRiskChecks, checkReasons := calculateBuyerCheckTrustScore(checks)
@@ -1202,7 +1223,12 @@ func applyTrustScore(summary *TrustSummary, rating RatingSummary, pledges []doma
 	summary.CommentCount = commentCounts.approved
 	summary.CommentPendingCount = commentCounts.pending
 	summary.CommentRejectedCount = commentCounts.rejected
+	if pendingChecks > 0 {
+		reasons = append(reasons, "buyer_checks_awaiting_ai_review")
+	}
+
 	summary.BuyerCheckCount = len(checks)
+	summary.PendingCheckCount = pendingChecks
 	summary.TrustedCheckCount = trustedChecks
 	summary.HighRiskCheckCount = highRiskChecks
 	summary.Reasons = uniqueStrings(reasons)
@@ -1543,6 +1569,11 @@ func calculateBuyerCheckTrustScore(checks []domain.BuyerCheck) (float64, int, in
 }
 
 const warningMaxScoreDelta = 2.5
+
+// Mirrors buyer.BuyerCheckStatusPendingReview. Copied rather than imported:
+// the buyer service already reads shop data, and one shared string is cheaper
+// than the cycle that importing it back would create.
+const buyerCheckStatusPendingReview = "pending_review"
 
 func trustGrade(score float64) string {
 	switch {

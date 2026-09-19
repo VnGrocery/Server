@@ -26,6 +26,7 @@ type BuyerCheckResponse struct {
 	CategoryMatch     bool       `json:"categoryMatch"`
 	ImageHash         string     `json:"imageHash,omitempty"`
 	ImageCID          string     `json:"imageCid,omitempty"`
+	ImageURL          string     `json:"imageUrl,omitempty"`
 	Reasons           []string   `json:"reasons"`
 	ModeratedByUserID string     `json:"moderatedByUserId,omitempty"`
 	ModerationNote    string     `json:"moderationNote,omitempty"`

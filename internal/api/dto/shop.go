@@ -48,6 +48,7 @@ type ShopTrustSummaryResponse struct {
 	BuyerCheckCount    int        `json:"buyerCheckCount"`
 	TrustedCheckCount  int        `json:"trustedCheckCount"`
 	HighRiskCheckCount int        `json:"highRiskCheckCount"`
+	PendingCheckCount  int        `json:"pendingCheckCount"`
 
 	CommentScore         float64 `json:"commentScore"`
 	CommentModeration    bool    `json:"commentModeration"`

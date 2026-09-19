@@ -335,6 +335,39 @@ func TestCreateRejectsInvalidCoordinates(t *testing.T) {
 	}
 }
 
+// A photo nobody has scored is not evidence for or against the shop. It is
+// reported separately so it does not look lost, but it must not move the
+// score - otherwise uploading photos would be a way to change your own rating.
+func TestPendingBuyerChecksDoNotMoveTheTrustScore(t *testing.T) {
+	scored := domain.BuyerCheck{
+		ShopID: "shop-1", Status: "completed", Verdict: "trusted",
+		CategoryMatch: true, BuyerUserID: "buyer-1",
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	pending := domain.BuyerCheck{
+		ShopID: "shop-1", Status: "pending_review", Verdict: "pending",
+		BuyerUserID: "buyer-2",
+		CreatedAt:   time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+
+	var scoredOnly, withPending TrustSummary
+	applyTrustScore(&scoredOnly, RatingSummary{}, nil, nil, []domain.BuyerCheck{scored}, false, nil)
+	applyTrustScore(&withPending, RatingSummary{}, nil, nil, []domain.BuyerCheck{scored, pending}, false, nil)
+
+	if withPending.Score != scoredOnly.Score {
+		t.Fatalf("a pending check moved the score: %v -> %v", scoredOnly.Score, withPending.Score)
+	}
+	if withPending.BuyerCheckCount != 1 {
+		t.Fatalf("expected only the scored check to count, got %d", withPending.BuyerCheckCount)
+	}
+	if withPending.PendingCheckCount != 1 {
+		t.Fatalf("expected the pending check to be reported, got %d", withPending.PendingCheckCount)
+	}
+	if withPending.TrustedCheckCount != 1 {
+		t.Fatalf("expected one trusted check, got %d", withPending.TrustedCheckCount)
+	}
+}
+
 func TestListReturnsTrustSummary(t *testing.T) {
 	committedAt := time.Date(2026, 4, 3, 10, 0, 0, 0, time.UTC)
 	service := NewService(shopRepositoryStub{

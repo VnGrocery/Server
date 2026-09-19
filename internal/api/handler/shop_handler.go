@@ -588,6 +588,7 @@ func toShopResponse(view shopsvc.ShopView) dto.ShopResponse {
 			BuyerCheckCount:    view.TrustSummary.BuyerCheckCount,
 			TrustedCheckCount:  view.TrustSummary.TrustedCheckCount,
 			HighRiskCheckCount: view.TrustSummary.HighRiskCheckCount,
+			PendingCheckCount:  view.TrustSummary.PendingCheckCount,
 
 			CommentScore:         view.TrustSummary.CommentScore,
 			CommentModeration:    view.TrustSummary.CommentModeration,

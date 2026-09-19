@@ -76,10 +76,12 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 	}
 
 	imageCID := ""
+	imageURL := ""
 	if h.uploader != nil {
 		uploaded, err := h.uploader.AddBytes(c.Request.Context(), upload.filename, upload.data)
 		if err == nil {
 			imageCID = uploaded.CID
+			imageURL = uploaded.GatewayURL
 		}
 	}
 
@@ -92,6 +94,7 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		ClientIP:       strings.TrimSpace(c.ClientIP()),
 		ImageHash:      sha256Hex(upload.data),
 		ImageCID:       imageCID,
+		ImageURL:       imageURL,
 		Image: visionservice.ImageInput{
 			Filename: upload.filename,
 			Size:     int64(len(upload.data)),
@@ -124,8 +127,11 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		ProductID:        result.ProductID,
 		BundleID:         result.BundleID,
 		BuyerUserID:      result.BuyerUserID,
-		Status:           buyerservice.BuyerCheckStatusCompleted,
-		Version:          1,
+		// Read off the result rather than assumed: a check the scorer never
+		// saw comes back pending, and telling the buyer it completed would
+		// promise a verdict that does not exist.
+		Status:  checkStatusOr(result.Status, buyerservice.BuyerCheckStatusCompleted),
+		Version: 1,
 		PolicyVersion:    result.PolicyVersion,
 		HasPledge:        result.HasPledge,
 		PledgeID:         result.PledgeID,
@@ -142,8 +148,16 @@ func (h *BuyerHandler) Check(c *gin.Context) {
 		CategoryMatch:    result.CategoryMatch,
 		ImageHash:        result.ImageHash,
 		ImageCID:         result.ImageCID,
+		ImageURL:         result.ImageURL,
 		Reasons:          result.Reasons,
 	})
+}
+
+func checkStatusOr(status, fallback string) string {
+	if strings.TrimSpace(status) == "" {
+		return fallback
+	}
+	return status
 }
 
 func (h *BuyerHandler) Moderate(c *gin.Context) {
@@ -211,6 +225,7 @@ func (h *BuyerHandler) Moderate(c *gin.Context) {
 		CategoryMatch:     check.CategoryMatch,
 		ImageHash:         check.ImageHash,
 		ImageCID:          check.ImageCID,
+		ImageURL:          check.ImageURL,
 		Reasons:           check.Reasons,
 		ModeratedByUserID: check.ModeratedByUserID,
 		ModerationNote:    check.ModerationNote,
@@ -346,6 +361,7 @@ func toBuyerCheckResponse(check domain.BuyerCheck) dto.BuyerCheckResponse {
 		CategoryMatch:     check.CategoryMatch,
 		ImageHash:         check.ImageHash,
 		ImageCID:          check.ImageCID,
+		ImageURL:          check.ImageURL,
 		Reasons:           check.Reasons,
 		ModeratedByUserID: check.ModeratedByUserID,
 		ModerationNote:    check.ModerationNote,

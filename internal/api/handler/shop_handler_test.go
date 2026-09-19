@@ -365,6 +365,12 @@ func (s shopServiceAdapter) GetByID(ctx context.Context, shopID string) (shopsvc
 func (s shopServiceAdapter) List(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error) {
 	return s.list(ctx, input)
 }
+// No handler test resolves a lot code yet; the label path is covered end to
+// end against the running server instead.
+func (s shopServiceAdapter) GetPledgeByBundleID(ctx context.Context, bundleID string) (domain.Pledge, error) {
+	return domain.Pledge{}, errors.New("not implemented")
+}
+
 func (s shopServiceAdapter) ListPledges(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error) {
 	if s.listPledges == nil {
 		return nil, errors.New("not implemented")

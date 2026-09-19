@@ -24,6 +24,7 @@ type ShopService interface {
 	GetByID(ctx context.Context, shopID string) (shopsvc.ShopView, error)
 	List(ctx context.Context, input shopsvc.ListInput) (shopsvc.ListResult, error)
 	ListPledges(ctx context.Context, input shopsvc.PledgeHistoryInput) ([]domain.Pledge, error)
+	GetPledgeByBundleID(ctx context.Context, bundleID string) (domain.Pledge, error)
 	GetPledgeIntegrity(ctx context.Context, input shopsvc.PledgeIntegrityInput) (shopsvc.PledgeIntegrityView, error)
 	GetPledgeProof(ctx context.Context, input shopsvc.PledgeIntegrityInput) (shopsvc.PledgeProofBundle, error)
 	ReanchorPledgeIntegrity(ctx context.Context, input shopsvc.ModeratePledgeIntegrityInput) (domain.Pledge, error)
@@ -290,6 +291,20 @@ func (h *ShopHandler) ListPledges(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.PledgeHistoryResponse{Items: items})
 }
 
+// GetPledgeByBundle answers the QR on a printed label.
+//
+// Keyed on the lot code rather than the pledge UUID so the QR stays short
+// enough to print small and scan off a curved crate, and so someone can type
+// the code by hand when the label is scuffed.
+func (h *ShopHandler) GetPledgeByBundle(c *gin.Context) {
+	pledge, err := h.shops.GetPledgeByBundleID(c.Request.Context(), c.Param("bundleId"))
+	if err != nil {
+		h.writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, toPledgeResponse(pledge))
+}
+
 func (h *ShopHandler) GetPledgeIntegrity(c *gin.Context) {
 	integrityView, err := h.shops.GetPledgeIntegrity(c.Request.Context(), shopsvc.PledgeIntegrityInput{
 		ShopID:   c.Param("shopId"),
@@ -510,6 +525,11 @@ func toShopReviewResponse(review domain.ShopReview, reviewerName string) dto.Sho
 }
 
 func (h *ShopHandler) writeError(c *gin.Context, err error) {
+	// The same 429 shape the other quotas answer with, so the app reads the
+	// wait off one field no matter which feature said no.
+	if writeRateLimited(c, err) {
+		return
+	}
 	status := http.StatusInternalServerError
 	switch {
 	case errors.Is(err, shopsvc.ErrInvalidShop):
@@ -573,6 +593,7 @@ func toShopResponse(view shopsvc.ShopView) dto.ShopResponse {
 			BuyerCheckCount:    view.TrustSummary.BuyerCheckCount,
 			TrustedCheckCount:  view.TrustSummary.TrustedCheckCount,
 			HighRiskCheckCount: view.TrustSummary.HighRiskCheckCount,
+			PendingCheckCount:  view.TrustSummary.PendingCheckCount,
 
 			CommentScore:         view.TrustSummary.CommentScore,
 			CommentModeration:    view.TrustSummary.CommentModeration,

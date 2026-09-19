@@ -16,6 +16,11 @@ type pledgeRepositoryStub struct {
 	listByChainAnchorStatus func(ctx context.Context, status string, limit int) ([]domain.Pledge, error)
 }
 
+// No test here mints a lot code, so every code reads as free.
+func (s pledgeRepositoryStub) GetByBundleID(ctx context.Context, bundleID string) (domain.Pledge, error) {
+	return domain.Pledge{}, errors.New("not found")
+}
+
 func (s pledgeRepositoryStub) Save(ctx context.Context, pledge domain.Pledge) error {
 	if s.save != nil {
 		return s.save(ctx, pledge)

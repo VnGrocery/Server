@@ -37,6 +37,11 @@ type pledgeRepositoryStub struct {
 	getByID      func(ctx context.Context, pledgeID string) (domain.Pledge, error)
 }
 
+// No test here mints a lot code, so every code reads as free.
+func (p pledgeRepositoryStub) GetByBundleID(ctx context.Context, bundleID string) (domain.Pledge, error) {
+	return domain.Pledge{}, errors.New("not found")
+}
+
 func (p pledgeRepositoryStub) Save(ctx context.Context, pledge domain.Pledge) error { return nil }
 func (p pledgeRepositoryStub) GetByID(ctx context.Context, pledgeID string) (domain.Pledge, error) {
 	if p.getByID == nil {
@@ -330,6 +335,39 @@ func TestCreateRejectsInvalidCoordinates(t *testing.T) {
 	}
 }
 
+// A photo nobody has scored is not evidence for or against the shop. It is
+// reported separately so it does not look lost, but it must not move the
+// score - otherwise uploading photos would be a way to change your own rating.
+func TestPendingBuyerChecksDoNotMoveTheTrustScore(t *testing.T) {
+	scored := domain.BuyerCheck{
+		ShopID: "shop-1", Status: "completed", Verdict: "trusted",
+		CategoryMatch: true, BuyerUserID: "buyer-1",
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+	pending := domain.BuyerCheck{
+		ShopID: "shop-1", Status: "pending_review", Verdict: "pending",
+		BuyerUserID: "buyer-2",
+		CreatedAt:   time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}
+
+	var scoredOnly, withPending TrustSummary
+	applyTrustScore(&scoredOnly, RatingSummary{}, nil, nil, []domain.BuyerCheck{scored}, false, nil)
+	applyTrustScore(&withPending, RatingSummary{}, nil, nil, []domain.BuyerCheck{scored, pending}, false, nil)
+
+	if withPending.Score != scoredOnly.Score {
+		t.Fatalf("a pending check moved the score: %v -> %v", scoredOnly.Score, withPending.Score)
+	}
+	if withPending.BuyerCheckCount != 1 {
+		t.Fatalf("expected only the scored check to count, got %d", withPending.BuyerCheckCount)
+	}
+	if withPending.PendingCheckCount != 1 {
+		t.Fatalf("expected the pending check to be reported, got %d", withPending.PendingCheckCount)
+	}
+	if withPending.TrustedCheckCount != 1 {
+		t.Fatalf("expected one trusted check, got %d", withPending.TrustedCheckCount)
+	}
+}
+
 func TestListReturnsTrustSummary(t *testing.T) {
 	committedAt := time.Date(2026, 4, 3, 10, 0, 0, 0, time.UTC)
 	service := NewService(shopRepositoryStub{
@@ -576,6 +614,69 @@ func TestReviewCreatesOrUpdatesRating(t *testing.T) {
 	}
 	if review.Version != 1 {
 		t.Fatalf("unexpected review version: %d", review.Version)
+	}
+}
+
+// Rewriting a review moves the shop's rating, so an account that could do it
+// on demand could swing that rating at will. Six hours between edits.
+func TestReviewIsRateLimitedWithinTheCooldown(t *testing.T) {
+	written := 0
+	lastEdit := time.Date(2026, 4, 4, 10, 0, 0, 0, time.UTC)
+	service := NewService(shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, Status: ShopStatusActive}, nil
+		},
+		save: func(ctx context.Context, shop domain.Shop) error { return nil },
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{
+		save: func(ctx context.Context, review domain.ShopReview) error {
+			written++
+			return nil
+		},
+		getByShopAndUser: func(ctx context.Context, shopID, reviewerUserID string) (domain.ShopReview, error) {
+			return domain.ShopReview{
+				ReviewID:       "review-1",
+				ShopID:         shopID,
+				ReviewerUserID: reviewerUserID,
+				Rating:         5,
+				Status:         ReviewStatusActive,
+				Version:        1,
+				CreatedAt:      lastEdit,
+				UpdatedAt:      lastEdit,
+			}, nil
+		},
+	}, userRepositoryStub{}, nil)
+
+	input := ReviewInput{
+		ShopID:          "shop-1",
+		ReviewerUserID:  "user-1",
+		ExpectedVersion: 1,
+		Rating:          1,
+		Comment:         "Đổi ý",
+	}
+
+	service.now = func() time.Time { return lastEdit.Add(5 * time.Hour) }
+	_, err := service.Review(context.Background(), input)
+	if !errors.Is(err, domain.ErrRateLimited) {
+		t.Fatalf("expected a rate limit error five hours in, got %v", err)
+	}
+	var limited domain.RateLimitedError
+	if !errors.As(err, &limited) {
+		t.Fatalf("expected the wait to travel with the error, got %T", err)
+	}
+	// The wait is the only part of this the reviewer can act on.
+	if limited.RetryAfter != time.Hour {
+		t.Fatalf("expected an hour left, got %v", limited.RetryAfter)
+	}
+	if written != 0 {
+		t.Fatalf("expected nothing written while rate limited, got %d saves", written)
+	}
+
+	service.now = func() time.Time { return lastEdit.Add(reviewCooldown) }
+	if _, err := service.Review(context.Background(), input); err != nil {
+		t.Fatalf("expected the edit to go through after six hours, got %v", err)
+	}
+	if written != 1 {
+		t.Fatalf("expected one save after the window, got %d", written)
 	}
 }
 

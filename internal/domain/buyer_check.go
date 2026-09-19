@@ -25,6 +25,7 @@ type BuyerCheck struct {
 	CategoryMatch     bool       `firestore:"categoryMatch"`
 	ImageHash         string     `firestore:"imageHash"`
 	ImageCID          string     `firestore:"imageCid"`
+	ImageURL          string     `firestore:"imageUrl"`
 	Reasons           []string   `firestore:"reasons"`
 	ModeratedByUserID string     `firestore:"moderatedByUserId"`
 	ModerationNote    string     `firestore:"moderationNote"`

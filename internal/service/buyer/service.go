@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"strings"
 	"time"
@@ -27,7 +28,17 @@ const (
 	BuyerCheckStatusCompleted = "completed"
 	BuyerCheckStatusFlagged   = "flagged"
 	BuyerCheckStatusRejected  = "rejected"
+
+	// BuyerCheckStatusPendingReview is a check the buyer made but the scorer
+	// never saw: the photo and the lot are recorded, the verdict is not. It
+	// carries no weight in any trust score until the scorer supplies one.
+	BuyerCheckStatusPendingReview = "pending_review"
 )
+
+// VerdictPending pairs with BuyerCheckStatusPendingReview. It is deliberately
+// not one of the scored verdicts, so anything switching on verdict falls
+// through to its neutral branch rather than crediting an unscored photo.
+const VerdictPending = "pending"
 
 type CheckInput struct {
 	PledgeID       string
@@ -38,6 +49,7 @@ type CheckInput struct {
 	ClientIP       string
 	ImageHash      string
 	ImageCID       string
+	ImageURL       string
 	Image          visionservice.ImageInput
 }
 
@@ -90,6 +102,10 @@ type CheckResult struct {
 	HasPledge        bool
 	PledgeID         string
 	BuyerUserID      string
+
+	// Empty means completed. Only the pending path sets it, so the scored
+	// paths do not have to repeat the status they have always had.
+	Status           string
 	Trusted          bool
 	Verdict          string
 	PledgedScore     float64
@@ -103,6 +119,7 @@ type CheckResult struct {
 	CategoryMatch    bool
 	ImageHash        string
 	ImageCID         string
+	ImageURL         string
 	Reasons          []string
 }
 
@@ -184,9 +201,6 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 	if err != nil {
 		return CheckResult{}, err
 	}
-	if s.scorer == nil {
-		return CheckResult{}, visionservice.ErrProviderUnavailable
-	}
 	if s.checks == nil {
 		return CheckResult{}, fmt.Errorf("buyer check repository is not configured")
 	}
@@ -242,26 +256,69 @@ func (s *Service) Check(ctx context.Context, input CheckInput) (CheckResult, err
 		}
 	}
 
-	scored, err := s.scorer.Score(ctx, input.Image)
-	if err != nil {
-		return CheckResult{}, err
+	// The buyer has already stood at the stall, taken the photo and spent their
+	// bundle token, which is single use. Dropping all of that because the
+	// scorer is unreachable loses evidence the buyer cannot produce twice, so
+	// an unreachable scorer records the check unscored instead of failing it.
+	// Everything else - a bad image, a rate limit - is still the buyer's
+	// problem to fix and still fails.
+	var scored visionservice.ScoreResult
+	pending := s.scorer == nil
+	if !pending {
+		scored, err = s.scorer.Score(ctx, input.Image)
+		switch {
+		case errors.Is(err, visionservice.ErrProviderUnavailable):
+			pending = true
+		case err != nil:
+			return CheckResult{}, err
+		}
 	}
 
-	if pledgeID == "" {
-		result := standaloneQualityResult(scored, bundleID, locationStatus)
+	var result CheckResult
+	switch {
+	case pending:
+		result = pendingResult(pledge, pledgeID, bundleID, locationStatus)
+	case pledgeID == "":
+		result = standaloneQualityResult(scored, bundleID, locationStatus)
+	default:
+		result = comparePledge(pledge, scored, locationStatus)
+	}
+	if result.ShopID == "" {
 		result.ShopID = tokenClaims.ShopID
-		result.ProductID = tokenClaims.ProductID
-		result.BuyerUserID = buyerUserID
-		result.ImageHash = strings.TrimSpace(input.ImageHash)
-		result.ImageCID = strings.TrimSpace(input.ImageCID)
-		return s.persistCheck(ctx, result)
 	}
-
-	result := comparePledge(pledge, scored, locationStatus)
+	if result.ProductID == "" {
+		result.ProductID = tokenClaims.ProductID
+	}
 	result.BuyerUserID = buyerUserID
 	result.ImageHash = strings.TrimSpace(input.ImageHash)
 	result.ImageCID = strings.TrimSpace(input.ImageCID)
+	result.ImageURL = strings.TrimSpace(input.ImageURL)
 	return s.persistCheck(ctx, result)
+}
+
+// pendingResult is what a check looks like before anything has scored it: the
+// pledge it was made against, and nothing claimed about the photo.
+//
+// ActualScore stays zero rather than borrowing the pledged one. A buyer check
+// exists to disagree with the seller, so seeding it with the seller's own
+// number would make every unscored check read as agreement.
+func pendingResult(pledge domain.Pledge, pledgeID, bundleID, locationStatus string) CheckResult {
+	return CheckResult{
+		ShopID:          pledge.ShopID,
+		ProductID:       pledge.ProductID,
+		BundleID:        bundleID,
+		PolicyVersion:   policyVersionV1,
+		HasPledge:       strings.TrimSpace(pledgeID) != "",
+		PledgeID:        strings.TrimSpace(pledgeID),
+		Status:          BuyerCheckStatusPendingReview,
+		Trusted:         false,
+		Verdict:         VerdictPending,
+		PledgedScore:    pledge.Score,
+		PledgedCategory: pledge.Category,
+		LocationStatus:  locationStatus,
+		CategoryMatch:   false,
+		Reasons:         []string{"awaiting_ai_review"},
+	}
 }
 
 func (s *Service) Moderate(ctx context.Context, input ModerateInput) (domain.BuyerCheck, error) {
@@ -466,11 +523,16 @@ func (s *Service) persistCheck(ctx context.Context, result CheckResult) (CheckRe
 			ResourceType:    "buyer_check",
 			ResourceID:      result.CheckID,
 			ResourceVersion: 1,
-			Action:          "buyer_check.completed",
-			Status:          "completed",
+			Action:          "buyer_check." + check.Status,
+			Status:          check.Status,
 			Payload:         audit.MutationPayload{After: check},
 		}); err != nil {
-			return CheckResult{}, err
+			// The check is already in the database at this point. Returning the
+			// error here reported a success as a failure: the buyer saw it fail,
+			// retried, and spent a second bundle token on a row that existed.
+			// The missing audit entry is real and is logged as such, but it is
+			// the operator's problem, not something to charge the buyer for.
+			log.Printf("buyer check %s saved without an audit entry: %v", check.CheckID, err)
 		}
 	}
 
@@ -485,7 +547,7 @@ func (r CheckResult) toBuyerCheck(checkID string, createdAt time.Time) domain.Bu
 		BundleID:         r.BundleID,
 		PledgeID:         r.PledgeID,
 		BuyerUserID:      r.BuyerUserID,
-		Status:           BuyerCheckStatusCompleted,
+		Status:           r.status(),
 		Version:          1,
 		PolicyVersion:    r.PolicyVersion,
 		Trusted:          r.Trusted,
@@ -501,10 +563,18 @@ func (r CheckResult) toBuyerCheck(checkID string, createdAt time.Time) domain.Bu
 		CategoryMatch:    r.CategoryMatch,
 		ImageHash:        r.ImageHash,
 		ImageCID:         r.ImageCID,
+		ImageURL:         r.ImageURL,
 		Reasons:          r.Reasons,
 		CreatedAt:        createdAt,
 		UpdatedAt:        createdAt,
 	}
+}
+
+func (r CheckResult) status() string {
+	if strings.TrimSpace(r.Status) == "" {
+		return BuyerCheckStatusCompleted
+	}
+	return r.Status
 }
 
 func normalizeLocationStatus(raw string) (string, error) {
@@ -682,6 +752,7 @@ func checkToResult(check domain.BuyerCheck) CheckResult {
 		HasPledge:        strings.TrimSpace(check.PledgeID) != "",
 		PledgeID:         check.PledgeID,
 		BuyerUserID:      check.BuyerUserID,
+		Status:           check.Status,
 		Trusted:          check.Trusted,
 		Verdict:          check.Verdict,
 		PledgedScore:     check.PledgedScore,
@@ -695,6 +766,7 @@ func checkToResult(check domain.BuyerCheck) CheckResult {
 		CategoryMatch:    check.CategoryMatch,
 		ImageHash:        check.ImageHash,
 		ImageCID:         check.ImageCID,
+		ImageURL:         check.ImageURL,
 		Reasons:          check.Reasons,
 	}
 }

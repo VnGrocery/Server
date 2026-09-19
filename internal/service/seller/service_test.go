@@ -3,6 +3,7 @@ package seller
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,8 +13,18 @@ import (
 )
 
 type pledgeRepositoryStub struct {
-	save func(ctx context.Context, pledge domain.Pledge) error
-	get  func(ctx context.Context, pledgeID string) (domain.Pledge, error)
+	save     func(ctx context.Context, pledge domain.Pledge) error
+	get      func(ctx context.Context, pledgeID string) (domain.Pledge, error)
+	byBundle func(ctx context.Context, bundleID string) (domain.Pledge, error)
+}
+
+// Every lot code reads as free unless a test says otherwise, which is what
+// minting expects on a first commit.
+func (s pledgeRepositoryStub) GetByBundleID(ctx context.Context, bundleID string) (domain.Pledge, error) {
+	if s.byBundle == nil {
+		return domain.Pledge{}, errors.New("not found")
+	}
+	return s.byBundle(ctx, bundleID)
 }
 
 func (s pledgeRepositoryStub) Save(ctx context.Context, pledge domain.Pledge) error {
@@ -105,6 +116,86 @@ func TestCommitCreatesPledge(t *testing.T) {
 	}
 	if pledge.PledgeID == "" {
 		t.Fatal("expected pledge id in response")
+	}
+}
+
+func TestCommitMintsBundleIDWhenNoneSupplied(t *testing.T) {
+	fixedTime := time.Date(2026, 3, 27, 10, 0, 0, 0, time.UTC)
+	var saved string
+	service := NewService(pledgeRepositoryStub{
+		save: func(ctx context.Context, pledge domain.Pledge) error {
+			saved = pledge.BundleID
+			return nil
+		},
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1"}, nil
+		},
+	}, productRepositoryStub{
+		getByID: func(ctx context.Context, productID string) (domain.Product, error) {
+			return domain.Product{ProductID: productID, ShopID: "shop-1"}, nil
+		},
+	}, nil)
+	service.now = func() time.Time { return fixedTime }
+
+	pledge, err := service.Commit(context.Background(), CommitInput{
+		Note:            "Hàng mới nhập sáng nay",
+		ShopID:          "shop-1",
+		ProductID:       "product-1",
+		CreatedByUserID: "user-1",
+		Score:           8.8,
+		Category:        "fresh_produce",
+		Confidence:      0.93,
+		ImageHash:       "hash-1",
+	})
+	if err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	// The code is what gets printed on the label, so it has to reach storage,
+	// not just the response.
+	if pledge.BundleID != saved {
+		t.Fatalf("response %q and stored %q disagree", pledge.BundleID, saved)
+	}
+	if !strings.HasPrefix(pledge.BundleID, "LO-260327-") {
+		t.Fatalf("expected a dated lot code, got %q", pledge.BundleID)
+	}
+	if len(pledge.BundleID) != len("LO-260327-")+8 {
+		t.Fatalf("expected an 8 character suffix, got %q", pledge.BundleID)
+	}
+}
+
+func TestCommitRejectsBundleIDAlreadyInUse(t *testing.T) {
+	service := NewService(pledgeRepositoryStub{
+		save: func(ctx context.Context, pledge domain.Pledge) error {
+			t.Fatal("a colliding lot code must not be stored")
+			return nil
+		},
+		byBundle: func(ctx context.Context, bundleID string) (domain.Pledge, error) {
+			return domain.Pledge{PledgeID: "pledge-existing", BundleID: bundleID}, nil
+		},
+	}, shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, OwnerUserID: "user-1"}, nil
+		},
+	}, productRepositoryStub{
+		getByID: func(ctx context.Context, productID string) (domain.Product, error) {
+			return domain.Product{ProductID: productID, ShopID: "shop-1"}, nil
+		},
+	}, nil)
+
+	_, err := service.Commit(context.Background(), CommitInput{
+		Note:            "Hàng mới nhập sáng nay",
+		ShopID:          "shop-1",
+		ProductID:       "product-1",
+		BundleID:        "LO-260327-ALREADY",
+		CreatedByUserID: "user-1",
+		Score:           8.8,
+		Category:        "fresh_produce",
+		Confidence:      0.93,
+		ImageHash:       "hash-1",
+	})
+	if !errors.Is(err, ErrInvalidCommit) {
+		t.Fatalf("expected ErrInvalidCommit, got %v", err)
 	}
 }
 

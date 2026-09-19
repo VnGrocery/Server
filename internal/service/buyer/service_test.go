@@ -18,6 +18,11 @@ type pledgeRepositoryStub struct {
 	getByID func(ctx context.Context, pledgeID string) (domain.Pledge, error)
 }
 
+// No test here mints a lot code, so every code reads as free.
+func (s pledgeRepositoryStub) GetByBundleID(ctx context.Context, bundleID string) (domain.Pledge, error) {
+	return domain.Pledge{}, errors.New("not found")
+}
+
 func (s pledgeRepositoryStub) Save(ctx context.Context, pledge domain.Pledge) error {
 	return nil
 }
@@ -211,6 +216,79 @@ func TestCheckReturnsTrustedVerdict(t *testing.T) {
 	}
 	if auditLogger.logHits != 1 {
 		t.Fatalf("expected one audit call, got %d", auditLogger.logHits)
+	}
+}
+
+// The scorer being down is the provider's problem, not the buyer's. They have
+// already spent a single-use bundle token to take this photo and cannot take
+// it again, so the check is kept - unscored, and worth nothing until scored.
+func TestCheckRecordsPendingWhenScorerIsUnavailable(t *testing.T) {
+	var saved domain.BuyerCheck
+	service := NewService(
+		pledgeRepositoryStub{
+			getByID: func(ctx context.Context, pledgeID string) (domain.Pledge, error) {
+				return domain.Pledge{
+					PledgeID:  pledgeID,
+					ShopID:    "shop-1",
+					ProductID: "product-1",
+					BundleID:  "bundle-1",
+					Score:     8.5,
+					Category:  "fresh_produce",
+				}, nil
+			},
+		},
+		buyerCheckRepositoryStub{
+			save: func(ctx context.Context, check domain.BuyerCheck) error {
+				saved = check
+				return nil
+			},
+		},
+		userRepositoryStub{},
+		scorerStub{
+			score: func(ctx context.Context, input visionservice.ImageInput) (visionservice.ScoreResult, error) {
+				return visionservice.ScoreResult{}, visionservice.ErrProviderUnavailable
+			},
+		},
+		&auditLoggerStub{},
+	)
+	service.SetBundleTokenVerifier(bundleTokenVerifierStub{})
+
+	result, err := service.Check(context.Background(), CheckInput{
+		PledgeID:    "pledge-1",
+		BundleID:    "bundle-1",
+		BundleToken: "token-1",
+		BuyerUserID: "buyer-1",
+		ImageHash:   "image-hash-1",
+		ImageCID:    "cid-1",
+		ImageURL:    "https://ipfs.example/ipfs/cid-1",
+		Image: visionservice.ImageInput{
+			Filename: "shop.jpg",
+			Content:  bytes.NewBuffer([]byte("fake")),
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected the check to be kept, got %v", err)
+	}
+	if result.Status != BuyerCheckStatusPendingReview || result.Verdict != VerdictPending {
+		t.Fatalf("unexpected pending result: status=%q verdict=%q", result.Status, result.Verdict)
+	}
+	if result.Trusted {
+		t.Fatal("an unscored check must not be trusted")
+	}
+	// Zero, not the pledged 8.5: borrowing the seller's number would make
+	// every unscored check read as agreement with the seller.
+	if result.ActualScore != 0 {
+		t.Fatalf("expected no actual score, got %v", result.ActualScore)
+	}
+	if saved.CheckID == "" || saved.Status != BuyerCheckStatusPendingReview {
+		t.Fatalf("expected a persisted pending check, got %#v", saved)
+	}
+	// The photo is the whole point of keeping the row.
+	if saved.ImageURL != "https://ipfs.example/ipfs/cid-1" || saved.ImageCID != "cid-1" {
+		t.Fatalf("expected the photo to be kept, got %#v", saved)
+	}
+	if saved.ShopID != "shop-1" || saved.ProductID != "product-1" {
+		t.Fatalf("expected the check to name what was photographed, got %#v", saved)
 	}
 }
 

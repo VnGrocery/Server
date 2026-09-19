@@ -41,6 +41,13 @@ const (
 	warningDeltaThreshold   = 2.5
 )
 
+// How long an account has to wait before rewriting its review of a shop.
+//
+// One account holds one review per shop, and rewriting it moves the shop's
+// rating. Without a wait an account could drag that rating up and down as
+// fast as it could press the button, which is a review system only in name.
+const reviewCooldown = 6 * time.Hour
+
 type CreateInput struct {
 	OwnerUserID string
 
@@ -162,6 +169,11 @@ type TrustSummary struct {
 	BuyerCheckCount    int
 	TrustedCheckCount  int
 	HighRiskCheckCount int
+
+	// Buyer photos recorded but not yet scored. Reported so a shop can see
+	// that evidence exists and is simply not counted yet, rather than the
+	// checks appearing to have vanished.
+	PendingCheckCount int
 
 	// Comments are the only part of the score the shop itself can suppress, so
 	// what was held back is reported next to what was published.
@@ -612,6 +624,13 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 		return domain.ShopReview{}, err
 	}
 	if existing.ReviewID != "" {
+		// Checked before the version, and before anything is written: being
+		// early is a matter of timing, not of holding a stale version, and
+		// answering "conflict" to someone who is simply too soon sends them
+		// off to reload a screen that was never out of date.
+		if wait := existing.UpdatedAt.Add(reviewCooldown).Sub(now); wait > 0 {
+			return domain.ShopReview{}, domain.RateLimitedError{RetryAfter: wait}
+		}
 		if existing.Version != input.ExpectedVersion {
 			return domain.ShopReview{}, ErrVersionConflict
 		}
@@ -880,6 +899,34 @@ func (s *Service) List(ctx context.Context, input ListInput) (ListResult, error)
 	}, nil
 }
 
+// GetPledgeByBundleID resolves the lot code printed on a label.
+//
+// Public on purpose: a label on a crate is read by whoever is holding the
+// crate, and the point of printing it is that they do not need an account to
+// see what the seller committed to.
+func (s *Service) GetPledgeByBundleID(ctx context.Context, bundleID string) (domain.Pledge, error) {
+	code := strings.TrimSpace(bundleID)
+	if code == "" {
+		return domain.Pledge{}, fmt.Errorf("%w: bundleId is required", ErrInvalidShop)
+	}
+	if s.pledges == nil {
+		return domain.Pledge{}, fmt.Errorf("pledge repository is not configured")
+	}
+	pledge, err := s.pledges.GetByBundleID(ctx, code)
+	if err != nil {
+		return domain.Pledge{}, fmt.Errorf("%w: %v", ErrNotFound, err)
+	}
+	// A label outlives the shop it was printed for, so a deleted shop has to
+	// read as gone rather than quietly serving its last pledge.
+	if s.shops != nil {
+		shop, err := s.shops.GetByID(ctx, pledge.ShopID)
+		if err != nil || shop.Status == ShopStatusDeleted {
+			return domain.Pledge{}, ErrNotFound
+		}
+	}
+	return pledge, nil
+}
+
 func (s *Service) ListPledges(ctx context.Context, input PledgeHistoryInput) ([]domain.Pledge, error) {
 	shopID := strings.TrimSpace(input.ShopID)
 	if shopID == "" {
@@ -1133,6 +1180,22 @@ func (s *Service) buildShopView(ctx context.Context, shop domain.Shop) (ShopView
 const trustScoreFormulaVersion = "trust_score_v3"
 
 func applyTrustScore(summary *TrustSummary, rating RatingSummary, pledges []domain.Pledge, reviews []domain.ShopReview, checks []domain.BuyerCheck, moderationOn bool, comments []domain.ProductComment) {
+	// Dropped here rather than inside each component: a check nothing has
+	// scored yet has no verdict to weigh, no delta to compare and no
+	// confirmation to count, so every one of the five users of `checks` below
+	// would otherwise have to remember to skip it. A photo starts counting
+	// once the scorer has looked at it, not when the buyer uploads it.
+	pendingChecks := 0
+	scoredChecks := make([]domain.BuyerCheck, 0, len(checks))
+	for _, check := range checks {
+		if check.Status == buyerCheckStatusPendingReview {
+			pendingChecks++
+			continue
+		}
+		scoredChecks = append(scoredChecks, check)
+	}
+	checks = scoredChecks
+
 	pledgeScore, pledgeReasons := calculatePledgeTrustScore(pledges)
 	reviewScore, reviewReasons := calculateReviewTrustScore(rating, len(reviews))
 	buyerCheckScore, trustedChecks, highRiskChecks, checkReasons := calculateBuyerCheckTrustScore(checks)
@@ -1174,7 +1237,12 @@ func applyTrustScore(summary *TrustSummary, rating RatingSummary, pledges []doma
 	summary.CommentCount = commentCounts.approved
 	summary.CommentPendingCount = commentCounts.pending
 	summary.CommentRejectedCount = commentCounts.rejected
+	if pendingChecks > 0 {
+		reasons = append(reasons, "buyer_checks_awaiting_ai_review")
+	}
+
 	summary.BuyerCheckCount = len(checks)
+	summary.PendingCheckCount = pendingChecks
 	summary.TrustedCheckCount = trustedChecks
 	summary.HighRiskCheckCount = highRiskChecks
 	summary.Reasons = uniqueStrings(reasons)
@@ -1515,6 +1583,11 @@ func calculateBuyerCheckTrustScore(checks []domain.BuyerCheck) (float64, int, in
 }
 
 const warningMaxScoreDelta = 2.5
+
+// Mirrors buyer.BuyerCheckStatusPendingReview. Copied rather than imported:
+// the buyer service already reads shop data, and one shared string is cheaper
+// than the cycle that importing it back would create.
+const buyerCheckStatusPendingReview = "pending_review"
 
 func trustGrade(score float64) string {
 	switch {

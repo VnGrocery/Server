@@ -630,6 +630,10 @@ func (shopHandlerStub) List(ctx context.Context, input shopservice.ListInput) (s
 	}, nil
 }
 
+func (shopHandlerStub) GetPledgeByBundleID(ctx context.Context, bundleID string) (domain.Pledge, error) {
+	return domain.Pledge{PledgeID: "pledge-1", ShopID: "shop-1", BundleID: bundleID}, nil
+}
+
 func (shopHandlerStub) ListPledges(ctx context.Context, input shopservice.PledgeHistoryInput) ([]domain.Pledge, error) {
 	return []domain.Pledge{{
 		PledgeID:  "pledge-1",

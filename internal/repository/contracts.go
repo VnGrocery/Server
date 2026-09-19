@@ -74,6 +74,12 @@ type SettingsRepository interface {
 type PledgeRepository interface {
 	Save(ctx context.Context, pledge domain.Pledge) error
 	GetByID(ctx context.Context, pledgeID string) (domain.Pledge, error)
+
+	// GetByBundleID finds a pledge by the lot code printed on its label.
+	// Returns ErrNotFound when the code is free, which is how minting checks
+	// a new one before using it.
+	GetByBundleID(ctx context.Context, bundleID string) (domain.Pledge, error)
+
 	ListByShopID(ctx context.Context, shopID string) ([]domain.Pledge, error)
 	ListByChainAnchorStatus(ctx context.Context, status string, limit int) ([]domain.Pledge, error)
 }

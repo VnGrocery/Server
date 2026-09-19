@@ -36,14 +36,18 @@ Two things that are easy to lose an hour to:
     posters, so the flag looks broken rather than unused. `wall` and `table`
     are the only poster names the stock scene has; anything else logs
     "Could not find poster with name" and is otherwise ignored.
-  * the scene camera does not start facing that wall. `sensor set` and
-    `physics` do not move it, but the emulator ships a macro that walks to it:
+  * the scene camera does not start facing that wall, and aiming it without a
+    hand on the mouse is unreliable. `sensor set` and `physics` do not move it
+    at all. The emulator ships a macro that sometimes does:
 
         adb emu automation play \\
           $ANDROID_HOME/emulator/resources/macros/Walk_to_image_room
 
-    Play it with the scanner already open - it takes a few seconds to arrive,
-    and the scan fires the moment the QR is in frame.
+    Play it with the scanner already open. It reached the poster twice out of
+    a dozen tries here, both times on a freshly booted emulator; the rest of
+    the time it returned OK and moved nothing, so treat a miss as normal
+    rather than as a broken QR. Dragging with the left mouse button inside the
+    emulator window always works, and is the way to do this on purpose.
 
 Scanning the PNG off the host screen with a real phone works too, and skips
 all of the above.

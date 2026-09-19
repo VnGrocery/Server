@@ -617,6 +617,69 @@ func TestReviewCreatesOrUpdatesRating(t *testing.T) {
 	}
 }
 
+// Rewriting a review moves the shop's rating, so an account that could do it
+// on demand could swing that rating at will. Six hours between edits.
+func TestReviewIsRateLimitedWithinTheCooldown(t *testing.T) {
+	written := 0
+	lastEdit := time.Date(2026, 4, 4, 10, 0, 0, 0, time.UTC)
+	service := NewService(shopRepositoryStub{
+		getByID: func(ctx context.Context, shopID string) (domain.Shop, error) {
+			return domain.Shop{ShopID: shopID, Status: ShopStatusActive}, nil
+		},
+		save: func(ctx context.Context, shop domain.Shop) error { return nil },
+	}, pledgeRepositoryStub{}, buyerCheckRepositoryStub{}, reviewRepositoryStub{
+		save: func(ctx context.Context, review domain.ShopReview) error {
+			written++
+			return nil
+		},
+		getByShopAndUser: func(ctx context.Context, shopID, reviewerUserID string) (domain.ShopReview, error) {
+			return domain.ShopReview{
+				ReviewID:       "review-1",
+				ShopID:         shopID,
+				ReviewerUserID: reviewerUserID,
+				Rating:         5,
+				Status:         ReviewStatusActive,
+				Version:        1,
+				CreatedAt:      lastEdit,
+				UpdatedAt:      lastEdit,
+			}, nil
+		},
+	}, userRepositoryStub{}, nil)
+
+	input := ReviewInput{
+		ShopID:          "shop-1",
+		ReviewerUserID:  "user-1",
+		ExpectedVersion: 1,
+		Rating:          1,
+		Comment:         "Đổi ý",
+	}
+
+	service.now = func() time.Time { return lastEdit.Add(5 * time.Hour) }
+	_, err := service.Review(context.Background(), input)
+	if !errors.Is(err, domain.ErrRateLimited) {
+		t.Fatalf("expected a rate limit error five hours in, got %v", err)
+	}
+	var limited domain.RateLimitedError
+	if !errors.As(err, &limited) {
+		t.Fatalf("expected the wait to travel with the error, got %T", err)
+	}
+	// The wait is the only part of this the reviewer can act on.
+	if limited.RetryAfter != time.Hour {
+		t.Fatalf("expected an hour left, got %v", limited.RetryAfter)
+	}
+	if written != 0 {
+		t.Fatalf("expected nothing written while rate limited, got %d saves", written)
+	}
+
+	service.now = func() time.Time { return lastEdit.Add(reviewCooldown) }
+	if _, err := service.Review(context.Background(), input); err != nil {
+		t.Fatalf("expected the edit to go through after six hours, got %v", err)
+	}
+	if written != 1 {
+		t.Fatalf("expected one save after the window, got %d", written)
+	}
+}
+
 func TestCreateShopWritesAuditLog(t *testing.T) {
 	auditLogger := &auditLoggerStub{
 		log: func(ctx context.Context, input audit.Input) error {

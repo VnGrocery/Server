@@ -525,6 +525,11 @@ func toShopReviewResponse(review domain.ShopReview, reviewerName string) dto.Sho
 }
 
 func (h *ShopHandler) writeError(c *gin.Context, err error) {
+	// The same 429 shape the other quotas answer with, so the app reads the
+	// wait off one field no matter which feature said no.
+	if writeRateLimited(c, err) {
+		return
+	}
 	status := http.StatusInternalServerError
 	switch {
 	case errors.Is(err, shopsvc.ErrInvalidShop):

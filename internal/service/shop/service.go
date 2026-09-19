@@ -41,6 +41,13 @@ const (
 	warningDeltaThreshold   = 2.5
 )
 
+// How long an account has to wait before rewriting its review of a shop.
+//
+// One account holds one review per shop, and rewriting it moves the shop's
+// rating. Without a wait an account could drag that rating up and down as
+// fast as it could press the button, which is a review system only in name.
+const reviewCooldown = 6 * time.Hour
+
 type CreateInput struct {
 	OwnerUserID string
 
@@ -617,6 +624,13 @@ func (s *Service) Review(ctx context.Context, input ReviewInput) (domain.ShopRev
 		return domain.ShopReview{}, err
 	}
 	if existing.ReviewID != "" {
+		// Checked before the version, and before anything is written: being
+		// early is a matter of timing, not of holding a stale version, and
+		// answering "conflict" to someone who is simply too soon sends them
+		// off to reload a screen that was never out of date.
+		if wait := existing.UpdatedAt.Add(reviewCooldown).Sub(now); wait > 0 {
+			return domain.ShopReview{}, domain.RateLimitedError{RetryAfter: wait}
+		}
 		if existing.Version != input.ExpectedVersion {
 			return domain.ShopReview{}, ErrVersionConflict
 		}
